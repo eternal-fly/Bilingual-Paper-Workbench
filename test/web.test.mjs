@@ -14,6 +14,24 @@ async function fixture(t) {
 function call(web, body, extra = {}) {
   return fetch(web.origin + '/api', { method: 'POST', headers: { Origin: web.origin, 'Content-Type': 'application/json', Authorization: `Bearer ${web.token}`, ...extra }, body: JSON.stringify(body) });
 }
+
+test('editor capture uses the authenticated paper channel and never resends full manuscript state per keystroke', async t => {
+  let stateReads = 0;
+  const project = { id: 'capture-paper', snapshotId: 'capture-snapshot' };
+  const service = { core: { _state: { project, segments: [{ id: 'capture-paragraph' }] } }, getState() { stateReads++; return { project, capabilities: {}, segments: [{ id: 'capture-paragraph' }] }; } };
+  const web = await startLocalWeb({ service }); t.after(() => web.close());
+  const state = await (await call(web, { action: 'state' })).json();
+  assert.equal(state.state.capabilities.editorDraftCapture, true);
+  const readsBeforeTyping = stateReads;
+  const scope = { clientId: 'one-capture-page', expectedProjectId: project.id, expectedSnapshotId: project.snapshotId };
+  const poll = await (await call(web, { action: 'pollEditorDraftCapture', payload: scope })).json();
+  assert.equal(poll.ok, true); assert.equal(poll.result.captureId, null); assert.equal(poll.state, undefined);
+  const captured = await (await call(web, { action: 'publishEditorDrafts', payload: { ...scope, sequence: 1, captureId: null, drafts: [{ segmentId: 'capture-paragraph', language: 'zh-CN', text: '尚未保存 $', baseDraftRevision: 1, bufferSequence: 2, saveState: 'saveFailed', composing: false }] } })).json();
+  assert.equal(captured.ok, true); assert.equal(captured.result.accepted, true); assert.equal(captured.state, undefined);
+  assert.equal(stateReads, readsBeforeTyping);
+  assert.equal((await call(web, { action: 'pollEditorDraftCapture', payload: scope }, { Authorization: '' })).status, 401);
+  assert.equal((await call(web, { action: 'publishEditorDrafts', payload: { ...scope, expectedProjectId: 'other-paper', sequence: 2, drafts: [] } })).status, 409);
+});
 test('unauthenticated requests cannot read manuscript state', async t => {
   const web = await fixture(t);
   const res = await call(web, { action: 'state' }, { Authorization: '' });

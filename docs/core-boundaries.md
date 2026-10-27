@@ -1,6 +1,8 @@
-# Bilingual Paper Workbench: Data and Source Boundaries, Version 1.5.1
+# Bilingual Paper Workbench: Data and Source Boundaries, Version 1.5.2
 
 This document explains source protection, private state and recovery. Start with the [User Guide](USER_GUIDE.md) for normal operation. English is the default interface language; selecting another interface or translation language does not change source authority.
+
+Version 1.5.2 rebases translation source metadata only from exact confirmed transaction/request evidence and matching current protected objects. The recovery ledger remains private. Undo and legacy reconciliation preserve newer or unproven author intent. Fresh live-editor captures are separate ephemeral UI evidence, authenticated to the current paper/source and originating native chat. Native saving accepts no arbitrary text: it requires a registered capture, matching hash/revision and a fresh check inside the save queue. Reading or saving translation text never grants source acceptance. Public update checks send no paper data and cannot execute downloaded code or approve installation.
 
 Version 1.5.0 removes author-facing item-count ceilings throughout selection, matching, organization, translation, synchronization, pending revision construction and compatible Desktop callbacks. Unique IDs and exact approved coverage remain mandatory. Byte-adaptive review batches and native result staging preserve caller/source/draft identity; intermediate parts grant no source acceptance and cannot prematurely complete a Desktop request. Only the full validated result publishes. Concurrency and display pagination remain operational controls.
 

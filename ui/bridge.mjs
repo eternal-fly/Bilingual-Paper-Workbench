@@ -24,6 +24,7 @@ const outgoingKeys=new Map();
 function startHostRelay(){if(local||hostRelay||!app||!uiToken||!relaySession)return;hostRelay=mountNativeRelay({app,getUiToken:()=>uiToken,getRelaySession:()=>relaySession,onStatus:value=>{host.relayStatus=value.status;}});window.addEventListener('pagehide',()=>hostRelay?.stop(),{once:true});}
 let uiSession;
 const workerActions = new Set(['models', 'chatState', 'chatStart', 'chatSelectModel', 'chatSend', 'chatInterrupt', 'chatDisconnect', 'runRequest', 'runReviewOrganization', 'reviewCycle', 'fullPaperReview', 'reviewParagraph', 'syncParagraph']);
+const lightActions=new Set(['pollEditorDraftCapture','publishEditorDrafts','getUpdates','checkUpdates','configureUpdates']);
 const announce = () => { for (const fn of listeners) fn(lastState, { ...host }); };
 const unpack = (result, source = 'rpc') => {
   const metadata = result?._meta;
@@ -41,7 +42,7 @@ const unpack = (result, source = 'rpc') => {
   return result._meta?.paperResult ?? result._meta?.paperState ?? result.structuredContent;
 };
 const ready = local ? Promise.resolve() : (async () => {
-  app = new App({ name: 'bilingual-paper-editor', version: '1.5.1' });
+  app = new App({ name: 'bilingual-paper-editor', version: '1.5.2' });
   app.ontoolresult = result => { try { unpack(result, 'tool-result'); } catch (e) { host.reason = e.message; announce(); } };
   app.onhostcontextchanged = context => {
     if (context.theme && !document.documentElement.dataset.themePreference) document.documentElement.dataset.theme = context.theme;
@@ -100,11 +101,11 @@ export async function api(action, payload = {}) {
       host.mode='native-window';host.connected=true;host.canSendMessage=body.transport.canSendMessage===true;host.directChat=body.transport.directChat===true;host.relayChat=body.transport.relayChat===true;host.messageRoute=body.transport.messageRoute;host.threadId=body.transport.threadId||null;
       host.label=host.canSendMessage?'独立窗口 · 已连接绑定聊天':'独立窗口 · 等待聊天连接卡';host.reason=body.transport.reason||'';
     }
-    if (body.state) lastState = body.state;
+    if (body.state&&!lightActions.has(action)) lastState = body.state;
     host.relayPending=Boolean(host.relayChat&&lastState?.nativeChatRelay?.messages?.some(message=>!message.historical&&['pending','claimed','sent'].includes(message.status)));
-    if (action === 'state') stateTag = response.headers.get('etag'); else stateTag = null;
-    announce();
-    return body.result;
+    if (action === 'state') stateTag = response.headers.get('etag'); else if(!lightActions.has(action)) stateTag = null;
+    if(!lightActions.has(action))announce();
+    return action==='state'&&lastState?lastState:body.result;
   }
   await ready;
   if (!host.connected) throw Object.assign(new Error(host.reason), { code: 'CAPABILITY_UNAVAILABLE' });

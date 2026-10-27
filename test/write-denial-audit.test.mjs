@@ -35,6 +35,16 @@ async function fixture(t) {
   return { app, directory, source, originals, selected, proposal, preview, draft, unchanged, confirmation };
 }
 
+function assertRebasedDrafts(f) {
+  const state = f.app.getState(), sources = new Map([...state.segments, ...state.readingParagraphs].map(row => [row.id, row]));
+  for (const [id, before] of Object.entries(f.draft)) {
+    const after = state.translations['zh-CN'][id], source = sources.get(id);
+    assert.equal(after.text, before.text); assert.equal(after.origin, before.origin);
+    assert.equal(after.revision, before.revision + 1); assert.equal(after.status, 'saved');
+    assert.equal(after.sourceHash, source.sourceHash || source.beforeHash);
+  }
+}
+
 test('OS read-only denial is reported as permission denial before any source file changes; a fresh confirmed retry succeeds', async t => {
   const f = await fixture(t), target = path.join(f.source, 'second.tex'), input = await f.confirmation();
   await chmod(target, 0o444);
@@ -44,7 +54,7 @@ test('OS read-only denial is reported as permission denial before any source fil
   const preview = await f.app.previewTransaction({ proposalIds: [f.proposal.proposalId] }); await f.app.waitJob({ jobId: preview.jobId });
   const result = await f.app.applyTransaction(await f.confirmation(preview.transactionId, 'permission-restored'));
   assert.equal(result.state, 'applied'); for (const name of f.originals.keys()) assert.match(await readFile(path.join(f.source, name), 'utf8'), /explicit/);
-  assert.deepEqual(Object.fromEntries(Object.entries(f.app.getState().translations['zh-CN']).map(([id, { status, ...draft }]) => [id, draft])), Object.fromEntries(Object.entries(f.draft).map(([id, { status, ...draft }]) => [id, draft])));
+  assertRebasedDrafts(f);
 });
 
 test('private-state OS persistence denial preserves the saved author draft and permits exact-revision retry', async t => {
@@ -62,7 +72,7 @@ test('workflow journal OS denial prevents the writer from starting and an exact 
   await chmod(filename, 0o444);
   try { await assert.rejects(f.app.applyTransaction(input), error => ['EACCES', 'EPERM'].includes(error.code)); assert.equal(calls, 0); await f.unchanged(); const durable = JSON.parse(await readFile(filename, 'utf8')); assert.equal(durable.transactions.find(tx => tx.transactionId === input.transactionId).state, 'ready'); }
   finally { await chmod(filename, 0o666); }
-  assert.equal((await f.app.applyTransaction(input)).state, 'applied'); assert.equal(calls, 1); assert.deepEqual(Object.fromEntries(Object.entries(f.app.getState().translations['zh-CN']).map(([id, { status, ...draft }]) => [id, draft])), Object.fromEntries(Object.entries(f.draft).map(([id, { status, ...draft }]) => [id, draft])));
+  assert.equal((await f.app.applyTransaction(input)).state, 'applied'); assert.equal(calls, 1); assertRebasedDrafts(f);
 });
 
 test('a dependency race after confirmation preserves external content and never writes an earlier candidate file', async t => {
@@ -87,5 +97,5 @@ test('journal denial after a durable first-file write never reports applied and 
   await assert.rejects(f.app.applyTransaction(input), { code: 'CONFIRMATION_INVALID' });
   const recovered = await f.app.recoverTransactions(); assert.equal(recovered.recovered[0].state, 'applied');
   for (const name of f.originals.keys()) assert.match(await readFile(path.join(f.source, name), 'utf8'), /explicit/);
-  for (const [id, draft] of Object.entries(f.draft)) { const after = f.app.getState().translations['zh-CN'][id]; assert.equal(after.text, draft.text); assert.equal(after.revision, draft.revision); }
+  assertRebasedDrafts(f);
 });

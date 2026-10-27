@@ -20,11 +20,14 @@ function appliedDraft(state, language, id, sources) {
   const source = sources.get(id); if (!source) return false;
   return (state.proposals || []).some(proposal => {
     if (proposal.applicationState !== 'applied') return false;
-    const transaction = (state.transactions || []).find(item => item.transactionId === proposal.transactionId || item.proposalIds?.includes(proposal.proposalId));
+    const transaction = proposal.transactionId ? (state.transactions || []).find(item => item.transactionId === proposal.transactionId) : (state.transactions || []).find(item => item.state === 'applied' && !item.revertedBy && item.proposalIds?.includes(proposal.proposalId));
     if (transaction?.state !== 'applied' || transaction.revertedBy) return false;
     const request = (state.requests || []).find(item => item.requestId === proposal.context?.requestId), edit = proposal.edits?.find(item => item.segmentId === id);
     const selected = request?.segments?.find(item => (item.segmentId || item.id) === id), drafts = state.translations?.[language] || {}, units = selected?.translationDraft?.translationUnitIds || [id];
-    const covered = request?.kind === 'revision' && request.projectId === state.project?.id && request.language === language && request.draftRevisions?.[id] === (drafts[id]?.revision || 0) && selected?.translationDraft && units.every(unit => request.translationUnitRevisions?.[unit] === undefined || request.translationUnitRevisions[unit] === (drafts[unit]?.revision || 0)) && normalized(units.map(unit => drafts[unit]).filter(Boolean).map(draft => draft.text).join('\n\n')) === normalized(selected.translationDraft.text);
+    const draft = drafts[id], receipt = draft?.sourceWritebackReceipt, noPendingIntent = draft?.status !== 'stale' && !draft?.formulaEdits?.length && !draft?.referenceEdits?.length && !draft?.formulaEditsConflict && !draft?.formulaEditUnmapped && !draft?.referenceEditsConflict && !draft?.referenceEditUnmapped;
+    const currentReceipt = receipt?.schemaVersion === 1 && receipt.projectId === state.project?.id && receipt.language === language && receipt.segmentId === id && receipt.transactionId === transaction.transactionId && transaction.projectId === state.project?.id && receipt.revision === draft?.revision && receipt.sourceHash === sourceHash(source) && draft?.sourceHash === receipt.sourceHash && noPendingIntent && units.length === 1 && units[0] === id;
+    const capturedRevision = request?.draftRevisions?.[id] === (drafts[id]?.revision || 0) && units.every(unit => request.translationUnitRevisions?.[unit] === undefined || request.translationUnitRevisions[unit] === (drafts[unit]?.revision || 0));
+    const covered = request?.kind === 'revision' && request.projectId === state.project?.id && request.language === language && (capturedRevision || currentReceipt) && selected?.translationDraft && normalized(units.map(unit => drafts[unit]).filter(Boolean).map(draft => draft.text).join('\n\n')) === normalized(selected.translationDraft.text);
     return edit && covered && normalized(edit.replacement).trim() === normalized(source.source).trim();
   });
 }

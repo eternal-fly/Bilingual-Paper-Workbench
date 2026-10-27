@@ -17,7 +17,7 @@ const bundle = await build({ entryPoints: [path.join(root, 'ui/app.mjs')], bundl
 } }] });
 let html = await readFile(path.join(root, 'ui/index.html'), 'utf8');
 html = html.replace(/<link[^>]*href="\.\/style\.css"[^>]*>/, `<style>${await readFile(path.join(root, 'ui/style.css'), 'utf8')}</style>`).replace(/<script[^>]*src="\.\/app\.mjs"[^>]*><\/script>/, () => `<script>${bundle.outputFiles[0].text.replaceAll('</script', '<\\/script')}</script>`);
-const artifacts = Object.fromEntries(['original', 'candidate', 'undo', 'next', 'recovered'].map(name => { const bytes = Buffer.from(`%PDF-1.4\nSynthetic ${name}`); return [name, { base64: bytes.toString('base64'), hash: createHash('sha256').update(bytes).digest('hex') }]; }));
+const artifacts = Object.fromEntries(['original', 'candidate', 'second', 'undo', 'next', 'recovered'].map(name => { const bytes = Buffer.from(`%PDF-1.4\nSynthetic ${name}`); return [name, { base64: bytes.toString('base64'), hash: createHash('sha256').update(bytes).digest('hex') }]; }));
 const { chromium } = await loadPlaywright(), browser = await chromium.launch(browserOptions), page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
 const errors = [], checks = [], check = name => { checks.push(name); console.log(name); };
 page.on('pageerror', error => errors.push(error.message));
@@ -95,6 +95,15 @@ try {
   assert.equal(await page.evaluate(() => window.__paperCalls.filter(call => call.action === 'readPdf').length), reads);
   assert.equal(await page.evaluate(() => document.activeElement.id), 'translation-panel');
   check('ordinary state polling neither reloads the applied PDF nor moves reading focus');
+  await page.evaluate(() => {
+    const state=window.__paperState;state.project.snapshotId='snapshot-second-applied';state.builds[1].stale=true;
+    state.builds.push({buildId:'build-second',kind:'candidate',status:'success',snapshotId:'snapshot-applied',promotedSnapshotId:state.project.snapshotId,candidateHash:'f'.repeat(64),pdfHash:window.__artifacts.second.hash,isolation:{verified:true}});
+    state.transactions.push({transactionId:'transaction-second',state:'applied',afterSnapshotId:state.project.snapshotId,buildId:'build-second',candidateHash:'f'.repeat(64)});
+    Object.assign(state.versionPair,{revision:3,latest:{buildId:'build-second',snapshotId:state.project.snapshotId,hash:window.__artifacts.second.hash}});
+    Object.assign(state.pdfSelection,{requestedRole:'latest',revision:state.pdfSelection.revision+1,activeRole:null,activeBuildId:null,activePdfHash:null});window.__publish();
+  });
+  await visible('second');assert.equal(await page.locator('#pdf-artifact').inputValue(),'version-latest');assert.equal(await page.evaluate(()=>window.__paperState.pdfSelection.activeBuildId),'build-second');assert.equal(await page.evaluate(()=>window.__paperState.versionPair.original.buildId),'build-original');
+  check('a second consecutive confirmed writeback replaces the same latest English viewer with its exact new artifact and retains the frozen original');
   await page.evaluate(() => {
     const state = window.__paperState; state.project.snapshotId = 'snapshot-undo'; state.builds[1].stale = true;
     state.builds.push({ buildId: 'build-undo', kind: 'candidate', status: 'success', snapshotId: 'snapshot-applied', promotedSnapshotId: 'snapshot-undo', candidateHash: 'd'.repeat(64), pdfHash: window.__artifacts.undo.hash, isolation: { verified: true } });

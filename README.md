@@ -1,4 +1,4 @@
-# Bilingual Paper Workbench 1.5.1
+# Bilingual Paper Workbench 1.5.2
 
 A local Windows plugin for reading, translating and revising LaTeX papers with Codex. Three aligned columns show the English PDF, an editable translation in reading view, and paragraph-linked notes. Import the original LaTeX project to preserve its document class, columns, figures and bibliography when compiling English revisions.
 
@@ -97,6 +97,16 @@ Review imports allow **64 MiB per file**, **32 MiB of extracted text/annotations
 PDF review supplies text and paragraph evidence, not visual inspection of binary figures. SyncTeX offers coarse navigation. Compilation and feedback do not prove scientific correctness. The compiler enforces CPU, memory, wall-time and process limits with sampled output monitoring rather than a hard volume quota. Private state relies on user filesystem access controls; encryption at rest and a VM boundary are not claimed.
 
 See [Data and Source Boundaries](docs/core-boundaries.md), [Compiler Security](docs/compiler-security.md) and [Font Support](docs/fonts-support.md).
+
+## Version 1.5.2: reliable repeated editing
+
+Confirmed writeback advances the exact translation draft and its formula/reference source association. Edit that paragraph again, compile another candidate and confirm writeback without inheriting the previous source epoch. Unrelated pending edits retain their intent. Undo and interrupted-operation recovery use exact private transaction evidence and preserve newer human text. A legacy failed draft can be reconciled through the native interface only when retained accepted-writeback records prove its association; unrelated source drift remains a conflict.
+
+The bound Desktop chat can read a fresh authenticated capture of unsaved or failed editor text, including its base revision, composition state and source identity. Native saving accepts only that exact author capture and rechecks it at the actual save boundary. It cannot supply arbitrary replacement text or approve source changes. Supported operations default to native MCP; fixed verbs in the current packaged transport remain available when the Desktop tool catalog is older. Screen scraping and browser-address discovery are unnecessary for these operations.
+
+Status refreshes reuse document derivations and preserve the active editor, caret and input-method composition. **More → Updates** checks public stable releases on a cached 24-hour cadence, supports opt-out and never blocks editing. Review the verified official release before manually downloading and installing it; the plugin does not execute installers or reload an unsaved window automatically.
+
+The opt-in [repeated-editing acceptance](scripts/acceptance-repeated-editing.mjs) generates its own small TeX paper, translations and reviews. It exercises matching, author decisions, repeated isolated compilation/writeback, undo and reopening without selecting an existing manuscript. Fresh release results appear in [Verification](docs/verification.md).
 
 ## Version 1.5.1: verify the Desktop model before submission
 

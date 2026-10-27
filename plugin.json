@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "bilingual-paper-editor",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "description": "Bilingual Paper Workbench: original-format LaTeX PDFs, protected translations and reviews, with model execution in your existing Codex Desktop chat.",
   "author": {
     "name": "Luofei"
@@ -30,10 +30,12 @@
           "write"
         ],
         "defaultPrompt": [
-          "FIRST open bilingual_paper_editor with the sourcePath and reviews explicitly supplied by me. Reuse its existing session window and verified originating Desktop chat. Use bilingual_paper_import_files for later imports; do not create another panel, invent a chat ID, or use shell extraction or manual file dialogs.",
-          "Run explicit translation, discussion and review requests in this existing Desktop chat. A whole-paper or paragraph-range translation is one approved task: continue its protected get_request and submit_translation_result batch loop in the same turn until completed, paused or cancelled. Use the packaged callback transport when supplied; do not start another model worker or acquire a second chat writer.",
-          "Review the selected original/latest PDFs and return suggested wording, its target-language translation and reasons through the approved paper tools. Preserve review evidence and current source identities.",
-          "Use approved selection requests for source candidates and compile safely. Applying source changes and undo require my exact UI confirmation. Do not add unrelated model requests."
+          "For source or review files I explicitly supply, FIRST call bilingual_paper_editor with their exact sourcePath and reviews; it opens the same independent window before importing. Use bilingual_paper_import_files for later imports. For an already-open paper, use native MCP operations directly without opening another page or panel.",
+          "Operate the current paper through bilingual_paper_read_project and bilingual_paper_read_paragraphs. For current unsaved or failed-save author input, use bilingual_paper_read_editor_drafts; saved drafts are not live input. Never use Computer Use, browser clicks, DOM inspection, clipboard copying or a guessed window for supported paper/editor operations.",
+          "Save current author input only when I request it, using bilingual_paper_save_editor_draft with the exact capture, textHash and baseDraftRevision; never supply replacement text or a force flag. Use bilingual_paper_reconcile_translation_draft only when exact already-confirmed writeback proof permits it. Preserve input and report missing-editor, composition or version conflicts.",
+          "If this chat has an older native tool catalog, use nativeAccess.currentTransport returned by bilingual_paper_editor or bilingual_paper_get_state. Its fixed project, paragraphs, read-editor, save-editor, reconcile-draft and preparation verbs use UTF-8 JSON and inherit this same Desktop chat identity. This is MCP transport only: do not inspect plugin source, write another client, start a model worker, copy requests manually or enqueue an extra message.",
+          "For explicit whole-paper or paragraph-range translation, prepare one native translation task and continue its protected get_request/submit_translation_result loop in this same Desktop turn until completed, paused or cancelled. Follow byte-driven continuations and complete-result staging without dropping paragraphs.",
+          "Review the selected PDFs and return suggested wording, its target-language translation and reasons through approved paper tools. Source candidates require protected scope and safe compilation; source application and undo require my exact UI confirmation. Do not add unrelated model requests."
         ]
       }
     }

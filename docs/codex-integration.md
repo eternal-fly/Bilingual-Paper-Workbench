@@ -1,4 +1,4 @@
-# Bilingual Paper Workbench: Codex Integration, Version 1.3.2
+# Bilingual Paper Workbench: Codex Integration, Version 1.5.2
 
 The existing Codex Desktop chat owns model execution. The plugin owns the paper window, protected requests, durable delivery receipts and validated returns. Explicit UI actions enter that exact chat's official durable queue. Desktop processes them with its current model and history; the plugin does not acquire another writer, resume the chat in a separate model process or require Desktop to release it. Other Desktop chats can continue.
 
@@ -32,12 +32,15 @@ Native callbacks carry the actual caller separately from model arguments. The pr
 
 ## Direct native paper operations
 
-Version 1.3.1 adds eight tools for an already-open paper. The user can request these operations directly in the bound Desktop chat; Codex does not need Computer Use or a private UI capability. Preparation registers exact work for the current turn rather than enqueueing another message or starting a model worker.
+Native MCP is the default for an already-open paper. The user can request these operations directly in the bound Desktop chat; Codex does not need Computer Use, browser identification, clipboard copying or a private UI capability. Preparation registers exact work for the current turn rather than enqueueing another message or starting a model worker. Version 1.5.2 adds live editor reads, captured-author-input saving and proof-only stale-draft reconciliation to the earlier eight operations.
 
 | Native tool | Scope |
 | --- | --- |
 | `bilingual_paper_read_project` | Page the current paragraph index and read paper/language/display identities. Entries contain brief location hints, not the full manuscript. |
 | `bilingual_paper_read_paragraphs` | Read the exact requested protected paragraphs and current drafts with complete byte-driven pages and continuation offsets. Private formula history is omitted. |
+| `bilingual_paper_read_editor_drafts` | Challenge the authenticated open editor for exact current input, including unsaved/failed-save text and composition status. Continue a large snapshot with its returned `captureId` and `nextOffset`; saved drafts are never substituted. |
+| `bilingual_paper_save_editor_draft` | Only on an explicit save request, save that captured author input using its project/snapshot, paragraph/language, `captureId`, `textHash` and `baseDraftRevision`. The schema accepts no replacement text or force flag. |
+| `bilingual_paper_reconcile_translation_draft` | Reconcile a saved stale draft only from exact already-confirmed source writeback proof and the current expected draft revision. Text and source bytes are preserved; missing proof/newer drift fails closed. |
 | `bilingual_paper_prepare_request` | Prepare selected translation, revision or discussion work and return its registered result-tool instructions. The server binds the invoking chat; the model cannot supply a binding ID. |
 | `bilingual_paper_prepare_translation_task` | Prepare the full paper or an explicit selection and return a compact task identity for the existing `get_request`/`submit_translation_result` loop. |
 | `bilingual_paper_control_translation_task` | Cancel remaining work or explicitly resume it in the same turn without another queue delivery. Cancellation keeps completed drafts and does not interrupt Desktop. |
@@ -46,6 +49,10 @@ Version 1.3.1 adds eight tools for an already-open paper. The user can request t
 | `bilingual_paper_configure_display_preferences` | Set an explicitly requested 14–28 px translation text size using project and preference-revision checks. |
 
 Reads and mutations require the current verified originating chat and matching project/snapshot identities. Language, draft and preference checks are repeated at the relevant serialized commit boundary. A stale saved binding cannot override revoked origin verification. Native preparation checks the complete returned packet, including writing-Skills guidance, before persisting a request; an oversized request leaves no unreachable pending authorization. Large translation tasks return a compact identity rather than the complete paragraph-ID array.
+
+Live text is read through an authenticated UI capture, not screen control. The response identifies its capture time, save state, buffer sequence, base draft revision, text digest and composition state. A read does not save, reconcile or authorize a source candidate. A save recaptures and verifies the same buffer and repeats caller/source checks before the actual serialized write. New typing, IME composition, stale source association and draft-revision changes retain the input and reject the save. `EDITOR_NOT_CONNECTED`, `EDITOR_CAPTURE_TIMEOUT` and ambiguous-window errors are reported directly instead of returning a saved draft as if it were current.
+
+The opener and `bilingual_paper_get_state` return model-visible `nativeAccess` guidance and the exact installed transport command. Generic Desktop discussion tickets carry the same native recipe when paper/editor context is needed. A stale host tool catalog can use that current fixed MCP transport in the same inherited Desktop turn; it is not a reason to inspect plugin source, write an improvised client, guess a browser tab or start another model message. A different chat's paper is never used to fill an empty current binding.
 
 Use `bilingual_paper_get_request` and the declared return tool to complete prepared work. Native translation-task packets include the writing-Skills policy and translation self-check within the byte-driven context budget. A changed target language blocks a delayed wrong-language result. Resume captures current unfinished source/draft/alignment context; cancellation remains available after physical source drift. None of these tools expose UI tokens, confirmation capabilities, source acceptance or source undo.
 
@@ -88,7 +95,7 @@ Source, language, alignment and draft changes pause the task before overwriting 
 
 The package includes `dist/desktop-callback.mjs`, a thin MCP client for the already running Desktop turn. It provides current installed tool definitions when a Desktop chat has cached older schemas. It performs no model inference, creates no chat, does not enqueue another message and does not open a UI.
 
-The only operations are:
+The fixed operations are:
 
 | Callback command | Native tool |
 | --- | --- |
@@ -96,6 +103,11 @@ The only operations are:
 | `submit` with UTF-8 JSON stdin | `bilingual_paper_submit_translation_result` |
 | `revision` with UTF-8 JSON stdin | `bilingual_paper_propose_revision` |
 | `reply` with UTF-8 JSON stdin | `bilingual_paper_submit_chat_reply` |
+| `state` / `project` | Current status/native guidance or the current paper index; `{}` or empty stdin is accepted. |
+| `paragraphs` / `read-editor` | Exact saved protected paragraphs or a fresh live editor capture, using UTF-8 JSON with current paper identities. |
+| `save-editor` / `reconcile-draft` | Exact captured author-buffer save or proof-only saved-draft reconciliation. No arbitrary text, force flag or source acceptance. |
+| `prepare` / `prepare-translation` / `control-translation` | Current-turn selected work or complete native translation-task preparation/control. |
+| `languages` / `display` / `set-display` | The corresponding explicitly requested native paper preference operation. |
 
 The callback derives its current installation root from its own module location and verifies the plugin/package/build versions, absolute regular Node/server paths and server build hash. It inherits Desktop's actual chat identity and working directory; there are no chat, root, endpoint or model override flags. JSON stdin and structured output are bounded to 8 MiB. The optional context offset and the request-bound `batchOffset`, `resultCount`, `finalize` result fields are forwarded without choosing another chat or acquiring acceptance authority. Standard output contains only bounded structured result JSON; private `_meta`, UI capabilities, authentication material and complete private UI state are excluded. Errors return sanitized codes without raw stack traces or source paths. Closing this short MCP client leaves the detached paper service available.
 
@@ -149,6 +161,6 @@ When an exact verified original/latest pair has no valid text cache, `bilingual_
 
 Preparation coalesces the exact pair and permits only one pair read per paper at a time. Before publishing, it rechecks the source, project, snapshot and PDF identities, then uses the existing serial cache validator. Closing the paper aborts pending reads. A 45-second timeout and JavaScript-worker heap limits bound the reader; these are not an OS sandbox or a hard total-memory limit. The separate TeX compiler retains its OS isolation boundary.
 
-Reloading the owned workbench backend and reconnecting the installed MCP transport are distinct from refreshing an already-running Desktop chat's tool catalog. The official `config/mcpServer/reload` method queues a configuration refresh for loaded threads and is not server-targeted. The acceptance host did not expose the control socket required by its proxy, so no Desktop hot-catalog refresh is claimed. Existing registered returns use the packaged current MCP transport; direct tools can also use a current MCP stdio connection in the same inherited host chat. Neither path creates an inference process, takes a chat writer or requires Computer Use. Never start a second app-server and describe its configuration as the original Desktop's live tool state.
+Reloading the owned workbench backend and reconnecting the installed MCP transport are distinct from refreshing an already-running Desktop chat's tool catalog. The official `config/mcpServer/reload` method queues a configuration refresh for loaded threads and is not server-targeted. The acceptance host did not expose the control socket required by its proxy, so no Desktop hot-catalog refresh is claimed. Existing registered returns and the fixed native-operation verbs use the packaged current MCP transport in the same inherited host chat when its listed tools are older. Neither path creates an inference process, takes a chat writer or requires Computer Use. Never start a second app-server and describe its configuration as the original Desktop's live tool state.
 
 References: [Codex App Server](https://learn.chatgpt.com/docs/app-server), [Codex CLI queue](https://learn.chatgpt.com/docs/cli/reference), [plugin MCP servers](https://developers.openai.com/plugins/build/mcp-server), and the official [durable queue implementation](https://github.com/openai/codex/blob/main/codex-rs/ext/queue/src/service.rs). Compatibility is checked against the installed schemas and release-specific live receipts; undocumented endpoints are not assumed.

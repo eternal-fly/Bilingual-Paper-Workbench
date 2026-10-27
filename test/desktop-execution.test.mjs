@@ -26,6 +26,7 @@ test('one user message creates its durable ticket before queueing and validates 
   const f = fixture(t); await f.bind(); const sent = await f.execution.sendMessage({ text: 'Explain this paragraph.', idempotencyKey: 'click-1' });
   assert.equal(sent.status, 'queued'); assert.equal(f.app.flow.desktopMessages[0].textHash, digest('Explain this paragraph.')); assert.equal(f.calls.filter(c => c[0] === 'enqueue').length, 1);
   const queued = f.calls.find(c => c[0] === 'enqueue')[1]; assert.ok(queued.text.includes('bilingual_paper_submit_chat_reply')); assert.ok(queued.text.includes(sent.messageId));
+  assert.ok(queued.text.includes('bilingual_paper_read_editor_drafts')); assert.ok(queued.text.includes('saved drafts are not a live editor capture')); assert.ok(queued.text.includes('not Computer Use'));
   assert.deepEqual(await f.execution.sendMessage({ text: 'Explain this paragraph.', idempotencyKey: 'click-1' }), sent); assert.equal(f.calls.filter(c => c[0] === 'enqueue').length, 1);
   await assert.rejects(f.execution.completeReply({ messageId: sent.messageId, text: 'Foreign answer' }, 'other-chat'), { code: 'THREAD_MISMATCH' });
   const returned = await f.execution.completeReply({ messageId: sent.messageId, text: 'Exact returned answer.' }, selection.threadId); assert.equal(returned.status, 'completed');

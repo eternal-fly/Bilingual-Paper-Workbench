@@ -1,6 +1,6 @@
 # Bilingual Paper Workbench — User Manual
 
-**Version 1.5.1 · Windows · English edition**
+**Version 1.5.2 · Windows · English edition**
 
 Bilingual Paper Workbench connects an English LaTeX paper, an editable translation and paragraph-linked review notes in one workspace. Your existing Codex Desktop chat performs translation and review; the workbench provides the reading, editing and confirmation interface. English is the default interface language. The translation language is a separate choice.
 
@@ -149,6 +149,28 @@ Original-only and unconfirmed-candidate reviews can return opinions but cannot r
 Current notes are shown by default. Open **History** in the notes controls to inspect retained older model suggestions. **Manage** controls future history retention and previews an explicit history cleanup. Current opinions, human comments and formal revision/undo records are separate from removable historical model notes.
 
 In the review-import dialog, **Withdraw notes** hides an imported file's opinions and keeps them recoverable. **Delete** has a separate preview and confirmation. Removing the imported record does not delete your original uploaded review file.
+
+## Continue editing after a confirmed writeback
+
+After **Write back English** succeeds, **Latest English** and its source identity update together. The translation used by that exact accepted revision keeps its text and receives a saved revision associated with the updated source. Click the same paragraph and continue editing; repeat the candidate, isolated compilation and confirmation cycle as needed. Editing another paragraph does not adopt its pending changes.
+
+Undo is another compiled and confirmed transaction. It restores only an exact matching prior draft state; newer author text remains available for review. A source change outside the verified transaction history is not automatically treated as an accepted translation change.
+
+## Read or recover unsaved input through Codex
+
+In the bound Desktop chat, ask: “Read my current unsaved translation input through the native workbench interface.” The live-editor tool returns a fresh authenticated capture with its paragraph, exact text, save state, draft revision, source association and composition state. Saved paragraph reads and live-editor captures are distinct. Missing, closed or ambiguous editors produce an explicit status instead of a guessed browser window or substituted saved text.
+
+If you request saving, Codex can save only that exact captured author text. The backend recaptures and rechecks it at the save boundary. Newer typing, active input-method composition, source changes or refused persistence preserve the editor and report the conflict. Reading does not save, enqueue a model request or write English source.
+
+For a legacy stale draft left by an older confirmed writeback, ask Codex to reconcile that paragraph with its confirmed writeback history. This changes association metadata only when the retained transaction and captured draft prove it exactly. It cannot force a match for newer or ambiguous intent. After successful reconciliation, read the live editor again before saving. Keep or export unresolved input rather than discarding it to bypass validation.
+
+If the Desktop tool catalog is older, use the current packaged MCP transport identified in the workbench's native-access instructions. It retains the inherited chat and exposes fixed paper operations. Supported reading and saving require no Computer Use, browser-address discovery, extra model worker or replacement chat.
+
+## Check for plugin updates
+
+Open **More → Updates** for the installed version, check status and available stable release. Automatic checks use the fixed public GitHub repository and a cached 24-hour cadence. No manuscript, draft or chat data is sent. **Check now** retries explicitly; the checkbox disables automatic checks. Offline, rate-limit and update-cache errors do not block editing or compilation.
+
+Choose **Review update** to inspect its official version, runtime ZIP name, size and SHA-256 metadata. Only **Open official release** opens GitHub. Download and verify the package, save or export open editing buffers, and confirm installation yourself. This version never automatically downloads or executes new runtime code, changes a model or reloads an unsaved window.
 
 ## Change models in the bound Desktop chat
 

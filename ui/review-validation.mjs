@@ -5,13 +5,13 @@ export const partialReviewOpinion = entry => !completedReviewOpinion(entry) && N
 /** Backend proofs are usable only with the exact current project, file and note revision. */
 export function reviewImportStatus(state, batchId) {
   const batch = (state.reviewBatches || []).find(item => item.batchId === batchId), validation = state.reviewImportValidation;
-  const supplied = validation?.projectId === state.project?.id && validation?.sourceSnapshotId === state.project?.snapshotId ? validation.batches?.find(item => item.batchId === batchId && item.revision === (batch?.revision || 1) && item.fileHash === batch?.fileHash) : null;
+  const supplied = validation && state.project?.id && state.project?.snapshotId && validation.projectId === state.project.id && validation.sourceSnapshotId === state.project.snapshotId ? validation.batches?.find(item => item.batchId === batchId && item.revision === (batch?.revision || 1) && item.fileHash === batch?.fileHash) : null;
   const proof = new Map((supplied?.notes || []).map(note => [note.noteId, note])), notes = new Map();
   for (const note of [...(state.reviewNotes || []), ...(state.reviewHistory || [])].filter(note => note.batchId === batchId)) {
     const entry = proof.get(note.noteId);
     if (entry?.revision === (note.revision || 1) && noteStatuses.has(entry.status)) notes.set(note.noteId, { ...entry, organizable: entry.organizable !== false && !completedReviewOpinion(entry), requiresRecheck: !completedReviewOpinion(entry) && entry.status !== 'current', associationRefreshNeeded: entry.associationRefreshNeeded === true || entry.status === 'current' && entry.requiresRecheck === true });
     else {
-      const current = !validation && note.sourceSnapshotId === state.project?.snapshotId;
+      const current = Boolean(!validation && state.project?.id && state.project?.snapshotId && note.sourceSnapshotId === state.project.snapshotId);
       notes.set(note.noteId, { noteId: note.noteId, revision: note.revision || 1, status: current ? 'current' : 'recheck', organizable: true, requiresRecheck: !current });
     }
   }

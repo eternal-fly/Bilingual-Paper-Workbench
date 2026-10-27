@@ -19,6 +19,11 @@ await page.addInitScript(() => {
 });
 try {
   await page.goto('http://127.0.0.1:9163/'); await page.waitForFunction(() => window.__calls.includes('state'));
+  assert.equal(await page.locator('#source-content .empty-state').count(),1,'The first identical empty backend state must not erase the initial source onboarding');
+  assert.equal(await page.locator('#translation-content .empty-state').count(),1,'The first identical empty backend state must not erase translation onboarding');
+  await page.evaluate(()=>window.__publish(structuredClone(window.__state)));
+  assert.equal(await page.locator('#translation-content .empty-state').count(),1);
+  check('the first unchanged empty backend state and later identical adoption retain both onboarding columns after workspace initialization');
   assert.equal(await page.locator('html').getAttribute('lang'), 'en');
   assert.ok((await page.locator('#pdf-empty-note').textContent()).includes('source ZIP'));
   assert.ok(!/[\u4e00-\u9fff]/u.test(await page.locator('#pdf-empty').textContent()));

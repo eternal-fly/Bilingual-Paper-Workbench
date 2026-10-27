@@ -5,8 +5,25 @@ import { fileURLToPath } from 'node:url';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { MODEL_TOOL_BYTES } from './request-budgets.mjs';
+import { z } from 'zod';
 const ROOT = fileURLToPath(new URL('../', import.meta.url)), MAX_INPUT = MODEL_TOOL_BYTES, MAX_OUTPUT = MODEL_TOOL_BYTES;
 const tools = { get: 'bilingual_paper_get_request', submit: 'bilingual_paper_submit_translation_result', revision: 'bilingual_paper_propose_revision', reply: 'bilingual_paper_submit_chat_reply' };
+const nativeId=z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/u),nativeLanguage=z.string().regex(/^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$/u),scope={expectedProjectId:nativeId,expectedSnapshotId:nativeId},ids=z.array(nativeId).min(1),offset=z.number().int().nonnegative();
+const nativeActions={
+  state:['bilingual_paper_get_state',z.object({}).strict()],
+  project:['bilingual_paper_read_project',z.object({expectedProjectId:nativeId.optional(),expectedSnapshotId:nativeId.optional(),offset:offset.optional(),limit:z.number().int().positive().optional()}).strict()],
+  paragraphs:['bilingual_paper_read_paragraphs',z.object({...scope,segmentIds:ids,offset:offset.optional()}).strict()],
+  'read-editor':['bilingual_paper_read_editor_drafts',z.object({...scope,segmentIds:ids.optional(),language:nativeLanguage.optional(),captureId:nativeId.optional(),offset:offset.optional()}).strict()],
+  'save-editor':['bilingual_paper_save_editor_draft',z.object({...scope,captureId:nativeId,segmentId:nativeId,language:nativeLanguage,baseDraftRevision:offset,textHash:z.string().regex(/^[a-f0-9]{64}$/u)}).strict()],
+  'reconcile-draft':['bilingual_paper_reconcile_translation_draft',z.object({...scope,segmentId:nativeId,language:nativeLanguage,expectedRevision:z.number().int().positive()}).strict()],
+  prepare:['bilingual_paper_prepare_request',z.object({...scope,kind:z.enum(['translation','revision','discussion']),segmentIds:ids,language:nativeLanguage.optional(),prompt:z.string().max(8000).optional()}).strict()],
+  'prepare-translation':['bilingual_paper_prepare_translation_task',z.object({...scope,scope:z.enum(['all','selected']),sourceSegmentIds:ids.optional(),language:nativeLanguage.optional(),prompt:z.string().max(8000).optional()}).strict()],
+  'control-translation':['bilingual_paper_control_translation_task',z.object({expectedProjectId:nativeId,expectedSnapshotId:nativeId.optional(),taskId:nativeId,action:z.enum(['cancel','resume'])}).strict()],
+  languages:['bilingual_paper_configure_languages',z.object({...scope,expectedRevision:offset,uiLanguage:nativeLanguage.optional(),translationLanguage:z.union([nativeLanguage,z.literal('interface')]).optional()}).strict()],
+  display:['bilingual_paper_get_display_preferences',z.object(scope).strict()],
+  'set-display':['bilingual_paper_configure_display_preferences',z.object({...scope,expectedRevision:offset,translationTextSize:z.number().int().min(14).max(28)}).strict()],
+};
+for(const[action,[name]]of Object.entries(nativeActions))tools[action]=name;
 const fail = (code, message = 'The Desktop callback could not be completed.') => { throw Object.assign(new Error(message), { code }); };
 const id = value => typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/u.test(value);
 const plain = value => value && typeof value === 'object' && !Array.isArray(value) && [Object.prototype, null].includes(Object.getPrototypeOf(value));
@@ -21,15 +38,16 @@ const safeCode = value => /^[A-Z][A-Z0-9_]{1,63}$/u.test(value || '') ? value : 
 /** Only the current Desktop turn provides the chat identity. There is no CLI
  * chat, workspace, endpoint, model, tool-name or private UI capability option. */
 export function parseDesktopCallback(argv, stdin = Buffer.alloc(0)) {
-  if (!Array.isArray(argv) || !Object.hasOwn(tools, argv[0]) || (argv[0] === 'get' ? ![2,3].includes(argv.length) || !id(argv[1]) || argv.length===3 && (!/^(?:0|[1-9][0-9]*)$/u.test(argv[2]) || !Number.isSafeInteger(Number(argv[2]))) : argv.length !== 1)) fail('INVALID_INPUT', 'Use get <requestId> [offset], or submit, revision or reply with bounded JSON on stdin.');
+  if (!Array.isArray(argv) || !Object.hasOwn(tools, argv[0]) || (argv[0] === 'get' ? ![2,3].includes(argv.length) || !id(argv[1]) || argv.length===3 && (!/^(?:0|[1-9][0-9]*)$/u.test(argv[2]) || !Number.isSafeInteger(Number(argv[2]))) : argv.length !== 1)) fail('INVALID_INPUT', 'Use an exact packaged callback verb with bounded JSON on stdin; get accepts its request identity and optional offset.');
   if (Buffer.byteLength(stdin) > MAX_INPUT) fail('INPUT_TOO_LARGE');
   const action = argv[0]; let input;
   if (action === 'get') input = { requestId: argv[1],...(argv.length===3?{offset:Number(argv[2])}:{}) };
-  else { try { input = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(stdin)); } catch { fail('INVALID_INPUT'); } }
+  else { try { input = !stdin.length&&['project','state'].includes(action)?{}:JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(stdin)); } catch { fail('INVALID_INPUT'); } }
   const valid = action === 'get' && strict(input, ['requestId','offset']) && id(input.requestId) && (input.offset===undefined || Number.isSafeInteger(input.offset)&&input.offset>=0)
     || action === 'submit' && strict(input, ['requestId', 'translations',...stageKeys]) && validStage(input) && id(input.requestId) && Array.isArray(input.translations) && input.translations.length >= 1 && input.translations.every(row => strict(row, ['segmentId', 'text']) && id(row.segmentId) && text(row.text, MODEL_TOOL_BYTES))
     || action === 'revision' && strict(input, ['requestId', 'edits', 'reason',...stageKeys]) && validStage(input) && id(input.requestId) && text(input.reason, 8000) && input.reason.length > 0 && Array.isArray(input.edits) && input.edits.length >= 1 && input.edits.every(row => strict(row, ['segmentId', 'beforeHash', 'replacement']) && id(row.segmentId) && typeof row.beforeHash === 'string' && row.beforeHash.length >= 1 && row.beforeHash.length <= 128 && text(row.replacement, MODEL_TOOL_BYTES))
-    || action === 'reply' && strict(input, ['messageId', 'text']) && id(input.messageId) && text(input.text, 65536) && input.text.length > 0;
+    || action === 'reply' && strict(input, ['messageId', 'text']) && id(input.messageId) && text(input.text, 65536) && input.text.length > 0
+    || Object.hasOwn(nativeActions,action)&&nativeActions[action][1].safeParse(input).success;
   if (!valid || Buffer.byteLength(JSON.stringify(input)) > MAX_INPUT) fail('INVALID_INPUT');
   return { action, input };
 }

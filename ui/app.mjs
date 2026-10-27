@@ -26,6 +26,8 @@ import { initializeExistingChatBinding } from './existing-chat-binding.mjs';
 import { initializeBackgroundConnection } from './background-connection.mjs';
 import { initializeDesktopTranslation } from './desktop-translation.mjs';
 import { initializeTranslationTypography } from './translation-typography.mjs';
+import { initializeEditorDraftPublisher } from './editor-drafts.mjs';
+import {initializeUpdates} from './updates.mjs';
 import { configuredDesktopExecution, desktopMessageHistory } from './desktop-execution.mjs';
 import { resolveInterfacePreference } from './interface-preferences.mjs';
 import { projectReviewHistory } from '../src/review-history.mjs';
@@ -71,6 +73,9 @@ let layerFinalProposalId = null;
 let splitIntent = null;
 let alignmentIntent = null;
 let unitsCache = { state: null, language: null, units: [], byId: new Map() };
+let documentRenderSignature = '';
+let markdownContextValue, markdownContextSignature = '';
+let lastAdoptedState = null;
 let activeProposal = null;
 let currentRequest = null;
 let requestKind = 'discussion';
@@ -91,6 +96,7 @@ let projectSwitcher;
 let englishWritebackController;
 let sourceWorkflow;
 let desktopTranslationController;
+let updatesController;
 let reviewOrganizationController;
 let reviewOrganizationBusy = false;
 let reviewAnchorController,existingChatBindingController,backgroundConnectionController;
@@ -150,8 +156,14 @@ const cycleJobScopes = new Map();
 const paragraphReviewScopes = new Map();
 const proposalSelection = new Set();
 const draftBuffers = new Map();
+const draftSaveFailures=new WeakMap();
+let draftSaveNotice=null;
 const sourceNodes = new Map();
 const translationNodes = new Map();
+const editorDraftPublisher=initializeEditorDraftPublisher({api,getScope:()=>({enabled:state.capabilities?.editorDraftCapture===true,recordId:workspaceKey(state),projectId:state.project?.id,snapshotId:state.project?.snapshotId}),collect:()=>currentBuffers().filter(buffer=>buffer.state!=='saved'||buffer.language===language&&translationNodes.get(buffer.segmentId)?.editing).map(buffer=>{
+  const input=buffer.language===language?translationNodes.get(buffer.segmentId)?.input:null,editing=input&&!input.hidden;
+  return{segmentId:buffer.segmentId,language:buffer.language,text:editing?input.value:buffer.text,baseDraftRevision:buffer.revision,bufferSequence:buffer.sequence||0,saveState:buffer.state,composing:Boolean(buffer.composing),sourceSnapshotId:buffer.editSnapshotId||buffer.snapshotId,...(buffer.editSourceHash||buffer.baseSourceHash?{baseSourceHash:buffer.editSourceHash||buffer.baseSourceHash}:{}),...(editing&&Number.isInteger(input.selectionStart)?{selectionStart:input.selectionStart,selectionEnd:input.selectionEnd}:{})};
+})});
 let demoProjectId = null;
 try { demoProjectId = sessionStorage.getItem('paper-editor-synthetic-project'); } catch {}
 
@@ -214,20 +226,32 @@ function errorMessage(error) {
 }
 function notify(message, error = false, persistent = false) {
   clearTimeout(noticeTimer);
+  draftSaveNotice=null;
   delete $('notice').dataset.desktopTranslationTask;
   $('notice').textContent = message;
   $('notice').classList.toggle('error', error);
   $('notice').hidden = false;
   if (!persistent) noticeTimer = setTimeout(() => { $('notice').hidden = true; }, 8000);
 }
-function reportError(error) { notify(errorMessage(error), true, true); }
+function draftFailureResolved(failure){const buffer=draftBuffers.get(failure.key);return buffer?.state==='saved'&&!buffer.pending&&!buffer.composing&&(buffer.sequence||0)>=failure.sequence;}
+function tagDraftSaveFailure(error,buffer,sequence=buffer.sequence||0){if(error&&typeof error==='object')draftSaveFailures.set(error,{key:`${buffer.workspaceKey}:${buffer.language}:${buffer.segmentId}`,sequence});return error;}
+function clearDraftSaveNotice(buffer){
+  if(!draftSaveNotice||draftSaveNotice.key!==`${buffer.workspaceKey}:${buffer.language}:${buffer.segmentId}`||!draftFailureResolved(draftSaveNotice))return;
+  clearTimeout(noticeTimer);draftSaveNotice=null;$('notice').hidden=true;$('notice').textContent='';$('notice').classList.remove('error');
+}
+function reportError(error) {
+  const failure=error&&typeof error==='object'?draftSaveFailures.get(error):null;
+  if(failure&&(draftFailureResolved(failure)||draftSaveNotice?.key===failure.key&&draftSaveNotice.sequence>failure.sequence))return;
+  notify(errorMessage(error), true, true);if(failure)draftSaveNotice=failure;
+}
 function bufferKey(segmentId, lang = language) { return `${workspaceKey(state)}:${lang}:${segmentId}`; }
 function serverDraft(segmentId, lang = language) { return state.translations?.[lang]?.[segmentId] || null; }
 function bufferFor(segmentId, lang = language) {
   const key = bufferKey(segmentId, lang);
   if (!draftBuffers.has(key)) {
     const draft = serverDraft(segmentId, lang);
-    draftBuffers.set(key, { workspaceKey: workspaceKey(state), segmentId, language: lang, projectId:state.project?.id,snapshotId:state.project?.snapshotId,sequence:0,text: draft?.text ?? (lang === 'zh-CN' ? readingSources().find(segment => segment.id === segmentId)?.translation : '') ?? '', revision: draft?.revision || 0, state: 'saved', timer: null, pending: null, error: '' });
+    const text=draft?.text ?? (lang === 'zh-CN' ? readingSources().find(segment => segment.id === segmentId)?.translation : '') ?? '';
+    draftBuffers.set(key, { workspaceKey: workspaceKey(state), segmentId, language: lang, projectId:state.project?.id,snapshotId:state.project?.snapshotId,baseSourceHash:draft?.sourceHash||readingSources().find(segment=>segment.id===segmentId)?.sourceHash||readingSources().find(segment=>segment.id===segmentId)?.beforeHash,sequence:0,text,confirmedText:text, revision: draft?.revision || 0, state: 'saved', timer: null, pending: null, error: '' });
   }
   return draftBuffers.get(key);
 }
@@ -293,12 +317,17 @@ async function withWorkspaceSwitch(work) {
 function adopt(result) {
   const incoming = result?.state || result;
   if (incoming && Array.isArray(incoming.segments)) {
+    if(incoming===lastAdoptedState){renderHost();return result;}
+    lastAdoptedState=incoming;
     const changedProject = currentProjectId !== projectId(incoming.project) || currentWorkspaceKey !== workspaceKey(incoming);
     const confirmed = !changedProject && (incoming.transactions || []).some(transaction => transaction.state === 'applied' && transaction.afterSnapshotId === incoming.project?.snapshotId && !(state.transactions || []).some(previous => previous.transactionId === transaction.transactionId && previous.state === 'applied'));
     if (changedProject) {
       for (const buffer of currentBuffers()) clearTimeout(buffer.timer);
       sourceNodes.clear(); translationNodes.clear();
       $('source-content').replaceChildren(); $('translation-content').replaceChildren();
+      // The first backend identity may still describe the same empty paper.
+      // Clearing its DOM invalidates the cached content even when data match.
+      documentRenderSignature='';
       currentProjectId = projectId(incoming.project);
       currentWorkspaceKey = workspaceKey(incoming);
       translationLanguageChoice = incoming.languagePreferences?.translationLanguage || incoming.project?.targetLanguage || 'zh-CN';
@@ -325,6 +354,7 @@ function adopt(result) {
       state.synthetic = Boolean(incoming.synthetic);
     }
     state = { ...state, ...incoming, proposals: incoming.proposals || [], translations: incoming.translations || {} };
+    editorDraftPublisher.adopt();
     if (confirmed) pendingConfirmedPdf = { projectId: currentProjectId, record: currentWorkspaceKey, snapshotId: state.project.snapshotId, choice: sourceChoiceRevision };
     if (!changedProject && incoming.languagePreferences) { translationLanguageChoice = incoming.languagePreferences.translationLanguage || translationLanguageChoice; interfaceLanguage = interfacePreference(incoming.languagePreferences); language = resolveTargetLanguage(translationLanguageChoice, interfaceLanguage); }
     for (const id of proposalSelection) if (!state.proposals.some(proposal => proposal.proposalId === id && pendingProposal(proposal))) proposalSelection.delete(id);
@@ -453,7 +483,7 @@ function render() {
   renderPdfSelection();
   applyLanguages();
   projectSwitcher?.adopt(state);
-  englishWritebackController?.adopt();
+  updatesController?.adopt();
 }
 function isCycleReviewJob(job) { return job?.kind === 'reviewCycle'; }
 function isCycleParagraph(job) { return isCycleReviewJob(job) && (cycleJobScopes.get(job.jobId)?.selected ?? (job.scope === 'selected' || job.reviewScope === 'selected')); }
@@ -1013,7 +1043,7 @@ let translationEditRequest = 0;
 const translationEditable = unit => Boolean(unit?.translatable && unit.kind !== 'opaque');
 const typographyFocus = target => Boolean(target?.closest?.('.translation-text-settings, .more-menu > summary'));
 function renderTranslationReading(node, unit, buffer) {
-  const signature = JSON.stringify([buffer.text, unit.translatable, unit.kind, unit.kind === 'opaque' ? unit.source || unit.visibleText || unit.displayText : null, unit.protectedTokens, state.markdownContext || {}, language]);
+  const signature = JSON.stringify([buffer.text, unit.translatable, unit.kind, unit.kind === 'opaque' ? unit.source || unit.visibleText || unit.displayText : null, unit.protectedTokens, readingContextSignature(), language,interfaceLanguage]);
   if (node.readSignature === signature) return;
   node.readSignature = signature;
   node.reading.lang = language; node.reading.dir = isRtlLanguage(language) ? 'rtl' : 'auto';
@@ -1068,7 +1098,7 @@ async function beginTranslationEdit(segmentId) {
   if (!node.editing) {
     try { node.input.setProtectedTokens(deriveTranslationProtectedTokens(buffer.text, currentUnit.protectedTokens || []), currentUnit.protectedTokens || []); node.input.value = buffer.text; }
     catch (error) { reportError(error); return false; }
-    node.editing = true; node.closeRequested = false; buffer.mathInline = true; buffer.editSnapshotId ||= state.project?.snapshotId; buffer.editProjectId ||= state.project?.id;
+    node.editing = true; node.closeRequested = false; buffer.mathInline = true; buffer.editSnapshotId ||= state.project?.snapshotId; buffer.editProjectId ||= state.project?.id;buffer.editSourceHash ||= serverDraft(segmentId)?.sourceHash||buffer.baseSourceHash;
   }
   syncTranslationView(node, currentUnit, buffer); node.input.focus({ preventScroll: true });
   return true;
@@ -1084,7 +1114,7 @@ async function finishTranslationEdit(segmentId, { returnFocus = false } = {}) {
     try {
       await saveBuffer(buffer);
       if (translationNodes.get(segmentId) !== node || buffer.workspaceKey !== workspaceKey(state) || buffer.composing || buffer.state !== 'saved' || (buffer.sequence || 0) !== sequence) return false;
-      node.editing = false; node.closeRequested = false; buffer.editSnapshotId = null; buffer.editProjectId = null; node.readSignature = '';
+      node.editing = false; node.closeRequested = false; buffer.editSnapshotId = null; buffer.editProjectId = null;buffer.editSourceHash=null; node.readSignature = '';
       syncTranslationView(node, translationUnit(segmentId), buffer);
       if (returnFocus) node.reading.focus({ preventScroll: true });
       return true;
@@ -1129,15 +1159,17 @@ function translationNode(segment, index) {
     node.closeRequested = false;
     buffer.text = input.value; buffer.sequence=(buffer.sequence||0)+1; buffer.state = 'dirty'; buffer.error = '';
     buffer.composing = buffer.composing || event.isComposing === true;
+    editorDraftPublisher.changed();
     syncController?.onHumanInput(segment.id, buffer.text, { composing: buffer.composing });
     updateDraftNode(segment.id);
     updateSelectionLabels();
     clearTimeout(buffer.timer);
     if (!buffer.composing) buffer.timer = setTimeout(() => { saveBuffer(buffer).catch(() => {}); }, 650);
   });
-  input.addEventListener('compositionstart', () => { const buffer = bufferFor(segment.id); buffer.composing = true; clearTimeout(buffer.timer); syncController?.onComposition(segment.id, true); });
+  input.addEventListener('compositionstart', () => { const buffer = bufferFor(segment.id); buffer.composing = true; clearTimeout(buffer.timer); syncController?.onComposition(segment.id, true);editorDraftPublisher.changed(); });
   input.addEventListener('compositionend', () => {
     const buffer = bufferFor(segment.id); buffer.composing = false; buffer.text = input.value; buffer.sequence=(buffer.sequence||0)+1; buffer.state = 'dirty';
+    editorDraftPublisher.changed();
     syncController?.onComposition(segment.id, false); syncController?.onHumanInput(segment.id, buffer.text, { composing: false });
     clearTimeout(buffer.timer); buffer.timer = setTimeout(() => { saveBuffer(buffer).catch(() => {}); }, 650);
     if (node.closeRequested && !article.contains(document.activeElement)) queueMicrotask(() => { void finishTranslationEdit(segment.id); });
@@ -1175,7 +1207,26 @@ function translationNode(segment, index) {
   return node;
 }
 function interfaceCopyElement(tag, className, copy) { const node = element(tag, className, t(copy)); node.dataset.interfaceCopy = copy; return node; }
+function readingContextSignature(){if(markdownContextValue!==state.markdownContext){markdownContextValue=state.markdownContext;markdownContextSignature=JSON.stringify(state.markdownContext||{});}return markdownContextSignature;}
+function reconcileTranslationDraft(node,unit,buffer,server){
+  if(!server||server.revision<=buffer.revision)return;
+  const sourceHash=unit?.sourceHash||unit?.beforeHash,currentSource=server.status!=='stale'&&sourceHash&&server.sourceHash===sourceHash;
+  const sameText=(left,right)=>typeof left==='string'&&typeof right==='string'&&left.replaceAll('\r\n','\n')===right.replaceAll('\r\n','\n');
+  const exactAcknowledgment=currentSource&&!buffer.pending&&sameText(server.text,buffer.text)&&(!node.editing||sameText(node.input.value,buffer.text));
+  const metadataOnly=currentSource&&typeof buffer.confirmedText==='string'&&server.text===buffer.confirmedText;
+  if(exactAcknowledgment||metadataOnly){
+    buffer.revision=server.revision;buffer.baseSourceHash=sourceHash;buffer.snapshotId=state.project.snapshotId;
+    if(node.editing){buffer.editSnapshotId=state.project.snapshotId;buffer.editSourceHash=sourceHash;}
+    if(exactAcknowledgment){buffer.confirmedText=server.text;if(!buffer.composing){buffer.state='saved';buffer.error='';buffer.formulaNotice='';clearTimeout(buffer.timer);clearDraftSaveNotice(buffer);}}
+  }else if(!buffer.pending){
+    if(node.editing||buffer.state!=='saved'){buffer.state='saveFailed';buffer.error=translationReadCopy('VERSION_CONFLICT：译文已由其他任务更新；当前编辑缓冲仍保留，请先核对。', 'VERSION_CONFLICT: another task updated this translation. Your editing buffer is retained; review it before continuing.', 'VERSION_CONFLICT：譯文已由其他任務更新；目前編輯緩衝仍保留，請先核對。');}
+    else{buffer.text=server.text;buffer.confirmedText=server.text;buffer.revision=server.revision;buffer.snapshotId=state.project.snapshotId;buffer.baseSourceHash=server.sourceHash||sourceHash;}
+  }
+}
 function renderDocuments() {
+  const signature=JSON.stringify([workspaceKey(state),state.project?.snapshotId,readingSources(),state.translations?.[language],state.alignments,readingContextSignature(),language,interfaceLanguage,$('show-tex').checked]);
+  if(signature===documentRenderSignature)return;
+  documentRenderSignature=signature;
   if (!state.project) {
     if (!$('source-content').querySelector('.empty-state')) {
       const empty = element('div', 'empty-state');
@@ -1214,19 +1265,17 @@ function renderDocuments() {
     draftNode.article.classList.toggle('selected', mapping.unitIds.includes(unit.id));
     const buffer = bufferFor(unit.id);
     const server = serverDraft(unit.id);
-    if (buffer.state === 'saved' && !buffer.pending && server && server.revision > buffer.revision) {
-      if (draftNode.editing && buffer.text !== server.text) { buffer.state = 'saveFailed'; buffer.error = translationReadCopy('VERSION_CONFLICT：译文已由其他任务更新；当前编辑缓冲仍保留，请先核对。', 'VERSION_CONFLICT: another task updated this translation. Your editing buffer is retained; review it before continuing.', 'VERSION_CONFLICT：譯文已由其他任務更新；目前編輯緩衝仍保留，請先核對。'); }
-      else { buffer.text = server.text; buffer.revision = server.revision; }
-    }
+    reconcileTranslationDraft(draftNode,unit,buffer,server);
     if (draftNode.input.value !== buffer.text && document.activeElement !== draftNode.input) draftNode.input.value = buffer.text;
-    updateDraftNode(unit.id);
+    updateDraftNode(unit.id,{summary:false});
   });
 }
-function updateDraftNode(segmentId) {
+function updateDraftNode(segmentId,{summary=true}={}) {
   const node = translationNodes.get(segmentId);
   if (!node) return;
   const buffer = bufferFor(segmentId);
   const saved = serverDraft(segmentId);
+  reconcileTranslationDraft(node,translationUnit(segmentId),buffer,saved);
   syncTranslationView(node, translationUnit(segmentId), buffer);
   if (!translationEditable(translationUnit(segmentId))) { node.marker.textContent = t('只读结构'); node.message.textContent = node.editing ? translationReadCopy('此段已不再可编辑，当前缓冲仍保留，可导出后核对。', 'This paragraph is no longer editable. Your buffer is retained and can be exported for review.', '此段已不再可編輯，目前緩衝仍保留，可匯出後核對。') : t('文档结构无需翻译；原始内容可展开查看。'); node.retry.hidden = true; node.exportDraft.hidden = !node.editing || !buffer.text; return; }
   node.marker.textContent = `${t(saveLabels[buffer.state])}${buffer.revision ? ` r${buffer.revision}` : ''}`;
@@ -1239,7 +1288,7 @@ function updateDraftNode(segmentId) {
   node.message.textContent = buffer.state === 'saveFailed' ? buffer.error : formulaNotice || (saved?.status === 'stale' ? '源版本已变化，保留草稿以供重新核对。' : selectionMapping(null, segmentId).unaligned ? '尚未归入当前对齐组；草稿仍独立保留，可通过“调整对齐”重新指定。' : changed ? t('译文已改，原文未改。') : t('译文是独立派生稿，原文保持不变。'));
   node.message.classList.toggle('changed', changed || saved?.status === 'stale');
   node.retry.hidden = buffer.state !== 'saveFailed'; node.exportDraft.hidden = buffer.state !== 'saveFailed';
-  renderSaveSummary();
+  if(summary)renderSaveSummary();
 }
 function renderSaveSummary() {
   const buffers = currentBuffers();
@@ -1256,12 +1305,12 @@ function renderSaveSummary() {
   englishWritebackController?.adopt();
 }
 async function saveBuffer(buffer) {
-  if (buffer.workspaceKey !== workspaceKey(state)) throw new Error('该草稿属于另一论文任务，已保留在原任务中。请先打开对应任务再保存。');
+  if (buffer.workspaceKey !== workspaceKey(state)) throw tagDraftSaveFailure(new Error('该草稿属于另一论文任务，已保留在原任务中。请先打开对应任务再保存。'),buffer);
   clearTimeout(buffer.timer);
   if (buffer.composing) return;
   if (buffer.editProjectId && buffer.editProjectId !== state.project?.id || buffer.editSnapshotId && buffer.editSnapshotId !== state.project?.snapshotId || serverDraft(buffer.segmentId, buffer.language)?.status === 'stale') {
     const error = Object.assign(new Error(translationReadCopy('源版本已变化，编辑缓冲仍保留；请先核对当前段落。', 'The source version changed. Your editing buffer is retained; review the current paragraph first.', '來源版本已變化，編輯緩衝仍保留；請先核對目前段落。')), { code: 'VERSION_CONFLICT' });
-    buffer.state = 'saveFailed'; buffer.error = errorMessage(error); updateDraftNode(buffer.segmentId); throw error;
+    buffer.state = 'saveFailed'; buffer.error = errorMessage(error); updateDraftNode(buffer.segmentId); throw tagDraftSaveFailure(error,buffer);
   }
   if (buffer.pending) return buffer.pending;
   if (buffer.state === 'saved') return;
@@ -1278,6 +1327,7 @@ async function saveBuffer(buffer) {
       if (saved?.text !== undefined && (typeof saved.text !== 'string' || saved.text.replaceAll('\r\n','\n') !== sentText.replaceAll('\r\n','\n'))) throw new Error('The saved draft differs from the submitted paragraph. Your editing buffer is retained.');
       acknowledgedText = saved?.text ?? sentText;
       buffer.revision = saved?.revision ?? buffer.revision + 1;
+      buffer.confirmedText=acknowledgedText;
       const unchanged = buffer.text === sentText && (buffer.sequence || 0) === sentSequence && !buffer.composing;
       if (unchanged) {
         const input = isCurrent() ? translationNodes.get(buffer.segmentId)?.input : null;
@@ -1295,11 +1345,13 @@ async function saveBuffer(buffer) {
       // already repaired it, save that newer buffer after this request settles.
       const superseded = (buffer.sequence || 0) !== sentSequence && buffer.text !== sentText;
       buffer.state = superseded && (['FORMULA_INCOMPLETE', 'FORMULA_REFERENCE_PROTECTED'].includes(error.code) || typeof error.code === 'string' && error.code.startsWith('REFERENCE_')) ? 'dirty' : 'saveFailed';
-      buffer.error = errorMessage(error); throw error;
+      buffer.error = errorMessage(error); throw tagDraftSaveFailure(error,buffer,sentSequence);
     }
     finally {
       buffer.pending = null;
+      editorDraftPublisher.changed();
       if(isCurrent()) updateDraftNode(buffer.segmentId);
+      clearDraftSaveNotice(buffer);
       if (isCurrent() && buffer.state === 'saved' && !buffer.composing && !workspaceSwitching && !buffer.formulaNotice) syncController?.onSaved({ unitId: buffer.segmentId, language: buffer.language, text: acknowledgedText, revision: buffer.revision });
       if (buffer.workspaceKey === workspaceKey(state) && buffer.state === 'dirty') buffer.timer = setTimeout(() => saveBuffer(buffer).catch(() => {}), 300);
       const node = translationNodes.get(buffer.segmentId);
@@ -1336,16 +1388,16 @@ function selectTranslation(id) {
   updateSelectionLabels(); renderOutline();
   renderLayers(); renderAnnotations();
 }
-function setRightView(view) {
+function setRightView(view,{summary=true}={}) {
   rightView = view;
   $('four-layer-view').hidden = view !== 'layers'; $('translation-content').hidden = view !== 'drafts';
   $('show-layers').setAttribute('aria-pressed', String(view === 'layers')); $('show-drafts').setAttribute('aria-pressed', String(view === 'drafts'));
   $('draft-tools').hidden = view !== 'drafts'; $('split-translation').hidden = view !== 'drafts';
   $('translation-heading').textContent = t(view === 'layers' ? '四层对照' : '译文编辑');
-  renderSaveSummary();
+  if(summary)renderSaveSummary();
 }
 function renderLayers() {
-  setRightView(rightView);
+  setRightView(rightView,{summary:false});
   const sources = selectedSources();
   const originals = sources.map(source => ({ source, original: state.originals?.[source.id] || (source.originalSegmentId ? state.originals?.[source.originalSegmentId] : null) }));
   const identities = new Set(originals.flatMap(({ source, original }) => [source.id, source.originalSegmentId, original?.originalSegmentId, original?.segmentId].filter(Boolean)));
@@ -2211,7 +2263,7 @@ chatPanel = initializeChat({ api: async (action, payload = {}) => {
   return api(action, payload);
 }, getNativeHost: () => nativeHostMode() ? hostState() : null, getOriginatingChat: () => !state.originatingChat?.projectId || !state.project?.id || state.originatingChat.projectId === state.project.id ? state.originatingChat : null, refreshState, notify, onPaperFeedback: instruction => startReviewCycle({ instruction, conversation: true }), onChatChange: chat => { state.chat = chat; renderHost(); syncController?.adopt(state); workspaceController?.adopt(state); } });
 syncController = initializeSync({ api, notify, getState: () => hostState().mode === 'native-window' ? { ...state, capabilities: { ...state.capabilities, codexChat: false }, chat: { connected: false, threadId: null, status: 'idle', busy: false } } : cycleStarting || workspaceSwitching ? { ...state, chat: { ...state.chat, busy: true } } : state, getLanguage: () => language, getSelection: () => selectionMapping(), getUnit: id => translationUnit(id), getBuffer: (id, lang) => bufferFor(id, lang), flushDrafts, refreshState });
-window.addEventListener('pagehide', () => { cycleController?.abort(); pdfWarmController?.abort(); versionPairCache.clear(); syncController?.destroy(); workspaceController?.destroy(); projectSwitcher?.destroy(); englishWritebackController?.destroy(); sourceWorkflow?.destroy(); desktopTranslationController?.destroy(); reviewOrganizationController?.destroy(); reviewAnchorController?.destroy(); existingChatBindingController?.destroy();backgroundConnectionController?.destroy(); }, { once: true });
+window.addEventListener('pagehide', () => { updatesController?.destroy();editorDraftPublisher.destroy();cycleController?.abort(); pdfWarmController?.abort(); versionPairCache.clear(); syncController?.destroy(); workspaceController?.destroy(); projectSwitcher?.destroy(); englishWritebackController?.destroy(); sourceWorkflow?.destroy(); desktopTranslationController?.destroy(); reviewOrganizationController?.destroy(); reviewAnchorController?.destroy(); existingChatBindingController?.destroy();backgroundConnectionController?.destroy(); }, { once: true });
 closeOutline();
 matchMedia('(max-width: 1049px)').addEventListener('change', (event) => { if (event.matches) closeOutline(); });
 subscribe((event) => {
@@ -2219,6 +2271,7 @@ subscribe((event) => {
   else renderHost();
 });
 render();
+updatesController=initializeUpdates({api,getState:()=>state,getInterfaceLanguage:()=>interfaceLanguage});
 sourceWorkflow = initializeSourceWorkflow({ api, getState: () => state, getLanguage: () => language, onTranslationRequest: openTranslationUpdateRequest, onError: reportError, desktopAvailable: () => Boolean(desktopExecutionState()) });
 desktopTranslationController = initializeDesktopTranslation({ api, getState: () => state, getSources: readingSources, getLanguage: () => language, getInterfaceLanguage: () => interfaceLanguage, getSelection: () => selectionMapping().sourceIds, beforeStart: flushDrafts, refreshState, notify });
 reviewAnchorController=initializeReviewAnchors({api,getState:()=>state,getHostState:hostState,sendToHost,refreshState,notify,beforePrepare:flushDrafts,onCompleted:()=>{$('review-file-dialog').close();annotationSignature='';reviewImportHistorySignature='';renderAnnotations();renderReviewImportHistory();},onBusyChange:busy=>{reviewAnchorBusy=busy;}});

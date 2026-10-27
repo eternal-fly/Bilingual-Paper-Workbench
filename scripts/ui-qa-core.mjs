@@ -39,7 +39,7 @@ await page.evaluate(()=>{
 const output=path.join(root,'work/ui-mvp-qa');await mkdir(output,{recursive:true});
 const results=[];const check=(name)=>{results.push({name,passed:true});console.log(name)};
 try{
- await page.setContent(html.replace('<html lang="en">','<html lang="zh-CN">'));await page.locator('#main-file').filter({hasText:'main.tex'}).waitFor();
+ await page.setContent(html.replace('<html lang="en">','<html lang="zh-CN">'));assert.deepEqual(errors,[],'Initial workbench startup must not fail before requesting paper state');await page.locator('#main-file').filter({hasText:'main.tex'}).waitFor();
  assert.equal(await page.locator('#chat-toggle').count(),1,'Codex dock opener must exist');
  if(await page.locator('#chat-toggle').getAttribute('aria-expanded')!=='true')await page.locator('#chat-toggle').click();await page.locator('#chat-model').waitFor({state:'visible'});await page.locator('#chat-paper-feedback').uncheck();
  await page.waitForFunction(()=>!document.querySelector('#chat-disconnect').disabled);await page.locator('#chat-disconnect').click();await page.waitForFunction(()=>document.querySelector('#chat-status').textContent.includes('连接已释放'));

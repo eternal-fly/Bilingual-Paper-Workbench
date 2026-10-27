@@ -1,4 +1,5 @@
 import {WRITING_SKILLS_POLICY} from './writing-skills-policy.mjs';
+import {nativeTicketGuidance} from './native-access.mjs';
 import {TRANSLATION_QUALITY_CHECK} from './translation-quality.mjs';
 import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
@@ -99,7 +100,7 @@ export class DesktopExecution {
     if (!created) return receipt(row);
     const callback = scope.app.desktopCallbackCommand;
     const replyTransport = callback ? `Use the current packaged native transport: pass a UTF-8 JSON object with messageId=${JSON.stringify(row.messageId)} and your complete answer as text to standard input of ${callback} reply. This transport only calls the native return tool; the model runs in this Desktop turn.` : `call bilingual_paper_submit_chat_reply with messageId=${JSON.stringify(row.messageId)} and the complete answer as text.`;
-    const deliveryText = prompt || `${text}\n\n[Workbench reply receipt ${row.messageId}]\nAfter answering this explicit user request, ${replyTransport} Return it to this existing paper window. Do not open another workbench, create a chat, or add unrelated tasks.`;
+    const deliveryText = prompt || `${text}\n\n[Workbench reply receipt ${row.messageId}]\nWhen this request needs paper or live-editor context: ${nativeTicketGuidance(callback)}\nAfter answering this explicit user request, ${replyTransport} Return it to this existing paper window. Do not open another workbench, create a chat, or add unrelated tasks.`;
     if (requestId && this._cancelled(scope, requestId)) fail('JOB_CANCELLED', 'This owned Desktop request was cancelled; no new delivery was made.');
     let delivered;
     try { delivered = await this.enqueueForApp(scope.app, { clientUserMessageId: row.clientUserMessageId, text: deliveryText }); }

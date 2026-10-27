@@ -8,6 +8,8 @@ import os from 'node:os';
 import { REVIEW_IMPORT_LIMITS } from './review-limits.mjs';
 import { callBackgroundModelTool } from './native-tool-dispatch.mjs';
 import { MODEL_TOOL_BYTES } from './request-budgets.mjs';
+import { editorDraftsFor } from './editor-drafts.mjs';
+import {publicUpdateChecker} from './update-checker.mjs';
 
 const packageRoot = fileURLToPath(new URL('../', import.meta.url));
 const actions = new Set(['state', 'listWorkspaces', 'openWorkspaceRecord', 'bootstrapHostProject', 'openProject', 'demo', 'configureEngine', 'saveDraft', 'splitTranslation', 'setAlignment', 'createRequest', 'editProposal', 'addComment', 'resolveComment', 'rejectProposal', 'previewTransaction', 'exportPatch', 'refreshProject', 'readPdf', 'readVersionPair', 'reviewCycle', 'cacheVersionPairContext', 'cacheActivePdfContext', 'recordPdfView', 'selectPdfReviewTarget', 'configureLanguages', 'readBuildLog', 'locateSource', 'locatePdf', 'importResult', 'compileBaseline', 'compileEnglish', 'importReviewNotes', 'setReviewImportActive', 'fullPaperReview', 'reviewParagraph', 'configureSync', 'syncParagraph', 'resolveReviewNote', 'setReviewDecision', 'anchorReviewNote', 'cancelJob', 'prepareAcceptance', 'applyTransaction', 'createUndoProposal', 'recoverTransactions', 'models', 'chatState', 'chatStart', 'chatSelectModel', 'chatSend', 'chatInterrupt', 'chatDisconnect', 'runRequest']);
@@ -26,6 +28,10 @@ actions.add('saveTranslationDraftWithFormulaEdits');
 actions.add('getDisplayPreferences');
 actions.add('configureDisplayPreferences');
 for (const action of ['startTranslationTask', 'cancelTranslationTask', 'resumeTranslationTask', 'desktopSendMessage', 'runDesktopRequest', 'openDesktopChat']) actions.add(action);
+const editorActions = new Set(['pollEditorDraftCapture', 'publishEditorDrafts']);
+for (const action of editorActions) actions.add(action);
+const updateActions=new Set(['getUpdates','checkUpdates','configureUpdates']);
+for(const action of updateActions)actions.add(action);
 const nativeWorkerActions=new Set(['models','chatState','chatStart','chatSelectModel','chatSend','chatInterrupt','chatDisconnect','runRequest','runReviewOrganization','runReviewAnchors','reviewCycle','fullPaperReview','reviewParagraph','syncParagraph']);
 const LIMIT = MODEL_TOOL_BYTES;
 const error = (code, message) => Object.assign(new Error(message), { code });
@@ -44,8 +50,13 @@ function boundedBody(request, maximum) {
   });
 }
 
-export async function dispatchUi(service, action, payload = {}, { nativeBindingId = null } = {}) {
+export async function dispatchUi(service, action, payload = {}, { nativeBindingId = null,updateChecker=null } = {}) {
   if (!actions.has(action)) throw error('INVALID_INPUT', '不支持的操作。');
+  if(updateActions.has(action)){
+    const checker=updateChecker||publicUpdateChecker();
+    if(action==='getUpdates'){if(Object.keys(payload).length)throw error('INVALID_INPUT','Read only the registered public update settings.');return checker.state();}
+    return action==='checkUpdates'?checker.check(payload):checker.configure(payload);
+  }
   if (service._assistantImportPromise && !['state', 'listWorkspaces'].includes(action)) throw error('IMPORT_BUSY', 'Wait for the current file import to finish.');
   if (action === 'retryOriginChat') {
     if (!payload || typeof payload !== 'object' || Array.isArray(payload) || Object.keys(payload).length) throw error('INVALID_INPUT', 'Retry only this window\'s trusted originating chat.');
@@ -57,6 +68,10 @@ export async function dispatchUi(service, action, payload = {}, { nativeBindingI
     return service.importFiles(payload.files, { bindingId: payload.originBindingId });
   }
   if (action === 'callNativeTool') return callBackgroundModelTool(service, payload);
+  if (editorActions.has(action)) {
+    const store = editorDraftsFor(service);
+    return action === 'pollEditorDraftCapture' ? store.poll(payload) : store.publish(payload);
+  }
   if (action === 'state') return service.getState();
   if(action==='sendNativeMessage'){if(!nativeBindingId||!service.nativeRelay)throw error('NATIVE_CHAT_REQUIRED','此窗口没有当前聊天连接卡。');const result=service.nativeRelay.enqueue(payload);await service.persistNativeRelayMessages?.(service.nativeRelay.getState().messages);service.emit?.('change');return result;}
   const desktop=service.desktopExecution?.state?.(),desktopMode=desktop?.mode==='desktop-queue';
@@ -107,7 +122,7 @@ export async function dispatchUi(service, action, payload = {}, { nativeBindingI
   return result ?? service.getState();
 }
 
-export async function startLocalWeb({ service, port = 0, htmlPath = path.join(packageRoot, 'dist/preview.html'), nativeBindingId = null, syncHostProject = null, switchWorkspace = null, projectWindowHandoff = null } = {}) {
+export async function startLocalWeb({ service, port = 0, htmlPath = path.join(packageRoot, 'dist/preview.html'), nativeBindingId = null, syncHostProject = null, switchWorkspace = null, projectWindowHandoff = null,updateChecker=null } = {}) {
   if (!service) throw new TypeError('service is required');
   if (nativeBindingId !== null && (typeof nativeBindingId !== 'string' || !/^[A-Za-z0-9_.:-]{1,128}$/.test(nativeBindingId))) throw new TypeError('Use an exact internal native instance identity.');
   const transport = () => {const direct=verifiedExistingChat(service),relay=service.nativeRelay?.getState?.(),ready=relay?.available&&relay?.canSendMessage;return nativeBindingId ? { mode:'native-window',nativeChat:true,canSendMessage:Boolean(ready||direct),directChat:Boolean(direct),relayChat:Boolean(!direct&&relay),messageRoute:direct?'bound-existing-chat':relay?'native-relay':'unavailable',reason:direct?'此窗口直接继续已验证的同一持久聊天。':relay?.reason||'请在绑定聊天中加载聊天连接卡。',...(direct?{threadId:direct.threadId}:{}) } : undefined;};
@@ -155,8 +170,13 @@ export async function startLocalWeb({ service, port = 0, htmlPath = path.join(pa
       if(input.action==='state'&&service.nativeRelay){const fresh=JSON.stringify(service.nativeRelay.getState());if(fresh!==relayFingerprint){relayFingerprint=fresh;revision++;}}
       const etag = observable && input.action === 'state' ? `"paper-${revision}"` : null;
       if (etag && req.headers['if-none-match'] === etag) { res.writeHead(304, { ETag: etag, 'Cache-Control': 'no-store' }); res.end(); return; }
-      const result = input.action === 'syncHostProject' && typeof syncHostProject === 'function' ? await syncHostProject(input.payload) : input.action === 'switchWorkspace' && typeof switchWorkspace === 'function' ? await switchWorkspace(input.payload) : input.action === 'prepareProjectWindowHandoff' && projectWindowHandoff ? await projectWindowHandoff.prepare(input.payload) : input.action === 'ackProjectWindow' && projectWindowHandoff ? await projectWindowHandoff.acknowledge(input.payload) : await dispatchUi(service, input.action, input.payload, { nativeBindingId });
-      const route=transport();return reply(200, { schemaVersion: 1, ok: true, result, state: input.action === 'state' ? result : service.getState(), ...(route ? { transport:route } : {}) }, etag ? { ETag: etag } : {});
+      const result = input.action === 'syncHostProject' && typeof syncHostProject === 'function' ? await syncHostProject(input.payload) : input.action === 'switchWorkspace' && typeof switchWorkspace === 'function' ? await switchWorkspace(input.payload) : input.action === 'prepareProjectWindowHandoff' && projectWindowHandoff ? await projectWindowHandoff.prepare(input.payload) : input.action === 'ackProjectWindow' && projectWindowHandoff ? await projectWindowHandoff.acknowledge(input.payload) : await dispatchUi(service, input.action, input.payload, { nativeBindingId,updateChecker });
+      // Editor heartbeats and snapshots carry only their bounded evidence. Do
+      // not clone, serialize or repaint the entire manuscript while typing.
+      if (editorActions.has(input.action)||updateActions.has(input.action)) return reply(200, { schemaVersion: 1, ok: true, result });
+      const decorate = value => value && (service.active || service).core ? { ...value, capabilities: { ...value.capabilities, editorDraftCapture: true,releaseUpdates:true } } : value;
+      const state = decorate(input.action === 'state' ? result : service.getState());
+      const route=transport();return reply(200, { schemaVersion: 1, ok: true, result: input.action === 'state' ? state : result, state, ...(route ? { transport:route } : {}) }, etag ? { ETag: etag } : {});
     } catch (e) {
       return reply(e.code === 'INPUT_TOO_LARGE' ? 413 : e.code === 'VERSION_CONFLICT' ? 409 : 400, { schemaVersion: 1, ok: false, error: { code: e.code ?? 'INTERNAL_ERROR', message: e.code ? e.message : '操作失败。请检查项目权限与服务状态。' } });
     }
