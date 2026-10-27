@@ -1,14 +1,8 @@
-import path from 'node:path';
 import {sha256} from './latex.mjs';
 
 const fail=(code,message)=>{throw Object.assign(new Error(message),{code});};
 const equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 const MAX_REPLACEMENT=4*1024*1024;
-const EXECUTABLE=new Set('openin openout closein closeout read readline write write18 ShellEscape directlua latelua luadirect luafunction luaexec pdfshellescape pdfextension special scantokens'.split(' '));
-const FILE_CONTROLS=new Set(['input','include','includegraphics','bibliography','bibliographystyle','addbibresource','lstinputlisting','verbatiminput']);
-const PACKAGE_CONTROLS=new Set(['usepackage','RequirePackage','documentclass','LoadClass']);
-const VERBATIM=new Set(['verbatim','verbatim*','Verbatim','lstlisting']);
-
 /** A source-review range is a byte capability, not a claim that arbitrary TeX
  * has been statically proved safe. Only the isolated compiler executes it. */
 export function sourceReviewManifest(state,files){
@@ -27,15 +21,26 @@ export function sourceReviewSource(state,files,id,expected=null,{verifiedManifes
  if(expected&&!equal(sourceAuthority,expected))fail('VERSION_CONFLICT','The exact source-review range or captured project manifest changed.');
  return{id,path:file.path,startByte:anchor.startByte,endByte:anchor.endByte,beforeHash,sourceHash:beforeHash,source,displayText:source,protectedTokens:[],translatable:true,sourceAuthority};
 }
-export const sourceReviewInstructions='Read the complete exact original TeX range and saved author draft, using the declared project context. Return a faithful English TeX candidate only for the registered ranges. Custom macros, environments, mathematics and references may change in this explicit source-review mode. Do not add host paths, executable/file-access capabilities, undeclared inputs, or edits outside the selected ranges. The result is pending: inspect its exact diff, compile it in the existing isolated compiler, and obtain explicit human source-review confirmation before any write. If compilation fails, prepare a fresh same-scoped request and repair the pending candidate; never apply automatically. Unresolved author-draft intent remains saved for further review.';
+export const sourceReviewInstructions='Read the complete exact original TeX range and latest saved author draft, using the declared project context. Return the single best faithful English TeX replacement for only the registered ranges. All inline content, formulas, citations, labels, macros and environments may be added, changed or deleted according to the author intent; do not impose placeholder or TeX-content restrictions. Return text only: do not execute host commands, access unrelated host files, apply source changes or invent approval. The workbench compiles the exact candidate only inside its existing isolated no-shell-escape runtime and promotes it through the author-initiated writeback workflow with current source and draft checks. Compilation does not certify scientific correctness or faithful translation. If compilation fails, repair the pending candidate in this same chat; preserve the exact author draft and do not create another chat or extra review task.';
 export function captureSourceReviewSegment(selected,source,draft){
- return{...selected,text:source.source,rawSource:source.source,originalSource:source.source,protectedTokens:[],sourceAuthority:source.sourceAuthority,draftReview:{mode:'raw-tex-source-review',draftRevision:draft?.revision||0,draftHash:sha256(draft?.text||''),sourceHash:source.beforeHash,diagnostics:structuredClone(draft?.sourceReviewDiagnostics||[]),instructions:sourceReviewInstructions}};
+ const current=selected.translationDraft||draft;
+ return{...selected,text:source.source,rawSource:source.source,originalSource:source.source,protectedTokens:[],sourceAuthority:source.sourceAuthority,draftReview:{mode:'raw-tex-source-review',draftRevision:current?.revision||0,draftHash:sha256(current?.text||''),sourceHash:source.beforeHash,diagnostics:structuredClone(draft?.sourceReviewDiagnostics||[]),instructions:sourceReviewInstructions}};
+}
+function currentAuthorDraft(state,language,id){for(const namespace of [state.readingDrafts?.[language],state.translations?.[language]])if(namespace&&Object.hasOwn(namespace,id))return namespace[id];return null;}
+function sourceReviewDraft(selected,request,state){
+ const captured=selected.translationDraft,alignment=state.alignments?.find(row=>row.language===request.language&&row.sourceSegmentIds?.includes(selected.id)),currentUnits=alignment?.translationUnitIds||[selected.id],units=captured?.translationUnitIds||[selected.id];
+ if(!Array.isArray(units)||!units.length||units.some(id=>typeof id!=='string'||!id)||new Set(units).size!==units.length||!equal(units,currentUnits))fail('VERSION_CONFLICT','The aligned author-draft units changed; prepare a fresh source-review candidate.');
+ const drafts=units.map(id=>currentAuthorDraft(state,request.language,id));
+ if(!captured){if(drafts.some(Boolean))fail('VERSION_CONFLICT','The saved author draft changed after source review was prepared.');return{text:'',revision:0};}
+ if(drafts.some(draft=>!draft||typeof draft.text!=='string'||!Number.isSafeInteger(draft.revision)||draft.revision<0)||units.some((id,index)=>!Object.hasOwn(request.translationUnitRevisions||{},id)||request.translationUnitRevisions[id]!==drafts[index].revision))fail('VERSION_CONFLICT','An aligned author-draft unit is missing or changed; prepare a fresh source-review candidate.');
+ const current={text:drafts.map(draft=>draft.text).join('\n\n'),revision:drafts.reduce((maximum,draft)=>Math.max(maximum,draft.revision),0)};
+ if(captured.text!==current.text||captured.revision!==current.revision)fail('VERSION_CONFLICT','The exact combined author draft changed; prepare a fresh source-review candidate.');return current;
 }
 export function assertSourceReviewRequest(request,state,files){
  const manifestHash=sourceReviewManifest(state,files);
  if(request?.kind!=='revision'||request.mode!=='source-review'||request.projectId!==state.project?.id||request.snapshotId!==state.project?.snapshotId||request.sourceReview?.manifestHash!==manifestHash||request.sourceReview.requiresHumanSourceReview!==true)fail('VERSION_CONFLICT','This exact raw TeX source-review request is no longer current.');
  const intervals=[];
- for(const selected of request.segments||[]){const source=sourceReviewSource(state,files,selected.id,selected.sourceAuthority,{verifiedManifestHash:manifestHash}),draft=state.readingDrafts?.[request.language]?.[selected.id]||state.translations?.[request.language]?.[selected.id];
+ for(const selected of request.segments||[]){const source=sourceReviewSource(state,files,selected.id,selected.sourceAuthority,{verifiedManifestHash:manifestHash}),draft=sourceReviewDraft(selected,request,state);
   if(selected.rawSource!==source.source||selected.text!==source.source||selected.originalSource!==source.source||selected.protectedTokens?.length||selected.draftReview?.mode!=='raw-tex-source-review'||selected.draftReview.sourceHash!==source.beforeHash||selected.draftReview.draftRevision!==(draft?.revision||0)||selected.draftReview.draftHash!==sha256(draft?.text||''))fail('VERSION_CONFLICT','The registered raw source or exact saved author draft changed; prepare a fresh source-review candidate.');
   intervals.push(source);
  }
@@ -43,48 +48,11 @@ export function assertSourceReviewRequest(request,state,files){
  intervals.sort((a,b)=>a.path.localeCompare(b.path)||a.startByte-b.startByte);for(let i=1;i<intervals.length;i++)if(intervals[i].path===intervals[i-1].path&&(intervals[i].startByte<intervals[i-1].endByte||intervals[i].startByte===intervals[i].endByte&&intervals[i-1].startByte===intervals[i-1].endByte&&intervals[i].startByte===intervals[i-1].startByte))fail('OVERLAPPING_EDITS','Source-review ranges overlap; select each source byte or insertion point once.');
  return{manifestHash,sources:new Map(intervals.map(row=>[row.id,row]))};
 }
-function argument(text,at){
- while(/\s/u.test(text[at]||''))at++;
- while(text[at]==='['){let depth=1;for(at++;at<text.length&&depth;at++){if(text[at]==='\\'){at++;continue;}if(text[at]==='[')depth++;if(text[at]===']')depth--;}while(/\s/u.test(text[at]||''))at++;}
- if(text[at]==='{'){const start=++at;let depth=1;for(;at<text.length;at++){if(text[at]==='\\'){at++;continue;}if(text[at]==='{')depth++;if(text[at]==='}'&&!--depth)return{value:text.slice(start,at),end:at+1};}return null;}
- const match=/^[^\s{}%]+/u.exec(text.slice(at));return match?{value:match[0],end:at+match[0].length}:null;
-}
-function controls(text){
- const result=[];for(let at=0;at<text.length;){if(text[at]==='%'){const end=text.indexOf('\n',at);if(end<0)break;at=end+1;continue;}if(text[at]!=='\\'){at++;continue;}const start=at++;let end=at;while(/[A-Za-z@_:]/u.test(text[end]||''))end++;if(end===at){at++;continue;}const name=text.slice(at,end);at=end;
-  if(name==='verb'){if(text[at]==='*')at++;const delimiter=text[at++],close=delimiter&&text.indexOf(delimiter,at);at=close<0?text.length:close+1;continue;}
-  const arg=argument(text,end);if(name==='begin'&&VERBATIM.has(arg?.value)){const close=text.indexOf(`\\end{${arg.value}}`,arg.end);at=close<0?text.length:close+arg.value.length+6;continue;}
-  if(name==='csname'){const close=text.indexOf('\\endcsname',end);if(close>=0){const built=withoutComments(text.slice(end,close)).replace(/\s+/gu,'');if(/^[A-Za-z@_:]+$/u.test(built)&&(EXECUTABLE.has(built)||FILE_CONTROLS.has(built)||PACKAGE_CONTROLS.has(built)))result.push({name:built,start,end:close+10,arg:argument(text,close+10),constructed:true});}}
-  result.push({name,start,end,arg});
- }return result;
-}
-function withoutComments(text){let value='';for(let at=0;at<text.length;at++){if(text[at]==='\\'){value+=text.slice(at,at+2);at++;continue;}if(text[at]==='%'){const end=text.indexOf('\n',at);if(end<0)break;at=end;continue;}value+=text[at];}return value;}
-function capabilityObject(text,control){
- let at=control.end;
- if(['write','write18','openin','openout','closein','closeout','read','readline'].includes(control.name)){
-  const stream=/^\s*(?:-?\d+|\\[A-Za-z@_:]+)/u.exec(text.slice(at));if(!stream)return null;at+=stream[0].length;
-  if(['openin','openout'].includes(control.name)){const filename=/^\s*=\s*(?:"[^"\r\n]+"|[^\s\\{}%]+)/u.exec(text.slice(at));return filename?text.slice(control.start,at+filename[0].length):null;}
-  if(['closein','closeout'].includes(control.name))return text.slice(control.start,at);
-  if(['read','readline'].includes(control.name)){const target=/^\s*to\s*\\[A-Za-z@_:]+/u.exec(text.slice(at));return target?text.slice(control.start,at+target[0].length):null;}
- }
- const arg=argument(text,at);return arg&&text.slice(at,arg.end).trimStart().startsWith('{')?text.slice(control.start,arg.end):null;
-}
-const originalAuxiliaryWrite=object=>typeof object==='string'&&/^\\write\s*\\@auxout\s*\{\s*\\string\s*\\citation\s*\{[^\\{}%]*\}\s*\}$/u.test(object);
-function declaredFile(value,source,files){
- if(!value||/[\\\x00-\x20{}#$%~^]/u.test(value)||path.posix.isAbsolute(value)||path.win32.isAbsolute(value)||value.includes(':')||value.split('/').some(part=>!part||part==='.'||part==='..'))return false;
- const names=[value,path.posix.join(path.posix.dirname(source.path),value)];
- return names.some(name=>files.has(name)||['.tex','.pdf','.png','.jpg','.jpeg','.eps','.bib','.bst'].some(extension=>files.has(name+extension)));
-}
-/** This is a direct capability fence, deliberately not a TeX layout grammar.
- * Macro expansion is executed only inside the unchanged AppContainer policy. */
+/** Validate transport encoding and size only. Exact source ranges, manifests,
+ * isolated compilation and author-initiated promotion are separate boundaries;
+ * this function neither parses TeX content nor executes any supplied text. */
 export function validateSourceReviewReplacement(source,replacement,files){
  if(typeof replacement!=='string'||Buffer.byteLength(replacement)>MAX_REPLACEMENT||/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/u.test(replacement)||Buffer.from(replacement).toString('utf8')!==replacement)fail('INVALID_INPUT','Provide bounded valid UTF-8 raw TeX for the selected source-review range.');
- if(replacement.includes('^^')&&replacement!==source.source)fail('SOURCE_REVIEW_CAPABILITY_DENIED','Normalize TeX character-rewrite notation before reviewing a changed raw range; it must not hide executable or external file controls.');
- const originalCapabilities=new Map();for(const control of controls(source.source))if(EXECUTABLE.has(control.name)){const object=capabilityObject(source.source,control);if(originalAuxiliaryWrite(object))originalCapabilities.set(object,(originalCapabilities.get(object)||0)+1);}
- for(const control of controls(replacement)){
-  if(EXECUTABLE.has(control.name)&&replacement!==source.source){const object=capabilityObject(replacement,control),count=object&&originalCapabilities.get(object);if(!count)fail('SOURCE_REVIEW_CAPABILITY_DENIED','A source-review candidate cannot introduce or retarget direct executable or file-stream controls. Its raw author draft remains saved.');originalCapabilities.set(object,count-1);}
-  if(FILE_CONTROLS.has(control.name)&&!control.arg?.value.split(',').every(value=>declaredFile(value.trim(),source,files)))fail('SOURCE_REVIEW_CAPABILITY_DENIED','Source-review file references must name literal inputs already captured in this project manifest.');
-  if(PACKAGE_CONTROLS.has(control.name)&&(!control.arg||!control.arg.value.split(',').every(value=>/^[A-Za-z0-9_-]+$/u.test(value))))fail('SOURCE_REVIEW_CAPABILITY_DENIED','Package/class names must be literal installed names; source review cannot grant external paths.');
- }
  return replacement;
 }
 export function sourceReviewCandidate(proposals){

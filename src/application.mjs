@@ -7,8 +7,10 @@ import { WindowsSourceWriter } from './windows-writer.mjs';
 import { paperRequestPrompt, paperRequestSchema } from './codex-bridge.mjs';
 import { restoreProtected } from './latex.mjs';
 import { ReadingWorkspace } from './reading-workflow.mjs';
-import { rebaseConfirmedTranslationDrafts, reconcileLegacyConfirmedDraft } from './draft-source-rebase.mjs';
+import { rebaseConfirmedTranslationDrafts, reconcileLegacyConfirmedDraft,verifiedAppliedDraftReceipts } from './draft-source-rebase.mjs';
 import {assertSourceReviewRequest,validateSourceReviewReplacement} from './source-review.mjs';
+import {OneClickWriteback} from './one-click-writeback.mjs';
+import {exportPaperProject} from './project-export.mjs';
 import { listProjectSources, readProjectSource } from './project-source.mjs';
 import { ReviewOrganizationWorkflow } from './review-organization.mjs';
 import { deriveReviewImportValidation, revalidateReviewImport, reopenReviewImportNote } from './review-import-validation.mjs';
@@ -83,6 +85,7 @@ export class PaperApplication extends EventEmitter {
     this.opinionMath = new OpinionMathRenderer({ compiler });
     this.chat = chat; this.engine = engine; this.defaultEngine = engine; this.flow = null; this.preferredModel = preferredModel; this.preferredEffort = preferredEffort;
     this.probe = { available: false, isolated: false }; this.jobs = new Map(); this.controllerId = randomUUID();
+    this.oneClick=new OneClickWriteback(this);
     this.chat?.on?.('change', () => this.emit('change'));
   }
   async initialize() {
@@ -90,8 +93,13 @@ export class PaperApplication extends EventEmitter {
     return { ...this.probe };
   }
   getProjectRoot() { return this.core.getProjectRoot(); }
+  exportPaperProject(input){return exportPaperProject(this,input);}
   listProjectSources(input) { return listProjectSources(this, input); }
   readProjectSource(input) { return readProjectSource(this, input); }
+  startOneClickWriteback(input){return this.oneClick.start(input);}
+  cancelOneClickWriteback(input){return this.oneClick.cancel(input);}
+  resumeOneClickWriteback(input){return this.oneClick.resume(input);}
+  resumeOneClickWritebacks(){this.oneClick.schedule();return{scheduled:true};}
   prepareReviewOrganization(input, options) { this.organization ||= new ReviewOrganizationWorkflow(this); return this.organization.prepare(input, options); }
   getReviewOrganizationContext(input, options) { this.organization ||= new ReviewOrganizationWorkflow(this); return this.organization.context(input, options); }
   submitReviewOrganization(input, options) { this.organization ||= new ReviewOrganizationWorkflow(this); return this.organization.submit(input, options); }
@@ -113,6 +121,7 @@ export class PaperApplication extends EventEmitter {
   getState() {
     const state = this.reading.state(this.core.getState());
     const own = this.flow?.projectId === state.project?.id ? this.flow : null;
+    state.appliedDraftReceipts=verifiedAppliedDraftReceipts({state,transactions:own?.transactions||[]});
     const secure = Boolean(this.probe.available && this.probe.isolated);
     const reviewBatches = (state.reviewBatches || []).map(batch => batch.origin === 'external' ? { ...batch, revision: batch.revision ?? 1, active: batch.status !== 'retired' && batch.active !== false } : batch);
     const retiredImports = new Set(reviewBatches.filter(batch => batch.origin === 'external' && !batch.active).map(batch => batch.batchId));
@@ -128,14 +137,14 @@ export class PaperApplication extends EventEmitter {
     state.reviewImportValidation = deriveReviewImportValidation(state, state, { transactions: own?.transactions || [], proposals: state.proposals || [] });
     state.reviewOperations = { organization: this.organization?.progress?.() || [], anchors: this.reviewAnchors?.progress?.() || [] };
     const liveRelay=this.nativeRelay?.getState?.();
-    return { ...state, displayPreferences:this.getDisplayPreferences(), nativeChatRelay:{...liveRelay,messages:mergeNativeRelayMessages(own?.nativeChatMessages,liveRelay?.messages,state.project?.id)}, backgroundConnection: this.backgroundConnection?.state() || { phase: 'inactive', serviceOnline: Boolean(this.backgroundMode), binding: own?.nativeChatBinding || own?.backgroundChatReference || null }, nativeChatBinding: own?.nativeChatBinding || own?.backgroundChatReference || null, nativeChatBindingError: this._nativeBindingError || null, reviewNotes: (state.reviewNotes || []).filter(note => !retiredImports.has(note.batchId)), reviewHistory: (state.reviewHistory || []).filter(note => !retiredImports.has(note.batchId)), reviewHistoryPreferences: reviewHistoryPreferences(state), pdfSelection: this.pdfSelection.state(), languagePreferences: this.pdfSelection.languages(), syncPreferences: this.sync.preferences(state.syncPreferences), versionPair: this.versionPair?.state?.() || null, reviewCycleContext: this.cycles.state(), capabilities: { ...state.capabilities, backgroundConnection: Boolean(this.backgroundMode), existingChatBinding: typeof this.createBoundChat === 'function', nativePdfContext: true, secureCompile: secure, directApply: secure && process.platform === 'win32', codexChat: Boolean(this.chat),
+    return { ...state, displayPreferences:this.getDisplayPreferences(), nativeChatRelay:{...liveRelay,messages:mergeNativeRelayMessages(own?.nativeChatMessages,liveRelay?.messages,state.project?.id)}, backgroundConnection: this.backgroundConnection?.state() || { phase: 'inactive', serviceOnline: Boolean(this.backgroundMode), binding: own?.nativeChatBinding || own?.backgroundChatReference || null }, nativeChatBinding: own?.nativeChatBinding || own?.backgroundChatReference || null, nativeChatBindingError: this._nativeBindingError || null, reviewNotes: (state.reviewNotes || []).filter(note => !retiredImports.has(note.batchId)), reviewHistory: (state.reviewHistory || []).filter(note => !retiredImports.has(note.batchId)), reviewHistoryPreferences: reviewHistoryPreferences(state), pdfSelection: this.pdfSelection.state(), languagePreferences: this.pdfSelection.languages(), syncPreferences: this.sync.preferences(state.syncPreferences), versionPair: this.versionPair?.state?.() || null, reviewCycleContext: this.cycles.state(), capabilities: { ...state.capabilities, backgroundConnection: Boolean(this.backgroundMode), existingChatBinding: typeof this.createBoundChat === 'function', nativePdfContext: true, oneClickWriteback:true, secureCompile: secure, directApply: secure && process.platform === 'win32', codexChat: Boolean(this.chat),
       reasons: { secureCompile: secure ? '' : this.probe.reason || 'No verified isolated compiler is configured.', directApply: secure ? '' : 'A successful exact isolated build is required before source promotion.' } },
       builds: (own?.builds || []).map(({ pdfPath, synctexPath, logPath, ...item }) => ({ ...clone(item), stale: (item.promotedSnapshotId || item.snapshotId) !== state.project?.snapshotId })),
       englishBuilds: (own?.builds || []).filter(item => item.kind === 'english').map(({ pdfPath, synctexPath, logPath, ...item }) => ({ ...clone(item), stale: item.snapshotId !== state.project?.snapshotId })),
       transactions: (own?.transactions || []).map(({ originals, candidate, readSet, beforeSegments, beforeReadingAnchors, draftRebases, acceptanceHash, ...item }) => clone(item)),
       orphanedDrafts: Object.entries(state.translations).flatMap(([language, drafts]) => Object.entries(drafts).filter(([segmentId, draft]) => !(draft.sourceSegmentIds || [segmentId]).some(id => state.segments.some(segment => segment.id === id) || state.readingParagraphs.some(segment => segment.id === id))).map(([segmentId, draft]) => ({ ...draft, segmentId, language, status: 'stale' }))),
       reviewBatches: reviewBatches.map(batch => (own?.jobs || []).some(job => job.batchId === batch.batchId && stoppedJobOwner(job)) ? { ...batch, status: 'interrupted', error: { code: 'CONTROLLER_STOPPED', message: 'The controller stopped before review completion; preserved reading progress is incomplete.' } } : batch),
-      jobs: (own?.jobs || []).map(job => stoppedJobOwner(job) ? { ...clone(job), status: 'interrupted', error: { code: 'CONTROLLER_STOPPED' }, controllable: false } : { ...clone(job), controllable: Boolean(this.jobs.get(job.jobId) && !this.jobs.get(job.jobId).finished) }), compiler: { engine: this.engine, supportedEngines: ['xelatex', 'pdflatex'] }, watcher: clone(this.watchState || { enabled: false }), chat: this.chat?.getState?.() || null };
+      jobs: (own?.jobs || []).map(job => stoppedJobOwner(job) ? { ...clone(job), status: 'interrupted', error: { code: 'CONTROLLER_STOPPED' }, controllable: false } : { ...clone(job), controllable: Boolean(this.jobs.get(job.jobId) && !this.jobs.get(job.jobId).finished) }),oneClickWritebacks:this.oneClick.state(), compiler: { engine: this.engine, supportedEngines: ['xelatex', 'pdflatex'] }, watcher: clone(this.watchState || { enabled: false }), chat: this.chat?.getState?.() || null };
   }
   async refreshExternalJobStatus() {
     const unchanged = { changed: false, updatedJobIds: [] }, flow = this.flow, store = this.core._store;
@@ -226,12 +235,13 @@ export class PaperApplication extends EventEmitter {
     };
     return locked ? work() : this.core._serial(work);
   }
-  async _flowAction(work, { desktopMetadataOnly = false } = {}) {
+  async _flowAction(work, { desktopMetadataOnly = false,skipUnchanged=false } = {}) {
     return this.core._serial(async () => {
       await this._loadFlow();
+      const initialHash=skipUnchanged?workflowValueHash(this.flow):null;
       const critical = flow => !Array.isArray(flow?.transactions) || flow.transactions.some(transaction => ['committing', 'recovering', 'recoveryRequired'].includes(transaction.state));
       const before = desktopMetadataOnly && !critical(this.flow) ? { before: clone(this.flow), flow: this.flow, version: clone(this._flowVersion), store: this.core._store, projectId: this.core._state.project?.id, snapshotId: this.core._state.project?.snapshotId, eventSeq: this.core._state.eventSeq } : null;
-      try { const value = await work(); await this._persistFlow(); return value; }
+      try { const value = await work();if(!skipUnchanged||workflowValueHash(this.flow)!==initialHash)await this._persistFlow(); return value; }
       catch (error) {
         // This opt-in is exclusive to owned Desktop receipt/metadata changes.
         // Source journals, core commits, unknown durable replacements and any
@@ -316,7 +326,7 @@ export class PaperApplication extends EventEmitter {
     return this.getState().watcher;
   }
   stopWatching() { if (this._watchTimer) clearInterval(this._watchTimer); this._watchTimer = null; this._watchCompilePending = false; this.watchState = { enabled: false }; }
-  async close() { closeNativePdfContext(this); this.translationTasks?.close?.(); this.stopWatching(); this._reviewHistoryClearPlans?.clear(); this._reviewImportDeletePlans?.clear(); for (const job of this.jobs.values()) if (!job.finished && job.controller) job.controller.abort(); await this.opinionMath.close?.(); await this.chat?.close(); }
+  async close() { closeNativePdfContext(this); this.translationTasks?.close?.(); this.stopWatching(); this._reviewHistoryClearPlans?.clear(); this._reviewImportDeletePlans?.clear(); for (const job of this.jobs.values()) if (!job.finished && job.controller) job.controller.abort(); await this.oneClick.close();await this.opinionMath.close?.(); await this.chat?.close(); }
   getDisplayPreferences() {
     const value=this.flow?.projectId===this.core._state.project?.id?this.flow?.displayPreferences:null;
     return {translationTextSize:Number.isInteger(value?.translationTextSize)&&value.translationTextSize>=14&&value.translationTextSize<=28?value.translationTextSize:17,revision:Number.isSafeInteger(value?.revision)&&value.revision>=0?value.revision:0};
@@ -333,27 +343,27 @@ export class PaperApplication extends EventEmitter {
   async saveDraft(input) {
     if (this.reading.hasDerived(input.segmentId)||this.core.getState().readingDrafts?.[input.language]?.[input.segmentId]) return this.reading.saveDraft(input);
     const existing = this.core.getState().translations[input.language]?.[input.segmentId];
-    if (existing?.unitKind !== 'split') { const value = await this.core.saveDraft(input); this.emit('change'); return value; }
+    if (existing?.unitKind !== 'split') { const value = await this.core.saveDraft(input); this.emit('change');this.oneClick.schedule(); return value; }
     const result = await this.core._serial(async () => {
       const state = this.core.getState(), current = state.translations[input.language]?.[input.segmentId];
       if (!current || current.revision !== input.expectedRevision) fail('VERSION_CONFLICT', 'The translation unit changed.');
       if (Object.keys(input).some(key => !['segmentId', 'language', 'text', 'expectedRevision'].includes(key)) || typeof input.text !== 'string' || Buffer.byteLength(input.text) > 128 * 1024) fail('INVALID_INPUT', 'Invalid translation unit draft.');
       const source=this.reading.paragraph(current.sourceSegmentIds?.[0])||state.segments.find(s=>s.id===current.sourceSegmentIds?.[0]);
       const draft = { ...current, text: input.text, revision: current.revision + 1, status: 'saved', origin: 'human', updatedAt: stamp() };
-      for(const key of['formulaEdits','formulaEditHistory','formulaEditsConflict','formulaEditUnmapped','referenceEdits','referenceEditHistory','referenceEditsConflict','referenceEditUnmapped'])delete draft[key];
+      for(const key of['formulaEdits','formulaEditHistory','formulaEditsConflict','formulaEditUnmapped','referenceEdits','referenceEditHistory','referenceEditsConflict','referenceEditUnmapped','sourceWritebackReceipt','sourceApplied'])delete draft[key];
       if(source)Object.assign(draft,reconcileFormulaDraft(source,current,input.text,state.project,input.language));
       state.translations[input.language][input.segmentId] = draft; await this.core._commit(state); return draft;
-    }); this.emit('change'); return result;
+    }); this.emit('change');this.oneClick.schedule(); return result;
   }
   async editTranslationFormula(input){return this._projectOperation(()=>this.core._serial(async()=>{
-    const keys=['segmentId','language','expectedRevision','expectedProjectId','expectedSnapshotId','start','end','before','replacement'];if(!input||Object.keys(input).some(k=>!keys.includes(k))||keys.some(k=>!Object.hasOwn(input,k))||!Number.isSafeInteger(input.expectedRevision)||input.expectedRevision<0)fail('INVALID_INPUT','Use an exact current formula selection and draft revision.');languageTag(input.language);await this.core._assertSourceCurrent();const state=this.core.getState();if(state.project?.id!==input.expectedProjectId||state.project?.snapshotId!==input.expectedSnapshotId)fail('VERSION_CONFLICT','The selected paper or source changed.');const merged=this.reading.state(state),current=merged.translations[input.language]?.[input.segmentId];if(!current||current.revision!==input.expectedRevision)fail('VERSION_CONFLICT','The translation changed. Save the current text before editing its formula.');const source=this.reading.paragraph(input.segmentId)||state.segments.find(s=>s.id===input.segmentId)||this.reading.paragraph(current.sourceSegmentIds?.[0]);if(!source)fail('SEGMENT_NOT_FOUND','The current source paragraph is unavailable.');const newline=this.core._files.get(source.path)?.text?.includes('\r\n')?'\r\n':'\n';const formulaInput=typeof input.replacement==='string'?{...input,replacement:input.replacement.replace(/\r?\n/g,newline)}:input;const result={...createFormulaDraft(source,current,formulaInput,state.project),appliedReplacement:formulaInput.replacement};const key=this.reading.hasDerived(input.segmentId)||state.readingDrafts?.[input.language]?.[input.segmentId]?'readingDrafts':'translations';state[key]||={};state[key][input.language]||={};state[key][input.language][input.segmentId]=result.draft;await this.core._commit(state);this.emit('change');return result;
+    const keys=['segmentId','language','expectedRevision','expectedProjectId','expectedSnapshotId','start','end','before','replacement'];if(!input||Object.keys(input).some(k=>!keys.includes(k))||keys.some(k=>!Object.hasOwn(input,k))||!Number.isSafeInteger(input.expectedRevision)||input.expectedRevision<0)fail('INVALID_INPUT','Use an exact current formula selection and draft revision.');languageTag(input.language);await this.core._assertSourceCurrent();const state=this.core.getState();if(state.project?.id!==input.expectedProjectId||state.project?.snapshotId!==input.expectedSnapshotId)fail('VERSION_CONFLICT','The selected paper or source changed.');const merged=this.reading.state(state),current=merged.translations[input.language]?.[input.segmentId];if(!current||current.revision!==input.expectedRevision)fail('VERSION_CONFLICT','The translation changed. Save the current text before editing its formula.');const source=this.reading.paragraph(input.segmentId)||state.segments.find(s=>s.id===input.segmentId)||this.reading.paragraph(current.sourceSegmentIds?.[0]);if(!source)fail('SEGMENT_NOT_FOUND','The current source paragraph is unavailable.');const newline=this.core._files.get(source.path)?.text?.includes('\r\n')?'\r\n':'\n';const formulaInput=typeof input.replacement==='string'?{...input,replacement:input.replacement.replace(/\r?\n/g,newline)}:input;const result={...createFormulaDraft(source,current,formulaInput,state.project),appliedReplacement:formulaInput.replacement};delete result.draft.sourceWritebackReceipt;delete result.draft.sourceApplied;const key=this.reading.hasDerived(input.segmentId)||state.readingDrafts?.[input.language]?.[input.segmentId]?'readingDrafts':'translations';state[key]||={};state[key][input.language]||={};state[key][input.language][input.segmentId]=result.draft;await this.core._commit(state);this.emit('change');return result;
   }));}
   async saveTranslationDraftWithFormulaEdits(input,{beforeWrite=null,editActor=null}={}){
     if(editActor!==null&&(!editActor||typeof editActor!=='object'||Array.isArray(editActor)||Object.keys(editActor).some(key=>!['kind','threadId','reason'].includes(key))||editActor.kind!=='bound-chat'||typeof editActor.threadId!=='string'||!/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/u.test(editActor.threadId)||typeof editActor.reason!=='string'||!editActor.reason.trim()||Buffer.byteLength(editActor.reason)>8000||/[\x00-\x08\x0b\x0c\x0e-\x1f]/u.test(editActor.reason)))fail('INVALID_INPUT','Use trusted bound-chat attribution with an exact chat identity and edit reason.');
     const actor=editActor?{kind:'bound-chat',threadId:editActor.threadId,reason:editActor.reason}:null;
     return this._projectOperation(()=>this.core._serial(async()=>{
-    const keys=['segmentId','language','text','expectedRevision','expectedProjectId','expectedSnapshotId'];if(!input||Object.keys(input).some(k=>!keys.includes(k))||keys.some(k=>!Object.hasOwn(input,k))||typeof input.segmentId!=='string'||typeof input.text!=='string'||Buffer.byteLength(input.text)>128*1024||!Number.isSafeInteger(input.expectedRevision)||input.expectedRevision<0)fail('INVALID_INPUT','Use the complete translation text and its current paper and revision.');languageTag(input.language);const state=this.core.getState();if(state.project?.id!==input.expectedProjectId||state.project?.snapshotId!==input.expectedSnapshotId)fail('VERSION_CONFLICT','The selected paper or source changed.');const merged=this.reading.state(state),existing=merged.translations[input.language]?.[input.segmentId];if((existing?.revision||0)!==input.expectedRevision)fail('VERSION_CONFLICT','The translation changed. Keep the current editor text and reload its latest revision.');const source=this.reading.paragraph(input.segmentId)||state.segments.find(s=>s.id===input.segmentId)||this.reading.paragraph(existing?.sourceSegmentIds?.[0]);if(!source)fail('SEGMENT_NOT_FOUND','The current source paragraph is unavailable.');const current=existing||{segmentId:input.segmentId,language:input.language,text:'',revision:0,sourceHash:source.sourceHash||source.beforeHash},newline=this.core._files.get(source.path)?.text?.includes('\r\n')?'\r\n':'\n';const referenceRegistry=referenceTargetRegistry(this.core._files,state.project),result=createInlineFormulaDraft(source,current,input.text,state.project,{newline,referenceRegistry,language:input.language});if(actor)result.draft.editActor=actor;else delete result.draft.editActor;const key=this.reading.hasDerived(input.segmentId)||state.readingDrafts?.[input.language]?.[input.segmentId]?'readingDrafts':'translations';state[key]||={};state[key][input.language]||={};state[key][input.language][input.segmentId]=result.draft;if(beforeWrite)await beforeWrite();await this.core._commit(state);this.emit('change');return result;
-  }));}
+    const keys=['segmentId','language','text','expectedRevision','expectedProjectId','expectedSnapshotId'];if(!input||Object.keys(input).some(k=>!keys.includes(k))||keys.some(k=>!Object.hasOwn(input,k))||typeof input.segmentId!=='string'||typeof input.text!=='string'||Buffer.byteLength(input.text)>128*1024||!Number.isSafeInteger(input.expectedRevision)||input.expectedRevision<0)fail('INVALID_INPUT','Use the complete translation text and its current paper and revision.');languageTag(input.language);const state=this.core.getState();if(state.project?.id!==input.expectedProjectId||state.project?.snapshotId!==input.expectedSnapshotId)fail('VERSION_CONFLICT','The selected paper or source changed.');const merged=this.reading.state(state),existing=merged.translations[input.language]?.[input.segmentId];if((existing?.revision||0)!==input.expectedRevision)fail('VERSION_CONFLICT','The translation changed. Keep the current editor text and reload its latest revision.');const source=this.reading.paragraph(input.segmentId)||state.segments.find(s=>s.id===input.segmentId)||this.reading.paragraph(existing?.sourceSegmentIds?.[0]);if(!source)fail('SEGMENT_NOT_FOUND','The current source paragraph is unavailable.');const current=existing||{segmentId:input.segmentId,language:input.language,text:'',revision:0,sourceHash:source.sourceHash||source.beforeHash},newline=this.core._files.get(source.path)?.text?.includes('\r\n')?'\r\n':'\n';const referenceRegistry=referenceTargetRegistry(this.core._files,state.project),result=createInlineFormulaDraft(source,current,input.text,state.project,{newline,referenceRegistry,language:input.language});delete result.draft.sourceWritebackReceipt;delete result.draft.sourceApplied;if(actor)result.draft.editActor=actor;else delete result.draft.editActor;const key=this.reading.hasDerived(input.segmentId)||state.readingDrafts?.[input.language]?.[input.segmentId]?'readingDrafts':'translations';state[key]||={};state[key][input.language]||={};state[key][input.language][input.segmentId]=result.draft;if(beforeWrite)await beforeWrite();await this.core._commit(state);this.emit('change');return result;
+  })).then(result=>{this.oneClick.schedule();return result;});}
   async reconcileTranslationDraft(input, { beforeWrite = null } = {}) {
     const keys = ['segmentId', 'language', 'expectedRevision', 'expectedProjectId', 'expectedSnapshotId'];
     if (!input || Object.keys(input).some(key => !keys.includes(key)) || keys.some(key => !Object.hasOwn(input, key)) || typeof input.segmentId !== 'string' || !Number.isSafeInteger(input.expectedRevision) || input.expectedRevision < 1) fail('INVALID_INPUT', 'Choose an exact saved draft and its current paper version.');
@@ -383,6 +393,7 @@ export class PaperApplication extends EventEmitter {
       const unitId = `unit-${randomUUID()}`;
       state.translations[language][segmentId] = { ...draft, text: draft.text.slice(0, splitAt), sourceSegmentIds: sourceIds, revision: draft.revision + 1, origin: 'human', status: 'saved' };
       state.translations[language][unitId] = { ...draft, text: draft.text.slice(splitAt), sourceSegmentIds: sourceIds, unitKind: 'split', revision: 1, origin: 'human', status: 'saved' };
+      for(const value of [state.translations[language][segmentId],state.translations[language][unitId]]){delete value.sourceWritebackReceipt;delete value.sourceApplied;}
       state.alignments ||= [];
       const prior = state.alignments.find(item => item.language === language && item.translationUnitIds.includes(segmentId));
       if (prior) { prior.translationUnitIds.splice(prior.translationUnitIds.indexOf(segmentId) + 1, 0, unitId); prior.revision++; prior.relation = prior.sourceSegmentIds.length === 1 ? 'oneToMany' : 'manyToMany'; }
@@ -405,6 +416,7 @@ export class PaperApplication extends EventEmitter {
       const record = { alignmentId: `alignment-${randomUUID()}`, language, sourceSegmentIds, translationUnitIds, revision: Math.max(0, ...overlapping.map(item => item.revision)) + 1,
         relation: sourceSegmentIds.length === 1 ? translationUnitIds.length === 1 ? 'oneToOne' : 'oneToMany' : translationUnitIds.length === 1 ? 'manyToOne' : 'manyToMany', snapshotId: state.project.snapshotId, method: 'humanConfirmed' };
       state.alignments.push(record);
+      for(const unitId of new Set([...overlapping.flatMap(item=>item.translationUnitIds),...translationUnitIds]))for(const namespace of ['translations','readingDrafts']){const draft=state[namespace]?.[language]?.[unitId];if(draft){delete draft.sourceWritebackReceipt;delete draft.sourceApplied;}}
       for (const unitId of translationUnitIds) if (state.translations[language]?.[unitId]) { state.translations[language][unitId].sourceSegmentIds = [...sourceSegmentIds]; state.translations[language][unitId].sourceHashes = Object.fromEntries(sourceSegmentIds.map(id => [id, state.segments.find(item => item.id === id).beforeHash])); }
       await this.core._commit(state); this.emit('change'); return this.getState();
     });
@@ -558,7 +570,7 @@ export class PaperApplication extends EventEmitter {
       return { ...result, projectId: captured.state.project.id, noteId: captured.note.noteId, noteRevision: captured.note.revision, sourceSnapshotId: captured.state.project.snapshotId, language: captured.language };
     });
   }
-  async proposeRevision(input,{beforeWrite}={}) { const result = await this.core.proposeRevision(input, { beforeWrite: async request => {await this.sync.beforeResult(request);await beforeWrite?.(request);} }); this.emit('change'); return result; }
+  async proposeRevision(input,{beforeWrite}={}) { const result = await this.core.proposeRevision(input, { beforeWrite: async request => {await this.sync.beforeResult(request);await beforeWrite?.(request);await this.oneClick.beforeResult(request);} }); this.emit('change');this.oneClick.schedule(); return result; }
   async editProposal({ proposalId, edits, reason }) {
     return this._flowAction(async () => {
       await this.core._assertSourceCurrent();
@@ -698,7 +710,7 @@ export class PaperApplication extends EventEmitter {
   }
   async waitJob({ jobId }) { const job = this.jobs.get(jobId); if (!job) fail('JOB_NOT_FOUND', 'No live job matches this ID.'); return job.promise; }
   async cancelJob({ jobId }) { const job = this.jobs.get(jobId); if (!job || job.finished) fail('JOB_NOT_RUNNING', 'The job is not running.'); if (job.finalizing) fail('JOB_FINALIZING', 'The completed model result is already being saved; resolve its notes after saving.'); job.controller?.abort(); if (job.kind === 'codex') await this.chat.interrupt(); return { jobId, status: 'cancelling' }; }
-  async prepareAcceptance({ transactionId, sourceReviewConfirmed = false }) {
+  async prepareAcceptance({ transactionId, sourceReviewConfirmed = false },{beforePrepare=null}={}) {
     this._assertAvailable();
     return this._flowAction(async () => {
       await this.core._assertSourceCurrent();
@@ -709,13 +721,14 @@ export class PaperApplication extends EventEmitter {
       if(reconstructed.candidateHash!==transaction.candidateHash)fail('CANDIDATE_HASH_MISMATCH','The current source candidate changed after compilation.');
       if(reconstructed.requiresHumanSourceReview&&sourceReviewConfirmed!==true)fail('SOURCE_REVIEW_CONFIRMATION_REQUIRED','Review and explicitly confirm the complete raw TeX source diff for this exact isolated candidate.');
       await this._verifyBuildArtifact(build);
+      await beforePrepare?.({transaction,reconstructed,build});
       const token = randomBytes(32).toString('base64url'), expiresAt = new Date(Date.now() + 5 * 60000).toISOString();
       this.flow.acceptances = this.flow.acceptances.filter(item => item.transactionId !== transactionId);
       this.flow.acceptances.push({ transactionId, tokenHash: hash(token), controllerId: this.controllerId, candidateHash: transaction.candidateHash, buildId: build.buildId, expiresAt, consumed: false,...(reconstructed.requiresHumanSourceReview?{sourceReviewConfirmed:true}:{}) });
       return { transactionId, confirmationToken: token, candidateHash: transaction.candidateHash, buildId: build.buildId, expiresAt,...(reconstructed.requiresHumanSourceReview?{requiresHumanSourceReview:true,sourceReview:reconstructed.sourceReview}:{}) };
     });
   }
-  async applyTransaction({ transactionId, confirmationToken, idempotencyKey }) {
+  async applyTransaction({ transactionId, confirmationToken, idempotencyKey },{beforeApply=null,beforeLockedWrite=null}={}) {
     this._assertAvailable();
     if (typeof confirmationToken !== 'string' || confirmationToken.length > 128 || typeof idempotencyKey !== 'string' || idempotencyKey.length > 128 || !idempotencyKey) fail('INVALID_INPUT', 'A UI confirmation and idempotency identity are required.');
     const projectId = this.core.getState().project?.id;
@@ -732,6 +745,7 @@ export class PaperApplication extends EventEmitter {
       if(reconstructed.requiresHumanSourceReview&&acceptance.sourceReviewConfirmed!==true)fail('CONFIRMATION_INVALID','This raw TeX source candidate requires its own exact human source-review acknowledgment.');
       this._verifyCandidate(transaction, build);
       if (reconstructed.candidateHash !== transaction.candidateHash || JSON.stringify(reconstructed.files.map(item => ({ path: item.path, hash: item.hash }))) !== JSON.stringify(transaction.candidate.files.map(item => ({ path: item.path, hash: item.hash })))) fail('CANDIDATE_HASH_MISMATCH', 'Proposal contents changed after compilation.');
+      await beforeApply?.({transaction,reconstructed,build});
       acceptance.consumed = true;
       Object.assign(transaction, { state: 'committing', idempotencyKey, acceptanceHash: acceptance.tokenHash, committedAt: stamp() });
       transaction.reviewCompletions = captureAdoptedReviewEvidence(this.core.getState(), { transaction, transactions: this.flow.transactions, proposals: this.core.getState().proposals });
@@ -739,10 +753,10 @@ export class PaperApplication extends EventEmitter {
       const changes = reconstructed.files.map(file => ({ path: file.path, beforeHash: file.beforeHash, hash: file.hash, bytes: Buffer.from(file.content) }));
       try {
         await this.writer.write({ root: this.core.getProjectRoot(), transactionId, readSet: transaction.readSet, changes }, {
-          onLocked: async () => { transaction.state = 'committing'; await this._persistFlow(); },
+          onLocked: async () => {try{await beforeLockedWrite?.({transaction,reconstructed,build});}catch(error){if(error&&typeof error==='object')error.beforeSourceWrite=true;throw error;}transaction.state = 'committing'; await this._persistFlow(); },
           onProgress: async progress => { transaction.progress.push({ path: progress.path, hash: progress.hash, at: stamp() }); await this._persistFlow(); }
         });
-      } catch (error) { transaction.state = ['SOURCE_BUSY', 'VERSION_CONFLICT', 'PERMISSION_DENIED'].includes(error.code) && !transaction.progress.length ? 'conflict' : 'recoveryRequired'; transaction.error = { code: error.code, message: error.message }; await this._persistFlow(); throw error; }
+      } catch (error) { transaction.state = (['SOURCE_BUSY', 'VERSION_CONFLICT', 'PERMISSION_DENIED','ONE_CLICK_STALE','JOB_CANCELLED'].includes(error.code)||error.beforeSourceWrite===true) && !transaction.progress.length ? 'conflict' : 'recoveryRequired'; transaction.error = { code: error.code, message: error.message }; await this._persistFlow(); throw error; }
       await this._recordApplied(transaction);
       return { transactionId, state: 'applied', snapshotId: transaction.afterSnapshotId, candidateHash: transaction.candidateHash, buildId: transaction.buildId };
     });

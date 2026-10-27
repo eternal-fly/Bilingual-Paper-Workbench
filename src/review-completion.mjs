@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { authorDraftGrant,verifiedAppliedDraftReceipts } from './draft-source-rebase.mjs';
 
 const sha = value => createHash('sha256').update(value).digest('hex');
 const digest = value => typeof value === 'string' && /^[a-f0-9]{64}$/iu.test(value);
@@ -46,10 +47,13 @@ function sourceIndex(state) {
   for (const source of [...(state.readingParagraphs || []), ...(state.segments || [])]) if (!result.has(source.id)) result.set(source.id, source);
   return result;
 }
-function reviewRequestIndex(requests = []) {
-  return new Map(requests.map(request => [request.requestId, { projectId: request.projectId, snapshotId: request.snapshotId, ids: new Set((request.segments || []).filter(segment => segment.draftReview?.mode === 'adaptive-human-draft').map(segment => segment.id)) }]));
+function reviewRequestIndex(requests = [],physical=[]) {
+  return new Map(requests.map(request => [request.requestId, { request, physicalWrites:new Set(physical.filter(row=>row.requestId===request.requestId).flatMap(row=>(row.sourceSegmentIds||[row.segmentId]).map(id=>JSON.stringify([row.transactionId,id])))), projectId: request.projectId, snapshotId: request.snapshotId, ids: new Set((request.segments || []).filter(segment => segment.draftReview?.mode === 'adaptive-human-draft').map(segment => segment.id)) }]));
 }
-function sourceReviewPending(proposal, segmentId, requests) {
+function sourceReviewPending(proposal, segmentId, requests, transaction) {
+  const indexed = requests?.get(proposal.context?.requestId), original = indexed?.request, selected = original?.segments?.find(row => (row.segmentId || row.id) === segmentId), edit = proposal.edits?.find(row => row.segmentId === segmentId);
+  if(transaction&&selected?.draftReview?.mode==='raw-tex-source-review'&&indexed?.physicalWrites.has(JSON.stringify([transaction.transactionId,segmentId])))return false;
+  if (transaction && original?.projectId === proposal.projectId && original.snapshotId === proposal.baseSnapshotId && edit && authorDraftGrant(original,selected,selected?.translationDraft,original.language,transaction,segmentId,edit.beforeHash)) return false;
   const captured = proposal.context?.sourceReviewSegmentIds;
   if (captured !== undefined && (!Array.isArray(captured) || captured.includes(segmentId))) return true;
   const request = requests?.get(proposal.context?.requestId);
@@ -59,12 +63,12 @@ function sourceReviewPending(proposal, segmentId, requests) {
  * No index is retained across calls or silently reused after state mutation. */
 export function createReviewCompletionContext(state, options = {}) {
   const transactions = options.transactions || state.transactions || [], proposals = options.proposals || state.proposals || [], notes = options.notes || [...(state.reviewNotes || []), ...(state.reviewHistory || [])];
-  const proposalMap = new Map(proposals.map(proposal => [proposal.proposalId, proposal])), requestIndex = reviewRequestIndex(state.requests), records = [], byBefore = new Map(), ledgerByNote = new Map();
+  const proposalMap = new Map(proposals.map(proposal => [proposal.proposalId, proposal])), requestIndex = reviewRequestIndex(state.requests,verifiedAppliedDraftReceipts({state,transactions})), records = [], byBefore = new Map(), ledgerByNote = new Map();
   for (const transaction of transactions) {
     const selected = applied(transaction, proposalMap, state.project?.id);
     if (!selected) continue;
     const record = { transaction, proposals: selected }; records.push(record);
-    const keys = new Set(selected.flatMap(proposal => proposal.edits.filter(edit => !sourceReviewPending(proposal, edit.segmentId, requestIndex))).filter(edit => typeof edit.segmentId === 'string' && digest(edit.beforeHash)).map(edit => JSON.stringify([edit.segmentId, edit.beforeHash.toLowerCase()])));
+    const keys = new Set(selected.flatMap(proposal => proposal.edits.filter(edit => !sourceReviewPending(proposal, edit.segmentId, requestIndex,transaction))).filter(edit => typeof edit.segmentId === 'string' && digest(edit.beforeHash)).map(edit => JSON.stringify([edit.segmentId, edit.beforeHash.toLowerCase()])));
     for (const key of keys) { if (!byBefore.has(key)) byBefore.set(key, []); byBefore.get(key).push(record); }
     for (const evidence of transaction.reviewCompletions || []) { const key = JSON.stringify([evidence.sourceNoteId, evidence.sourceBatchId]); if (!ledgerByNote.has(key)) ledgerByNote.set(key, []); ledgerByNote.get(key).push({ transaction, evidence }); }
   }
@@ -89,7 +93,7 @@ function hasAncestry(from, to, decisionAt, committedAt, transactions, proposals,
 function currentEditProof(id, expectedBeforeHash, transaction, proposals, sources, requests) {
   const source = sources.get(id), currentHash = sourceHash(source);
   if (!digest(currentHash)) return null;
-  const matches = proposals.flatMap(proposal => proposal.edits.filter(edit => edit.segmentId === id && !sourceReviewPending(proposal, id, requests)).map(edit => ({ proposal, edit }))).filter(({ edit }) => edit.beforeHash?.toLowerCase() === expectedBeforeHash && typeof edit.before === 'string' && sha(edit.before) === expectedBeforeHash && typeof edit.replacement === 'string' && (!source.path || edit.path === source.path));
+  const matches = proposals.flatMap(proposal => proposal.edits.filter(edit => edit.segmentId === id && !sourceReviewPending(proposal, id, requests,transaction)).map(edit => ({ proposal, edit }))).filter(({ edit }) => edit.beforeHash?.toLowerCase() === expectedBeforeHash && typeof edit.before === 'string' && sha(edit.before) === expectedBeforeHash && typeof edit.replacement === 'string' && (!source.path || edit.path === source.path));
   if (matches.length !== 1) return null;
   const { proposal, edit } = matches[0], afterHash = currentHash.toLowerCase();
   if (afterHash === expectedBeforeHash || ![sha(edit.replacement), sha(edit.replacement.trim())].includes(afterHash) || typeof source.source === 'string' && sha(source.source) !== afterHash) return null;
@@ -130,7 +134,7 @@ export function captureAdoptedReviewEvidence(raw, { transaction, transactions = 
     if (note.origin !== 'external' || note.projectId && note.projectId !== projectId || batches.get(note.batchId)?.active === false || batches.get(note.batchId)?.status === 'retired') return [];
     const captured = decisionEvidence(note), adoptedAt = time(note.decisionUpdatedAt);
     if (!captured || adoptedAt > committedAt || !hasAncestry(note.decisionSnapshotId, transaction.baseSnapshotId, adoptedAt, committedAt, transactions, proposals, projectId)) return [];
-    const edits = selected.flatMap(proposal => proposal.edits.filter(edit => !sourceReviewPending(proposal, edit.segmentId, requestIndex)));
+    const edits = selected.flatMap(proposal => proposal.edits.filter(edit => !sourceReviewPending(proposal, edit.segmentId, requestIndex,transaction)));
     if (captured.ids.some(id => edits.filter(edit => edit.segmentId === id && edit.beforeHash?.toLowerCase() === captured.hashes[id] && typeof edit.before === 'string' && sha(edit.before) === captured.hashes[id] && typeof edit.replacement === 'string' && sha(edit.replacement.trim()) !== captured.hashes[id]).length !== 1)) return [];
     return [{ schemaVersion: 1, projectId, sourceNoteId: note.noteId, sourceBatchId: note.batchId, sourceFileHash: batches.get(note.batchId)?.fileHash || null, concernHash: reviewConcernHash(note), decision: 'adopt', decisionSnapshotId: note.decisionSnapshotId, decisionUpdatedAt: note.decisionUpdatedAt, sourceSegmentIds: captured.ids, sourceHashes: captured.hashes, transactionId: transaction.transactionId }];
   });

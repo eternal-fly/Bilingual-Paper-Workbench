@@ -46,3 +46,8 @@ test('a source-review draft remains eligible for candidate preparation even if a
  f.state.requests[0].draftRevisions.a=draft.revision;
  const plan=deriveEnglishWriteback(f.state,'zh-CN');assert.equal(plan.mode,'missing');assert.deepEqual(plan.missingIds,['a']);
 });
+
+test('an incomplete known alignment cannot disappear from the pending writeback plan',()=>{
+ const f=fixture();f.state.alignments=[{language:'zh-CN',sourceSegmentIds:[],translationUnitIds:['a'],status:'confirmed'}];
+ const plan=deriveEnglishWriteback(f.state,'zh-CN');assert.equal(plan.mode,'blocked');assert.equal(plan.count,1);assert.deepEqual(plan.blockedIds,['a']);
+});

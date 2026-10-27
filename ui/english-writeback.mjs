@@ -1,3 +1,4 @@
+import {initializeOneClickWriteback} from './one-click-writeback.mjs';
 import { deriveEnglishWriteback } from './writeback-state.mjs';
 
 /** Only an explicit author click can obtain and consume source confirmation. */
@@ -6,11 +7,13 @@ export function initializeEnglishWriteback({ api, getState, getLanguage, getInte
   let busy = false, lastSuccess = false, successIdentity = '';
   const copy = (english, chinese) => getInterfaceLanguage().startsWith('zh') ? chinese : english;
   const plan = () => deriveEnglishWriteback(getState(), getLanguage(), getBuffers());
+  const direct=initializeOneClickWriteback({button,status,cancel:document.getElementById('one-click-writeback-cancel'),enabled:()=>getState().capabilities?.oneClickWriteback===true,getState,getLanguage,getInterfaceLanguage,getPlan:plan,api,flushDrafts,refreshState,notify,onApplied});
   const identity = () => JSON.stringify([getState().workspaceIndex?.currentRecordId || null, getState().project?.id, getLanguage()]);
   const changed = () => Error(copy('The draft, source, project or candidate changed. Review the current English candidate and click again.', '译稿、源文、项目或候选已变化。请检查当前英文候选后重新点击。'));
   const action = current => ['missing','save'].includes(current.mode) ? 'prepare' : current.mode === 'compile' ? 'compile' : 'apply';
   const blockedReason = current => getBusy(action(current)) ? getBusyReason(action(current)) || copy('Another paper operation is active. Wait before this action.', '另一论文操作正在进行，请完成后再执行此操作。') : '';
   function render() {
+    if(getState().capabilities?.oneClickWriteback){direct.adopt();return;}
     const current = plan(), count = current.count, scope = copy(`${count} paragraph${count === 1 ? '' : 's'}`, `${count} 段`), blocked=blockedReason(current);
     button.textContent = current.mode === 'compile' ? copy('Compile English changes', '编译英文修改') : ['missing', 'save'].includes(current.mode) ? copy('Prepare English changes', '准备英文修改') : copy('Write back English', '写回英文');
     button.disabled = busy || Boolean(blocked) || ['empty', 'blocked', 'compiling'].includes(current.mode) || current.mode === 'ready' && !getState().capabilities?.directApply || current.mode === 'compile' && !getState().capabilities?.secureCompile;
@@ -21,6 +24,7 @@ export function initializeEnglishWriteback({ api, getState, getLanguage, getInte
     button.title = status.title = status.textContent;
   }
   async function click() {
+    if(getState().capabilities?.oneClickWriteback)return;
     const clicked = plan(), capturedIdentity = identity(), clickedSnapshot = getState().project?.snapshotId;
     if (busy || blockedReason(clicked)) return;
     busy = true; lastSuccess = false; lockEditing(true); render();
@@ -56,5 +60,5 @@ export function initializeEnglishWriteback({ api, getState, getLanguage, getInte
     finally { busy = false; lockEditing(false); render(); }
   }
   button.addEventListener('click', click); render();
-  return { adopt: render, isBusy: () => busy, destroy() { button.removeEventListener('click', click); } };
+  return { adopt: render, isBusy: () => busy || direct.isBusy(), destroy() { direct.destroy();button.removeEventListener('click', click); } };
 }

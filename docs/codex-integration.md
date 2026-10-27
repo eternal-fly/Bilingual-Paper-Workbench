@@ -1,4 +1,15 @@
-# Bilingual Paper Workbench: Codex Integration, Version 1.6.3
+# Bilingual Paper Workbench: Codex Integration, Version 1.6.4
+
+
+Version 1.6.4 defaults to freely editable inline TeX and an author-initiated one-click controller. **Write back English** saves current input, registers exact current paper/source/draft/alignment authorization, queues English generation in the same bound Desktop chat, compiles the returned candidate in isolation, atomically applies it and promotes the latest PDF. No second confirmation is required for this default task. Model tools cannot create its grant, select an arbitrary destination or apply source directly.
+
+The author route has no formula/reference/layout/content veto. All inline TeX can be added, changed or deleted according to the saved author intent, including an empty paragraph replacement. Execution remains restricted to the existing isolated compiler and captured input manifest. Current source hashes, UTF-8 ranges, draft revisions, caller identity, cancellation and durable write recovery remain mandatory. A pre-click stale draft may be explicitly adapted to the current source; drift after authorization revokes the task.
+
+Applied receipts distinguish physical source application from semantic fidelity and review adoption. Exact private transaction evidence can refresh compatible older raw-write status without rewriting source. New input and undo invalidate their own receipt. Only explicitly adopted concerns with matching successful source-write evidence complete; undecided notes never inherit adoption.
+
+For a protected `adaptive-human-draft` partial result, physical application does not consume unresolved author intent. The status projection reports `sourceApplied` and `pendingAuthorIntent` separately, and its paragraph remains in the writeback scope until that remaining intent is handled.
+
+The following compatibility paragraphs describe older protected/adaptive requests. They remain available for explicit manual workflows and ordinary translation/result contracts; they do not restrict content in the default author-click route.
 
 Read and return authorization refresh coherent current durable core/workflow state under the existing shared project-data lock. An identical Desktop bind also refreshes rather than trusting a stale workflow cache. Final result mutation rechecks current ticket/cancellation authority within its commit serialization boundary. Refresh cannot enqueue messages, claim a model writer or grant source writeback. Dirty cache, durable identity changes and unreadable/conflicting workflow versions remain explicit failures.
 
@@ -24,11 +35,11 @@ The shared author-fidelity policy also applies to English revisions and synchron
 
 ## General TeX source review through MCP
 
-Use `bilingual_paper_prepare_request` with `kind: "revision"` and `mode: "source-review"` when an author-requested structure change cannot be represented by protected editing. Read all request pages. The server captures exact declared `.tex` byte ranges, source hashes, complete input-manifest identity and current saved drafts. Return complete raw TeX replacements through `bilingual_paper_propose_revision`; ordinary and staged replies share the same mode-specific validation. No caller-supplied range or authority is accepted. The default protected route retains its existing contracts.
+The author-click controller uses `kind: "revision"`, `mode: "source-review"` and a trusted server-created task marker. Native reads return the exact registered source and latest saved author text. Read all pages and return a faithful complete English replacement through `bilingual_paper_propose_revision`; ordinary and staged replies retain the same exact ranges and draft proof. The default author task permits all inline TeX content rather than a protected placeholder inventory.
 
-Compile the pending proposal with `bilingual_paper_compile` (`kind: "candidate"`, exact `proposalIds`). Inspect `bilingual_paper_workbench` action `read_build_log`, and prepare a fresh same-scoped candidate to repair a compilation failure. The fixed installed callback transport supports `prepare`, `get`, `revision`, `compile` and `workbench`, so an older chat catalog need not resort to Computer Use. These operations use the same bound chat and start no extra model conversation.
+For an explicit manual candidate, the bound chat may prepare this same raw mode through `bilingual_paper_prepare_request`, return a proposal, use `bilingual_paper_compile` for its exact `proposalIds`, and inspect `bilingual_paper_workbench` action `read_build_log`. Without a registered author-click task, a model return or successful build remains pending and cannot authorize source application. The separate protected mode retains its narrower compatibility contracts.
 
-Custom TeX is not confined to a layout whitelist. Direct executable/stream operations and external or undeclared paths remain outside this grant, and only the unchanged isolated compiler executes candidates. Successful compilation is not source approval or proof of faithfulness. Raw candidates require a separate checked human source-review confirmation bound to the exact compiled bytes. Source application, undo and confirmation tokens are never model tools. Confirmed raw intervals retain their identities through repeat edits and reviewed undo; unresolved draft intent remains explicit rather than receiving an invented fully-applied receipt.
+The fixed installed callback transport supports current prepare/get/revision/compile/workbench operations when a host catalog is old. It starts no model worker and requires no Computer Use. Only the existing isolated compiler executes candidate TeX. A compile proves neither semantic equivalence nor scientific correctness. Exact confirmed intervals, including empty insertion points, retain identity across repeated writes and undo.
 
 ## Open and import in the same project chat
 
@@ -55,7 +66,7 @@ Native MCP is the default for an already-open paper. The user can request these 
 | Native tool | Scope |
 | --- | --- |
 | `bilingual_paper_workbench` | Read declared source files, reviews and pending candidate state; prepare review matching/organization; record review decisions/resolution; read retained compiler logs. Every call stays in the verified current paper. No UI token, queued turn, source acceptance or arbitrary path is exposed. |
-| `bilingual_paper_edit_translation` | Apply author-directed replacement text, including supported protected objects, with exact paper/snapshot, saved revision, prior `textHash` and reason. Derive trusted chat attribution on the server; recheck current binding and preserve unsaved/composing editor text before commit. The result is a saved draft, not source acceptance. |
+| `bilingual_paper_edit_translation` | Apply author-directed replacement text, including full inline TeX, with exact paper/snapshot, saved revision, prior `textHash` and reason. Derive trusted chat attribution on the server; recheck current binding and preserve unsaved/composing editor text before commit. The result is a saved draft, not source acceptance. |
 | `bilingual_paper_read_project` | Page the current paragraph index and read paper/language/display identities. Entries contain brief location hints, not the full manuscript. |
 | `bilingual_paper_read_paragraphs` | Read the exact requested protected paragraphs and current drafts with complete byte-driven pages and continuation offsets. Private formula history is omitted. |
 | `bilingual_paper_read_editor_drafts` | Challenge the authenticated open editor for exact current input, including unsaved/failed-save text and composition status. Continue a large snapshot with its returned `captureId` and `nextOffset`; saved drafts are never substituted. |
@@ -135,15 +146,13 @@ The callback derives its current installation root from its own module location 
 
 The callback is transport for Desktop's existing inference, not a fallback model worker. Its packaged path can be supplied directly with the approved task, avoiding manual request copying or improvised source-reading helpers. Public task packets include the protected batch in structured results; Desktop-bound regular result callbacks omit the full private `paperState` envelope.
 
-## Human formula intent
+## Free inline authoring and protected compatibility
 
-The main translation editor exposes formula LaTeX directly in the paragraph text. The author edits prose and math together, with no separate formula panel. The private `saveTranslationDraftWithFormulaEdits` UI action atomically saves the paragraph and its validated human math intent. It requires captured project/snapshot identities, language, paragraph and expected draft revision. Caller-supplied intent/history is rejected; the action is not a model tool. Saving creates no separate model task, and enabled synchronization retains its existing policy. The earlier exact-span formula action remains a private compatibility entry.
+The paragraph editor and author-directed native edit accept complete inline text and TeX under exact project, snapshot, revision and prior-text checks. Fresh captured-save operations still save only the actual human buffer; neither route accepts caller-supplied private intent or task grants. Unsaved/composing input is preserved at the real commit boundary.
 
-The returned draft retains source-pinned formula edits and bounded before/after draft-hash history. Standard paragraph undo/redo uses ordinary draft saves to deactivate or restore matching formula authority. Formula delimiters and environments are retained; replacement math is bounded to 32 KiB and validated controls. Embedded labels, references, citations and tags stay unchanged, and their containing formula cannot be deleted as a whole. Opaque figures, tables and unprovable layout or dynamic content remain outside source-edit authority.
+The default author-click controller adapts the full saved draft through raw source review. It is not restricted by the older formula/reference/formatting inventory, and source diagnostics cannot masquerade as storage failure or a permanent read-only state. Incomplete TeX may fail its isolated compile and remain available for correction.
 
-When the author requests an English candidate, the existing Desktop request uses each authorized formula replacement as that token's effective protected value. The original source identity, exact range, other protected objects, current draft versions and active formula-intent fingerprint remain bound to the request. Only an independently proven complete mathematical source interval can add standalone-formula candidate eligibility. The model cannot create authorization by returning different formula bytes or adding its own intent fields.
-
-Retranslation preserves authorized human formula values. A review translation returned for a paragraph with active human math intent is retained historically without replacing the current draft. A source candidate still proceeds through the same existing Desktop chat, validation, exact isolated compilation, human confirmation and separately compiled inverse undo; no new model or worker is introduced.
+Protected/manual modes retain their existing formula/reference/history contracts for compatible requests. Translation/review results outside an author task still obey the registered result schema and cannot overwrite newer human text or broaden their source scope. Source-write authority comes from the exact author-click task or advanced manual confirmation, never a model-supplied content flag.
 
 ## Review and source candidates
 
@@ -155,15 +164,17 @@ Complete PDF text plus paragraph evidence is limited to 2 MiB, with a 1 MiB stru
 
 Selected source revisions also reuse `bilingual_paper_get_request`, `bilingual_paper_read_segments` and `bilingual_paper_propose_revision`. Their permission comes from an exact current request: a Desktop return ticket for queued window work, or the verified caller-bound preparation for direct native work. The existing core validates protected objects, hashes, source ranges and current draft versions before accepting a candidate. Ordinary discussion tickets permit only a displayed reply. A validated queued result resolves its private Desktop job; cancellation revokes that owned return ticket without interrupting Desktop's model.
 
-Complex reading ranges receive candidate authority only after an independent literal-range validator proves exact bytes, file hash, snapshot, UTF-8 coordinates and protected structure. A readable projection alone grants no source-write permission. Unsupported lexical changes or unprovable dynamic content remain unavailable for automatic source candidates.
+Raw author tasks bind the exact declared source range and complete input manifest without requiring the protected-mode structure proof. Protected/manual requests retain their independent literal-range validator. A readable projection or model result alone never grants source-write permission.
 
-## Compilation and confirmation
+## Author-click compilation and manual confirmation
 
-`bilingual_paper_compile` compiles immutable confirmed English, a baseline or explicitly selected pending proposals in the isolated compiler. It returns actual build status and artifact/isolation evidence. A successful candidate build is not approval.
+`bilingual_paper_compile` compiles immutable current English, a baseline or explicitly selected proposals in the existing isolated compiler. It returns build and artifact evidence. A successful standalone candidate build is not approval.
 
-Only the authenticated human UI can prepare a short-lived single-use confirmation for an exact compiled transaction and apply it. Undo is a separately reviewed, compiled and confirmed inverse transaction. Model tools cannot apply reviewed changes, write arbitrary source ranges, grant confirmation or undo a transaction. Original-format layout, figures and bibliography are preserved from the supplied source project; compilation does not establish scientific correctness.
+For the default one-click route, the authenticated author action creates a durable scope grant. The controller checks it before generation, compilation, acceptance and the exclusive writer lock. It obtains and consumes the existing exact successful-build token internally, then applies only that task's source transaction. New typing, source/alignment drift, cancellation, failed isolation and uncertain delivery stop continuation; uncertain queue delivery is not automatically resent.
 
-The private paper context keeps stable `original.pdf` and `latest-english.pdf` artifacts. The original is frozen, and the latest follows confirmed source. Candidates, intermediate builds, before-images, review history and undo evidence remain outside that two-file context.
+The advanced manual route still inspects and confirms its exact compiled candidate. Undo is a separate compiled inverse with its own author confirmation. Model-facing tools expose neither task-grant creation nor apply/confirmation tokens. Original-format layout and unaffected source bytes are retained; compilation does not establish scientific correctness or faithful translation.
+
+The private paper context keeps stable `original.pdf` and `latest-english.pdf`. The original stays frozen; the latest follows verified applied English. Build history, draft/review records and undo evidence remain outside that two-PDF context. **Export → LaTeX project ZIP** includes all current declared compilation inputs plus a manifest; **Latest English PDF** requires the current exact build. Neither export grants model or write authority or includes private application records.
 
 ## Models, history and compatibility
 
@@ -171,7 +182,7 @@ Desktop's current chat selection is the model authority. Each new Workbench subm
 
 The installer receipt's `desktopProcessRequired: false` describes viewer startup only. `desktopInferenceProcessRequired: true` and `inferenceMode: desktop-existing-chat-queue` explicitly record that model execution requires Desktop's background process and the loaded paper chat.
 
-Opening, importing, selecting, refreshing and verification do not send prompts. Explicit translation/review/discussion actions and synchronization enabled by the user are the delivery triggers. The workbench does not append unrelated requests to the chat.
+Opening, importing, selecting, refreshing and verification do not send prompts. Explicit translation/review/discussion/writeback actions and synchronization enabled by the user are the delivery triggers. The workbench does not append unrelated requests to the chat.
 
 The older independent-writer adapters and native relay remain compatibility code, with their version-specific evidence retained in [Verification](verification.md). Their writer-handoff, model-settings and historical window-close results are not evidence for the current queue route. Legacy unmarked windows require a one-time manual close; current native windows use verified session ownership and reuse without reload. No process is adopted or stopped merely by its title.
 

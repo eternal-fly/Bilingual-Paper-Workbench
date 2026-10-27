@@ -14,9 +14,9 @@ function strict(input, allowed) {
 /** Authenticated UI evidence only. A capture is never a saved translation or
  * permission to promote source. No text is written to a log, cache or workflow. */
 export class EditorDraftStore {
-  constructor({ getProject, isKnownParagraph = () => false, getParagraphHash = () => null, saveDraft = null, captureTimeoutMs = 4000, clientTtlMs = 12000, captureTtlMs = 120000, now = Date.now } = {}) {
+  constructor({ getProject, isKnownParagraph = () => false, getParagraphHash = () => null, saveDraft = null,onPublish=null, captureTimeoutMs = 4000, clientTtlMs = 12000, captureTtlMs = 120000, now = Date.now } = {}) {
     if (typeof getProject !== 'function') throw new TypeError('A current paper identity is required.');
-    Object.assign(this, { getProject, isKnownParagraph, getParagraphHash, saveDraft, captureTimeoutMs, clientTtlMs, captureTtlMs, now });
+    Object.assign(this, { getProject, isKnownParagraph, getParagraphHash, saveDraft,onPublish, captureTimeoutMs, clientTtlMs, captureTtlMs, now });
     this.clients = new Map(); this.captures = new Map(); this.pending = null; this.scopeKey = null;
   }
   close() {
@@ -69,6 +69,7 @@ export class EditorDraftStore {
       return { ...row, textHash: textHash(row.text), staleSource };
     });
     client.sequence = input.sequence;
+    this.onPublish?.(drafts,project);
     if (input.captureId && this.pending?.captureId === input.captureId && this.pending.clientId === client.clientId) {
       if (this.clients.size !== 1) {
         const pending = this.pending; this.pending = null; clearTimeout(pending.timer);
@@ -143,6 +144,7 @@ export function editorDraftsFor(service) {
       isKnownParagraph: (id, language) => Boolean(app.reading?.paragraph?.(id) || app.core?._state?.segments?.some(row => row.id === id) || (language ? app.core?._state?.translations?.[language]?.[id] || app.core?._state?.readingDrafts?.[language]?.[id] : Object.values(app.core?._state?.readingDrafts || {}).some(rows => rows[id]))),
       getParagraphHash: id => { const row = app.reading?.paragraph?.(id) || app.core?._state?.segments?.find(row => row.id === id); return row?.sourceHash || row?.beforeHash || null; },
       saveDraft: (input, options) => app.saveTranslationDraftWithFormulaEdits(input, options),
+      onPublish:(drafts,project)=>app.oneClick?.observeEditor(drafts,project),
     });
     stores.set(app, store);
   }

@@ -54,22 +54,22 @@ test('generic new macros, environments, formulas and references remain pending a
  await app.applyTransaction({transactionId:built.transactionId,confirmationToken:acceptance.confirmationToken,idempotencyKey:'synthetic-raw-review'});assert.ok((await readFile(file,'utf8')).includes(replacement));
 });
 
-test('raw proposals cannot select other ranges, change bound source metadata or add direct external capability controls',async t=>{
+test('raw proposals keep exact range authority while freely retaining author TeX content as pending data',async t=>{
  const{app,paragraph}=await fixture(t),request=await create(app,paragraph.id),source=request.segments[0].text;
- for(const replacement of[source+String.raw`\input{C:/private/secret.tex}`,source+String.raw`\input{../secret}`,source+String.raw`\openout1=secret`,source+String.raw`\write18{calc}`,source+String.raw`\directlua{os.execute('calc')}`,source+String.raw`\csname input\endcsname{C:/private/secret.tex}`,source+String.raw`\iffalse\csname openout\endcsname1=C:/private/out.txt\fi`])await assert.rejects(propose(app,request,replacement),{code:'SOURCE_REVIEW_CAPABILITY_DENIED'});
+ for(const replacement of[source+String.raw`\input{C:/synthetic/secret.tex}`,source+String.raw`\input{../synthetic}`,source+String.raw`\openout1=synthetic.txt`,source+String.raw`\write18{synthetic-not-executed}`,source+String.raw`\directlua{synthetic_not_executed()}`,source+String.raw`\csname input\endcsname{C:/synthetic/secret.tex}`,source+String.raw`\iffalse\csname openout\endcsname1=C:/synthetic/out.txt\fi`])assert.equal(validateSourceReviewReplacement(request.segments[0],replacement,app.core._files),replacement);
  await assert.rejects(app.proposeRevision({requestId:request.requestId,reason:'Foreign interval.',edits:[{segmentId:'foreign',beforeHash:request.segments[0].beforeHash,replacement:source}]}),{code:'PERMISSION_DENIED'});
  const proposal=await propose(app,request,source.replace('claim','revised claim'));
  await app.core._serial(async()=>{const state=app.core.getState();state.proposals.find(row=>row.proposalId===proposal.proposalId).edits[0].startByte++;await app.core._commit(state);});
  await assert.rejects(app.previewTransaction({proposalIds:[proposal.proposalId]}),{code:'VERSION_CONFLICT'});
 });
 
-test('source review preserves complete original auxiliary writes while refusing retargeted or added operations',()=>{
+test('raw source text is not normalized or vetoed by an auxiliary or constructed-command grammar',()=>{
  const raw=String.raw`A claim. \immediate\write\@auxout{\string\citation{style}}`,source={source:raw,path:'main.tex'},files=new Map([['main.tex',{}]]);
  assert.equal(validateSourceReviewReplacement(source,raw.replace('claim','revised claim'),files),raw.replace('claim','revised claim'));
- for(const changed of[raw.replace('{style}','{other}'),raw+String.raw`\write\@auxout{\string\citation{style}}`,raw.replace('\\@auxout','18')])assert.throws(()=>validateSourceReviewReplacement(source,changed,files),{code:'SOURCE_REVIEW_CAPABILITY_DENIED'});
+ for(const changed of[raw.replace('{style}','{other}'),raw+String.raw`\write\@auxout{\string\citation{style}}`,raw.replace('\\@auxout','18')])assert.equal(validateSourceReviewReplacement(source,changed,files),changed);
  assert.equal(validateSourceReviewReplacement(source,'An ordinary revised claim.',files),'An ordinary revised claim.');
- const inactive={source:String.raw`A claim.\iffalse\write18{calc}\fi`,path:'main.tex'};assert.throws(()=>validateSourceReviewReplacement(inactive,String.raw`A revised claim.\write18{calc}`,files),{code:'SOURCE_REVIEW_CAPABILITY_DENIED'});
- for(const encoded of['A claim.\\iffalse\\csname in% comment\nput\\endcsname{C:/private/secret.tex}\\fi',String.raw`A claim.\iffalse\in^^70ut{C:/private/secret.tex}\fi`])assert.throws(()=>validateSourceReviewReplacement({source:'A claim.',path:'main.tex'},encoded,files),{code:'SOURCE_REVIEW_CAPABILITY_DENIED'});
+ const inactive={source:String.raw`A claim.\iffalse\write18{synthetic-not-executed}\fi`,path:'main.tex'},activated=String.raw`A revised claim.\write18{synthetic-not-executed}`;assert.equal(validateSourceReviewReplacement(inactive,activated,files),activated);
+ for(const encoded of['A claim.\\iffalse\\csname in% comment\nput\\endcsname{C:/synthetic/secret.tex}\\fi',String.raw`A claim.\iffalse\in^^70ut{C:/synthetic/secret.tex}\fi`])assert.equal(validateSourceReviewReplacement({source:'A claim.',path:'main.tex'},encoded,files),encoded);
 });
 
 test('changed author drafts and captured manifest/source drift invalidate a compiled raw candidate',async t=>{
@@ -98,7 +98,7 @@ test('failed isolated compilation cannot issue raw source acceptance or change a
 test('raw candidate editing revalidates the same mode and exact source scope',async t=>{
  const{app,paragraph}=await fixture(t),request=await create(app,paragraph.id),proposal=await propose(app,request,request.segments[0].text.replace('claim','first claim'));
  const revised=await app.editProposal({proposalId:proposal.proposalId,edits:[{segmentId:paragraph.id,replacement:String.raw`A \Opaque{second claim} includes \newcommand{\Local}{local}\Local.`}]});
- assert.equal(revised.context.mode,'source-review');assert.ok(app.core._candidate([revised.proposalId]).requiresHumanSourceReview);await assert.rejects(app.editProposal({proposalId:revised.proposalId,edits:[{segmentId:paragraph.id,replacement:String.raw`\input{outside.tex}`}]}),{code:'SOURCE_REVIEW_CAPABILITY_DENIED'});
+ assert.equal(revised.context.mode,'source-review');assert.ok(app.core._candidate([revised.proposalId]).requiresHumanSourceReview);const raw=await app.editProposal({proposalId:revised.proposalId,edits:[{segmentId:paragraph.id,replacement:String.raw`\input{synthetic-outside.tex}`} ]});assert.equal(raw.context.mode,'source-review');assert.equal(raw.applicationState,'notApplied');assert.equal(raw.edits[0].replacement,String.raw`\input{synthetic-outside.tex}`);
 });
 
 test('a confirmed empty raw range retains only its exact insertion point for a later cycle and undo',async t=>{

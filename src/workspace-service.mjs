@@ -28,6 +28,7 @@ export class WorkspaceService extends EventEmitter {
     this._onChange = () => { this.emit('change'); this._saveBinding(); };
     this.active.on?.('change', this._onChange);
     this.desktopExecution = createDesktopProducer ? new DesktopExecution(this, { createProducer: createDesktopProducer }) : null;
+    this.active.desktopStatusRefresher=()=>this.desktopExecution?.refreshStatus?.();
     this.originChat = originThreadId ? new OriginChatBinding(this, { threadId: originThreadId, readMetadata: readOriginMetadata }) : null;
     return new Proxy(this, {
       get(target, key) {
@@ -69,6 +70,7 @@ export class WorkspaceService extends EventEmitter {
     const app = this.active, desktop = await this.desktopExecution?.refreshStatus?.();
     if (this._switching || this._closing || this.active !== app) return desktop || { changed: false, updatedJobIds: [] };
     const external = await app.refreshExternalJobStatus?.() ?? { changed: false, updatedJobIds: [] };
+    app.resumeOneClickWritebacks?.();
     return { ...external, changed: Boolean(desktop?.changed || external.changed), updatedJobIds: [...new Set([...(desktop?.updatedJobIds || []), ...(external.updatedJobIds || [])])], ...(desktop ? { updatedMessageIds: desktop.updatedMessageIds } : {}) };
   }
   async compileReviewNote(input) {
@@ -210,7 +212,7 @@ export class WorkspaceService extends EventEmitter {
     await this._bindingQueue; await this._persistBinding();
     const previous = this.active; previous.off?.('change', this._onChange);
     try { await previous.close?.(); } catch (error) { await next.close?.(); previous.on?.('change', this._onChange); throw error; }
-    this.active = next; this.currentRecord = await this.registry.touch(record.recordId, { ...(this._hostProjectCapture(record) || {}), ...(paperProjectTitle(next.getState()) ? { paperTitle: paperProjectTitle(next.getState()) } : {}) }); this.active.on?.('change', this._onChange);
+    this.active = next;next.desktopStatusRefresher=()=>this.desktopExecution?.refreshStatus?.(); this.currentRecord = await this.registry.touch(record.recordId, { ...(this._hostProjectCapture(record) || {}), ...(paperProjectTitle(next.getState()) ? { paperTitle: paperProjectTitle(next.getState()) } : {}) }); this.active.on?.('change', this._onChange);
     this.recordCount = (await this.registry.records()).length; this.bootstrap = { status: 'ready', root, mainCandidates: [] };
     if (this._watchOptions) this.active.startWatching?.(this._watchOptions);
     this.emit('change'); return this.getState();

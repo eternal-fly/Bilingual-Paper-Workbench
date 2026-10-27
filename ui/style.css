@@ -189,6 +189,7 @@
 .panel-heading .segmented button{min-height:24px;padding:2px 7px;font-size:11px}
 .source-details>summary{cursor:pointer;color:var(--muted);font-size:10px;min-height:26px;display:flex;align-items:center;list-style:none}
 .source-details>summary::-webkit-details-marker{display:none}
+.paper-export-content{display:grid;gap:8px}.paper-export-content .helper{margin:0}.source-heading-actions .paper-export-menu>summary{color:var(--accent)}
 .source-details>summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .source-detail-content{position:absolute;right:6px;top:40px;width:min(340px,calc(100% - 12px));max-height:50dvh;overflow:auto;padding:14px;z-index:8;background:var(--panel);border:1px solid var(--line);border-radius:6px;box-shadow:var(--shadow);font-size:11px;line-height:1.8;overflow-wrap:anywhere}
 .source-detail-content h3{font-size:13px;margin-bottom:8px}

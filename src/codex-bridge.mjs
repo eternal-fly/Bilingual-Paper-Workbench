@@ -34,7 +34,7 @@ export function paperRequestSchema(request) {
   const result = request.kind === 'translation' ? {
     translations: { type: 'array', minItems: request.segments.length, maxItems: request.segments.length, items: { type: 'object', additionalProperties: false, properties: { segmentId, text: { type: 'string' } }, required: ['segmentId', 'text'] } },
   } : {
-    edits: { type: 'array', minItems: 1, maxItems: request.segments.length, items: { ...editSchema, properties: { ...editSchema.properties, segmentId } } }, reason: { type: 'string' },
+    edits: { type: 'array', minItems: request.oneClickWriteback ? request.segments.length : 1, maxItems: request.segments.length, items: { ...editSchema, properties: { ...editSchema.properties, segmentId } } }, reason: { type: 'string' },
   };
   return { type: 'object', additionalProperties: false, properties: { requestId: { type: 'string', const: request.requestId }, ...result }, required: ['requestId', ...Object.keys(result)] };
 }
@@ -95,7 +95,7 @@ export class CodexBridge extends EventEmitter {
       this._child.stderr.on('data', () => {}); // Auth/diagnostic output is never copied into manuscript logs.
       this._child.on('error', error => this._processFailed(error));
       this._child.on('exit', code => this._processFailed(Object.assign(new Error(`Codex app-server exited (${code}).`), { code: 'CODEX_PROCESS_EXITED' })));
-      await this._request('initialize', { clientInfo: { name: 'bilingual_paper_editor', title: 'Bilingual Paper Editor', version: '1.6.3' }, capabilities: { experimentalApi: true } });
+      await this._request('initialize', { clientInfo: { name: 'bilingual_paper_editor', title: 'Bilingual Paper Editor', version: '1.6.4' }, capabilities: { experimentalApi: true } });
       this._notify('initialized', {}); this._state.connected = true; this._changed();
       return this.getState();
     } catch (error) { await this.close(); throw error; }

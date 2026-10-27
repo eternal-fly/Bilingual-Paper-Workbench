@@ -326,6 +326,7 @@ export class PaperService {
     if ((current?.revision ?? 0) !== expectedRevision) fail('VERSION_CONFLICT', 'The draft changed; preserve your buffer and merge or reload.');
     const next = this.getState(); next.translations[language] ??= {};
     const result = { text: content, revision: expectedRevision + 1, sourceHash: segment.beforeHash, status: 'saved', origin: 'human', updatedAt: now(), ...reconcileFormulaDraft(segment,current,content,next.project,language), ...(current?.sourceSegmentIds ? { sourceSegmentIds: current.sourceSegmentIds, sourceHashes: Object.fromEntries(current.sourceSegmentIds.map(id => [id, this._state.segments.find(item => item.id === id)?.beforeHash])) } : {}) };
+    delete result.sourceWritebackReceipt;delete result.sourceApplied;
     next.translations[language][segmentId] = result;
     await this._commit(next); return copy(result);
   }); }
@@ -458,6 +459,7 @@ export class PaperService {
     const request = this._request(input.requestId, 'revision');
     text(input.reason, 'reason', 8192);
     if (!Array.isArray(input.edits) || input.edits.length < 1 || input.edits.length > request.segmentIds.length) fail('INVALID_INPUT', 'A proposal needs bounded registered segment edits.');
+    if(request.oneClickWriteback&&input.edits.length!==request.segmentIds.length)fail('INVALID_INPUT','A one-click candidate must cover every registered author-approved source range exactly once.');
     const inputHash = sha256(JSON.stringify(input));
     if (request.resultHash) {
       if (request.resultHash !== inputHash) fail('IDEMPOTENCY_CONFLICT', 'A completed request cannot accept a different retry.');
@@ -485,7 +487,7 @@ export class PaperService {
         beforeHash: segment.beforeHash, before: segment.source, replacement: replacement.replace(/\r?\n/g, newline), protectedTokenIds: segment.protectedTokens.map(t => t.id), ...(segment.sourceAuthority ? { sourceAuthority: segment.sourceAuthority } : {}) });
     }
     const proposal = { schemaVersion: 1, proposalId: `proposal-${randomUUID()}`, projectId: this._state.project.id, baseSnapshotId: request.snapshotId,
-      context: { requestId: request.requestId, threadBindingId: request.bindingId, translationRevision: Math.max(0, ...Object.values(request.draftRevisions)), alignmentRevision: 0, ...(request.mode==='source-review'?{mode:'source-review',requiresHumanSourceReview:true}:{}), ...(request.segments.some(segment=>segment.draftReview)?{sourceReviewSegmentIds:request.segments.filter(segment=>segment.draftReview).map(segment=>segment.id)}:{}) },
+      context: { requestId: request.requestId, threadBindingId: request.bindingId, translationRevision: Math.max(0, ...Object.values(request.draftRevisions)), alignmentRevision: 0, ...(request.oneClickWriteback?{oneClickWriteback:copy(request.oneClickWriteback)}:{}),...(request.mode==='source-review'?{mode:'source-review',requiresHumanSourceReview:true}:{}), ...(request.segments.some(segment=>segment.draftReview)?{sourceReviewSegmentIds:request.segments.filter(segment=>segment.draftReview).map(segment=>segment.id)}:{}) },
       author: 'ai', reviewState: 'pending', applicationState: 'notApplied', reason: input.reason, edits, createdAt: now() };
     const next = this.getState(); next.proposals.push(proposal);
     const record = next.requests.find(r => r.requestId === request.requestId);

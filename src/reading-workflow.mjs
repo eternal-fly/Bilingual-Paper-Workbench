@@ -112,7 +112,8 @@ export class ReadingWorkspace {
       if ((current?.revision || 0) !== input.expectedRevision) fail('VERSION_CONFLICT', 'The translation changed; preserve your buffer.');
       state.readingDrafts ||= {}; state.readingDrafts[input.language] ||= {};
       const draft = { text: input.text, revision: input.expectedRevision + 1, sourceHash: paragraph.sourceHash, status: 'saved', origin: 'human', updatedAt: now(),...reconcileFormulaDraft(paragraph,current,input.text,state.project,input.language) };
-      state.readingDrafts[input.language][input.segmentId] = draft; await this.app.core._commit(state); this.app.emit('change'); return draft;
+      delete draft.sourceWritebackReceipt;delete draft.sourceApplied;
+      state.readingDrafts[input.language][input.segmentId] = draft; await this.app.core._commit(state); this.app.emit('change');this.app.oneClick?.schedule(); return draft;
     });
   }
   async createRequest(input,{beforeCreate,beforeCommit}={}) {

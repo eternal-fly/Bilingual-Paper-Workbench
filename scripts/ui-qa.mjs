@@ -6,6 +6,8 @@ import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const output = path.join(root, 'work/ui-acceptance-summary.json');
 const suites = [
+  ['one-click-writeback','ui-qa-one-click-writeback.mjs','work/ui-one-click-writeback-qa/report.json',10],
+  ['free-editing','ui-qa-free-editing.mjs','work/ui-free-editing-qa/report.json',8],
   ['writeback-availability','ui-qa-writeback-availability.mjs','work/ui-writeback-availability-qa/report.json',7],
   ['source-review-draft','ui-qa-source-review-draft.mjs','work/ui-source-review-draft-qa/report.json',6],
   ['pdf-zoom','ui-qa-pdf-zoom.mjs','work/ui-pdf-zoom-qa/report.json',13],

@@ -28,8 +28,21 @@ function objectLabel(raw, kind,language) {
   return `${uiText('结构',language)} ${raw.length <= 20 ? raw : raw.slice(0, 17) + '…'}`;
 }
 
-/** Plain-language editing with atomic, non-editable original TeX objects. */
-export function createProtectedEditor({ tokens = [], sourceTokens = tokens, onProtectedAttempt = () => {}, mathInline = false, referencesInline = false, structuresInline = false, getLanguage=()=>document.documentElement.lang||'en' } = {}) {
+function createFreeEditor() {
+  const editor=document.createElement('textarea');editor.className='translation-input free-tex-editor';editor.dataset.freeEditing='true';editor.rows=4;editor.setAttribute('role','textbox');editor.setAttribute('aria-multiline','true');
+  editor.refreshLabels=()=>{};
+  // Existing callers may refresh source metadata. It must never replace or
+  // tokenize a freely edited author buffer, including incomplete TeX.
+  editor.setProtectedTokens=()=>{};
+  editor.focusAt=offset=>{editor.focus({preventScroll:true});const at=Math.max(0,Math.min(editor.value.length,offset));editor.setSelectionRange(at,at);};
+  editor.focusRange=(start,end=start)=>{editor.focus({preventScroll:true});editor.setSelectionRange(Math.max(0,Math.min(editor.value.length,start)),Math.max(0,Math.min(editor.value.length,end)));};
+  editor.acceptCanonicalValue=(expected,canonical)=>typeof expected==='string'&&typeof canonical==='string'&&editor.value===expected.replaceAll('\r\n','\n')&&expected.replaceAll('\r\n','\n')===canonical.replaceAll('\r\n','\n');
+  return editor;
+}
+
+/** Legacy protected atoms remain opt-in; the workbench uses free inline TeX. */
+export function createProtectedEditor({ tokens = [], sourceTokens = tokens, onProtectedAttempt = () => {}, mathInline = false, referencesInline = false, structuresInline = false, freeEditing = false, getLanguage=()=>document.documentElement.lang||'en' } = {}) {
+  if(freeEditing)return createFreeEditor();
   const editor = document.createElement('div');
   editor.className = 'translation-input protected-editor';
   editor.contentEditable = 'true';

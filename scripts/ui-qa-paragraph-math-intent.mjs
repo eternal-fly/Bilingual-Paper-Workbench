@@ -36,10 +36,10 @@ const { chromium } = await loadPlaywright(), browser = await chromium.launch(bro
 const errors = [], checks = [], check = text => { checks.push(text); console.log(text); }; page.on('pageerror', error => errors.push(error.message));
 try {
   await page.goto(web.url); await page.locator(`[data-unit-id="${paragraph.id}"]`).waitFor();
-  assert.match(await page.locator(`[data-unit-id="${paragraph.id}"] .draft-message`).textContent(), /inventory.*confirmation|整段.*公式/s);
+  assert.match(await page.locator(`[data-unit-id="${paragraph.id}"] .draft-message`).textContent(), /Draft saved.*Write back English|草稿已保存.*一键写回/s);
   assert.equal(await page.locator('#propose-selected').isDisabled(), false);
-  check('a complete human paragraph rewrite remains eligible for a source suggestion and describes its automatic formula inventory');
-  await page.locator('#propose-selected').click(); await page.locator('#request-math-review .math-intent-review').waitFor();
+  check('a complete human paragraph rewrite remains eligible and describes the default one-click writeback without claiming it is already applied');
+  await page.locator('#propose-selected').click();await page.waitForFunction(()=>!document.querySelector('#copy-request').disabled&&/"mode"\s*:\s*"source-review"/.test(document.querySelector('#request-payload').value));assert.equal(await page.locator('#request-source-review').isChecked(),true);assert.equal(app.core.getState().requests.at(-1).mode,'source-review');await page.locator('#request-source-review').uncheck();await page.locator('#prepare-request').click();await page.locator('#request-math-review .math-intent-review').waitFor();
   assert.equal(await page.locator('#request-math-review .math-intent-inventory').count(), 2);
   assert.equal(await page.locator('#request-math-review .katex').count(), 4);
   const request = app.core.getState().requests.at(-1); assert(request.segments[0].paragraphMathIntent);

@@ -169,3 +169,24 @@ test('commit evidence and legacy completion exclude the exact adaptive request s
   delete f.state.requests[0].segments[0].draftReview;
   assert.equal(deriveReviewCompletion(f.note,f.state).completed,true);
 });
+
+function authorTaskFixture(){
+ const f=fixture(),draft={text:'Exact saved author intent.',revision:4},scopeHash=hash('registered author task scope');
+ const selected={id:'p1',segmentId:'p1',beforeHash:hash(f.before),sourceHash:hash(f.before),translationDraft:draft,draftReview:{mode:'raw-tex-source-review',draftRevision:4,draftHash:hash(draft.text),sourceHash:hash(f.before)}};
+ const request={requestId:'author-request',kind:'revision',mode:'source-review',projectId:'paper',snapshotId:'before',language:'zh-CN',segments:[selected],oneClickWriteback:{schemaVersion:1,taskId:'author-task',mode:'author-approved-free-source',scopeHash}};
+ f.state.requests=[request];f.proposal.context={requestId:request.requestId,mode:'source-review',sourceReviewSegmentIds:['p1']};Object.assign(f.transaction,{candidateHash:hash('compiled candidate'),buildId:'isolated-build',authorDraftAcceptance:{schemaVersion:1,taskId:'author-task',requestId:request.requestId,scopeHash,projectId:'paper',baseSnapshotId:'before',language:'zh-CN',drafts:[{segmentId:'p1',revision:4,textHash:hash(draft.text),beforeSourceHash:hash(f.before)}]}});
+ return f;
+}
+
+test('matching fully applied author task completes only the concerns explicitly adopted before its source write',()=>{
+ const f=authorTaskFixture();assert.equal(deriveReviewCompletion(f.note,f.state).completed,true);
+ for(const decision of['pending','revise','keep']){const note={...f.note,noteId:decision,decision};assert.equal(deriveReviewCompletion(note,f.state).completed,false);}
+ const pending=structuredClone(f.proposal);pending.reviewState='pending';pending.applicationState='notApplied';delete pending.transactionId;
+ const transaction={...f.transaction,state:'committing'},raw={project:{id:'paper',snapshotId:'before'},requests:f.state.requests,proposals:[pending],reviewNotes:[f.note],reviewBatches:[{batchId:f.note.batchId,active:true}]};
+ assert.equal(captureAdoptedReviewEvidence(raw,{transaction}).length,1);
+});
+
+test('manual, mismatched, failed or undone raw source tasks do not complete review concerns',()=>{
+ const mutations=[f=>delete f.transaction.authorDraftAcceptance,f=>delete f.state.requests[0].oneClickWriteback,f=>f.transaction.authorDraftAcceptance.scopeHash=hash('different scope'),f=>f.transaction.authorDraftAcceptance.drafts[0].revision++,f=>f.state.requests[0].segments[0].draftReview.mode='adaptive-human-draft',f=>f.transaction.state='ready',f=>f.transaction.sourceChangedAgain=true,f=>f.transaction.revertedBy='undo',f=>f.note.decisionUpdatedAt=stamp(4)];
+ for(const mutate of mutations){const f=authorTaskFixture();mutate(f);assert.equal(deriveReviewCompletion(f.note,f.state).completed,false);}
+});

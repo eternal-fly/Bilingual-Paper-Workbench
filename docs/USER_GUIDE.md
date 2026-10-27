@@ -1,8 +1,8 @@
 # Bilingual Paper Workbench — User Manual
 
-**Version 1.6.3 · Windows · English edition**
+**Version 1.6.4 · Windows · English edition**
 
-Bilingual Paper Workbench connects an English LaTeX paper, an editable translation and paragraph-linked review notes in one workspace. Your existing Codex Desktop chat performs translation and review; the workbench provides the reading, editing and confirmation interface. English is the default interface language. The translation language is a separate choice.
+Bilingual Paper Workbench connects an English LaTeX paper, an editable translation and paragraph-linked review notes in one workspace. Your existing Codex Desktop chat performs translation and review; the workbench provides the reading, editing and author-initiated writeback interface. English is the default interface language. The translation language is a separate choice.
 
 ## Install once before opening your first paper
 
@@ -12,7 +12,7 @@ An existing compatible Windows TeX Live installation is a compiler prerequisite 
 
 ## Recommended first-use workflow
 
-**Upload the LaTeX source → translate with one action → generate and inspect a review file → import the review → revise selected paragraphs → compile and confirm.**
+**Open the LaTeX project → translate → review suggestions → edit the translation → Write back English once → export the current project or PDF.**
 
 ### 1. Open a paper chat and upload the original LaTeX project
 
@@ -35,27 +35,25 @@ There is no fixed paragraph or opinion count limit on the complete selection. Wo
 
 You can also ask Codex in the same paper chat: “Translate this entire open paper into French,” or “Translate paragraphs 3–7.” Codex reads the current paper and processes its protected batches within that existing turn. This direct route needs no Computer Use, window clicking or additional queued message. Ask it to cancel or resume the remaining scope when needed; completed translations remain saved.
 
-Translation and English synchronization use one best natural wording while retaining the complete meaning. They do not authorize summarizing, deleting qualifications, adding claims or automatically adopting review advice. For English writeback, the latest saved author draft is the intended content; the old English is comparison context. Explicit author deletions and validated formula/reference edits remain respected. Suggestions stay separate until requested. Read the compiled candidate before confirmation: these model instructions guide fidelity, but do not mechanically prove semantic equivalence.
+Translation and English synchronization use one best natural wording while retaining the complete meaning. They do not authorize summarizing, deleting qualifications, adding claims or automatically adopting review advice. For English writeback, the latest saved author draft is the intended content; the old English is comparison context. Follow explicit author edits and deletions and keep unsolicited advice separate. Read the resulting English/PDF after writeback, or choose the advanced manual route to review before applying. Model instructions guide fidelity but do not mechanically prove semantic equivalence.
 
 ### Work directly from the bound chat
 
-Ask the paper's bound Codex chat to inspect the project source, edit a saved translation paragraph, change a formula or existing reference, organize imported reviews, or record pending/adopt/revise/keep decisions. The native interface performs these operations on the current paper. It does not require screen control or a second model conversation. Draft edits retain the chat actor and exact revision; unsaved or composing text in the reading window is preserved until saved.
+Ask the bound Codex Desktop chat to inspect source, edit a saved translation, organize imported reviews, or record pending/adopt/revise/keep decisions. Native tools operate on this paper without screen control or another model conversation. Reads and edits retain the exact paper, source and draft revision; unsaved or composing window input is preserved.
 
-Supported spacing, escaped symbols and static formatting can be edited inside ordinary paragraph text. Their presence does not by itself make the complete paragraph read-only. When a custom command can consume unknown later input, its exact affected range is retained for source review. Editing a draft or preparing a proposal does not accept English source changes: compile and inspect the complete current candidate, then confirm **Write back English**.
+The default **Write back English** route accepts the complete author-edited inline TeX, including changes to formulas, references, labels, macros and environments. Codex follows your latest saved intent and returns English for the exact registered ranges. It does not receive a general source-write command: the controller alone compiles and applies the task you authorized by clicking.
 
-If an unfamiliar TeX structure cannot be represented by protected editing, the request preview offers **Review TeX structure changes**. It is selected automatically for source-review-available paragraphs that need this route; you can also select it explicitly. Update the preview after changing the mode. Codex receives the exact original TeX range and your saved draft, and can return a complete raw TeX candidate rather than being restricted to the old placeholder inventory. Custom macros and environments can be compiled without a separate layout whitelist. Inputs remain limited to the captured project; direct executable or external-file capabilities are not granted.
-
-The bound chat can prepare this mode, return a proposal, compile it, read its build log and repair a failed candidate through MCP in the same chat. It cannot accept its own source changes. Raw TeX candidates open the complete diff and require your checked source-review confirmation before a writeback token is issued. Draft/source/candidate changes invalidate that confirmation. A confirmed source write is recorded separately from unresolved translation intent: raw drafts remain saved for further editing rather than being falsely marked fully applied. Server-proven source intervals preserve their paragraph identity over repeated raw edits and reviewed undo, including when the reading parser does not recognize the new structure.
+For manual control, open **Revisions** and inspect a pending candidate, build log and complete source diff. The advanced manual route keeps its own explicit confirmation. Ordinary native preparation or compilation outside a one-click task does not apply source changes.
 
 ### Read the request status
 
-The background and native interface synchronize persisted request and execution-ticket records before authorization, including when reconnecting the same chat. A valid request created after the background started can be read without recreating it or resending the message. A later cancellation, changed source or mismatched identity remains a real refusal. If durable data cannot be read consistently, preserve your draft and follow the reported recovery diagnostic; do not edit internal ticket files to bypass it.
+After **Write back English**, the status progresses through saving/preparing, generating in the bound chat, compiling, applying and completed. Keep the workbench and Desktop background process available. The default task continues automatically after a valid model return and successful isolated build; it does not wait for another confirmation click.
 
-**Prepare English changes** saves your current edits and opens a request preview. This local preparation does not send another model message, compile a candidate or write source. Earlier acknowledged messages awaiting a return do not silently disable it. If a real paper operation or source write is active, the interface explains why the next execution step must wait.
+Changed drafts, source or alignment revoke the old task. A failed compile keeps your saved text and the previous successful English PDF. Correct the pending candidate or reported problem and use the explicit retry/resume action. **Cancel writeback** cancels remaining work; a source commit already in progress must finish or recover safely.
 
-Delivery and result status are distinct. An acknowledged delivery means Desktop accepted the request; it does not prove that the model finished or that a valid result reached the paper. The workbench distinguishes active work, waiting for a return, validated completion and uncertain delivery. It does not infer success from elapsed time or automatically resend an uncertain request. Keep the bound Desktop chat available and inspect that chat when a result has not returned.
+Delivery acknowledgment, active model work and validated results are separate states. Uncertain delivery is not automatically resent. Check the bound chat before retrying an uncertain send. Repeated clicks and reconnecting the same chat do not create another task for the same click identity.
 
-Once Codex returns the complete current English candidate, compile it and inspect the PDF. Click **Write back English** to confirm that exact candidate. The latest PDF then updates automatically. A new edit requires a new current candidate; it does not require redoing unaffected translations.
+When the exact source write completes, the paragraph shows it as written back. A later edit becomes pending again. This physical status does not certify a faithful translation or automatically adopt review advice.
 
 ### 3. Generate a review file before importing it — recommended
 
@@ -105,57 +103,31 @@ Each paper remembers its own size when reopened or selected from History. You ca
 
 ## Edit prose and formulas together
 
-Click a translation paragraph or press Enter. Its text and formulas become editable in the same field:
+Click a translation paragraph or press Enter. Edit prose and inline TeX in the same field, then choose **Done**, leave the field, press Escape or use Ctrl+Enter to save and return to reading. Ctrl+Z undoes draft edits; Ctrl+Y or Ctrl+Shift+Z redoes them.
 
 ```tex
-The estimate holds for $n\ge 2$ and $M\ge 1$.
+The estimate holds for $n\ge 2$; see \eqref{eq:bound} and \cite{KEY_A}.
 ```
 
-Change the prose, modify the formula source, or select and delete a complete formula directly. You do not need an insert-formula command or a separate formula panel. Select **Done**, leave the field, press Escape, or use Ctrl+Enter to save and return to reading. Ctrl+Z undoes; Ctrl+Y or Ctrl+Shift+Z redoes.
+You may add, change, reorder or delete formulas and their labels/references. Empty saved text can intentionally remove a paragraph through writeback; later text can be written into its retained exact source slot. The default author route has no formula/content whitelist. Incomplete TeX is saved as text and may need correction when compiled. A genuine save, permission, version or connection failure remains distinct from a TeX compile error and preserves your input for retry or export.
 
-Reading mode uses offline Markdown and KaTeX. Supported equation/split environments, static project macros and mathematical boxes are typeset. Labels stay in the underlying source but are hidden in reading view; displayed equation numbers come only from verified auxiliary data. The preview never invents numbering.
-
-A complete inline formula inside a math-only `\mbox` displays without the TeX wrapper. Balanced `\texorpdfstring` headings show their display branch. These are reading projections: the editable text, references and source bytes stay intact. Incomplete or unsupported formatting remains visible for inspection.
-
-For English source authority, labels, references, citations and equation tags inside math remain fixed. Raw author drafts can retain their edits as source-review input. You can edit the mathematical body around them, but cannot delete their containing formula as a whole. Individual mapped edits retain their delimiter/environment type and are limited to 32 KiB of validated math syntax. The full-paragraph inventory described below also permits complete added or reordered formulas, while retaining the original boundaries of any formula containing fixed labels or references.
-
-An incomplete expression, such as `$x^`, now saves as exact author text with a **Source review required** notice. It can reopen safely and remains available to Codex; it does not grant that malformed math permission to change English source. Complete or adapt it before the corresponding source edit. Actual storage, permission, version or connection failures remain **Save failed** and retain retry/export controls.
-
-Uniquely mapped changes to existing formulas can become English revision intent. If your saved author-directed paragraph adds or reorders complete formulas, **Suggest source revision** captures the paragraph's exact new mathematical inventory instead of guessing old-to-new formula matches. Review the **Original formulas** and **Requested formulas** lists. The model must use that complete inventory, preserve citations and labels, and return a pending English candidate. Added formulas still require a successful candidate compile and your final confirmation. Incomplete, unsafe or structurally ambiguous TeX remains unavailable for source changes. Ordinary translation/review output cannot grant itself edit authority; explicit bound-chat edits use the dedicated native editor with version checks and actor attribution.
+Reading mode uses offline Markdown and KaTeX. Supported mathematical environments and static project macros are typeset; unsupported or incomplete constructs retain a visible source representation. This display fallback does not make a paragraph read-only or authorize an unrequested source edit.
 
 ## Edit citation and cross-reference keys
 
-The same paragraph editor accepts existing standalone citation and cross-reference commands as inline LaTeX. You can change or delete them, add an existing bibliography key to a citation list, and undo or redo the change:
-
-```tex
-\cite{KEY_A,KEY_B}
-\ref{fig:overview}
-\eqref{eq:bound}
-```
-
-The supported commands are `cite`, `citep`, `citet`, `citealp`, `citealt`, `citeauthor`, `citeyear`, `ref`, `eqref`, `pageref`, `autoref`, `cref` and `Cref`. Choose keys already declared unambiguously in the paper's reachable bibliography/source files. Bibliography keys and label keys are checked separately. An unknown, incomplete, dynamic or ambiguous target is saved as author text with a source-review notice. Codex can review it against the original protected inventory, while the unresolved key cannot retarget English source. Repairing a valid known reference restores its validated intent.
-
-This release accepts literal ASCII keys up to 128 characters, using letters, digits, `_`, `.`, `:`, `/`, `+` and `-`. Case-colliding bibliography entries are treated as ambiguous; label names remain case-sensitive.
-
-This reference-editing scope retains command names and optional notes. Label definitions such as `\label{eq:bound}`, numeric citation display atoms and references inside formulas retain their source-validation rules. Inline structures have their own editable scope below. A newly inserted or ambiguously mapped reference can be saved as a local draft without permission to change English source; the workbench explains when source mapping must be resolved.
-
-For a proven existing occurrence, the backend records your exact reference change as source-pinned author intent. Request an English candidate, review it, compile that exact candidate and confirm writeback. The model must retain all unedited formulas and references. Undoing the draft change revokes pending source authority; undoing a confirmed source change still needs a separately compiled inverse and confirmation. Later model translation/review output preserves active author reference edits rather than overwriting them.
+Edit commands such as `\cite{KEY_A,KEY_B}`, `\ref{fig:overview}`, `\eqref{eq:bound}` and `\label{eq:bound}` directly. Your author-directed writeback may add, change or remove them. Include the required bibliography and label definitions in the project; compilation can report missing or malformed dependencies. The model should preserve your intended references and scientific meaning rather than silently restoring older English.
 
 ## Edit inline TeX structures
 
-The translation paragraph editor displays structural notation as text rather than forcing generic **Structure** chips. Edit spacing and formatting alongside prose, formulas and existing references:
+Spacing, escaped symbols, formatting, custom macros and environments remain ordinary editable text:
 
 ```tex
 Section~3.1 and \textbf{the main result}, with a literal 10\% value.
 ```
 
-Supported source-revision intent includes nonbreaking spaces and safe spacing controls, escaped literal characters, and balanced static formatting such as `\emph{...}`, `\textbf{...}`, `\textit{...}`, `\textnormal{...}`, `\textrm{...}`, `\textsf{...}`, `\texttt{...}`, `\textsc{...}`, `\underline{...}` and `\mbox{...}`. The backend derives this intent from your exact saved paragraph and current source, alongside its formula and reference checks. The model must retain the exact authorized inventory in its English candidate.
+The default author route does not veto a candidate because a static parser cannot classify one of these objects. It still limits changes to the captured source ranges and runs the exact candidate in the existing isolated compiler. Saving or reading text does not execute TeX. Compiler isolation, input manifests, byte/version checks and write recovery remain in force.
 
-Source grants remain bound to captured project dependencies. Deleting existing safe inline notation does not require a blanket proof that every project macro is standard. New or genuinely rebound controls receive source review; surviving risky calls and unknown-arity ranges retain their complete original bindings in the candidate. Raw authoring remains available in every case.
-
-Being able to type and save a command does not make it a valid source edit. Incomplete wrappers, labels, environment boundaries, file controls and unknown macros are retained durably as raw author text, with source-review diagnostics. They are not forced browser chips and cannot execute through draft saving. Only an actual failed save requires retry/export before closing.
-
-Generate the corresponding English candidate through the bound Codex chat. For a source-review draft, Codex receives the exact saved text, original source and retained protected objects. It can adapt wording/formatting and compile a pending candidate through native tools, repairing a failed candidate within the same turn. Review the resulting English and confirm **Write back English** as usual. Repeated confirmed writes update the draft's association with the new source. Model translation/review output cannot silently overwrite pending structural author intent. A partial source adaptation leaves unresolved text pending after writeback and does not mark an adopted concern complete. Repair or explicitly review that remaining intent; an older receipt cannot hide it.
+Older protected/manual request modes remain available for compatible workflows. Their placeholder or formula/reference diagnostics describe that mode; they do not impose a permanent content restriction on a new author-click writeback.
 
 ## Default writing Skills and translation checks
 
@@ -169,22 +141,31 @@ The workbench does not install Skills or change global Desktop settings. If the 
 
 Before returning a translation, Codex performs a built-in check within the same requested turn: complete paragraph coverage, target language, terminology, conditions and quantifiers, negation, probability guarantees, numbers/units, sentence completeness, formula/reference placeholders and valid output structure. Protected English identifiers are not treated as missed translation. Correct retained TeX is not rewritten merely to work around a display limitation. The backend separately validates IDs, protected objects, versions and result scope.
 
+Placeholder checks apply to requests that carry a protected inventory. The default author-click English task instead follows the complete saved inline TeX and its exact source scope; it must not restore content you deliberately changed or removed merely to satisfy an older inventory.
+
 This check does not schedule an additional review conversation. It also does not replace the author's assessment of scientific correctness.
 
-## Turn an edited translation into confirmed English
+## Write an edited translation back to English
 
-1. Finish editing and save your translation paragraphs, including complete formula or citation changes.
-2. Generate the corresponding English candidates through the bound Codex chat and inspect their proposed wording. The first PDF column now provides **Write back English** and shows how many current changed paragraphs are covered.
-3. If an exact successful compilation is still missing, click the button to prepare the candidate preview. Review that PDF when it is ready. Compilation alone does not write the source.
-4. Once the complete current candidate is ready and you have reviewed it, click **Write back English**. This direct author action confirms the exact compiled candidate, updates the English LaTeX and switches the first column to **Latest English**. No additional checkbox or visit to **Revisions** is required.
+1. Edit the intended translation paragraphs. Review advice remains optional; incorporate only the changes you want.
+2. Click **Write back English** in the PDF column. Current input is saved and the exact scope is sent once to the bound Desktop chat.
+3. The controller receives the English replacements, compiles them in isolation and atomically writes the authorized source. **Latest English** updates from the verified applied version. No separate confirmation is required in this default route.
 
-If a changed paragraph has no current English candidate, the entry opens the existing revision request flow for that missing scope. It never silently applies a partial selection or uses an obsolete proposal. Draft edits, source changes or a project switch invalidate the old candidate. Keep the workbench open until it reports the result; repeated clicks while busy cannot create another write.
+That click authorizes the captured text, revisions, source and alignment only. New typing or changed source stops an obsolete task. Confirmed split/merged paragraphs are processed as a complete known group; missing or ambiguous alignment is reported rather than guessed. A draft that was already stale before your new click can be adapted against the current captured source; an old receipt does not authorize it.
 
-The original uploaded English PDF stays frozen for comparison. If the source uses bilingual layout that differs from the English projection, the workbench builds that projection before publishing the latest English PDF. Compilation or write failure preserves the previous successful PDF; inspect **Log** and the visible status before retrying.
+Successful compilation does not prove scientific correctness or semantic equivalence. Read the resulting English/PDF. The controller does not silently turn imported or generated opinions into author decisions, add another review conversation or delete material you did not ask to remove.
 
-The detailed **Revisions** route remains available for inspecting individual differences, mathematical inventories and exact build identity. Translation saves, model responses and polling never approve source writes. Only the author's explicit ready-button click or detailed confirmation does so.
+For a step-by-step workflow, use **Revisions** to inspect the source diff and pending PDF, compile, then confirm that exact manual candidate. Native model tools cannot invent an author-click grant or apply an unrelated candidate.
 
-To undo a confirmed source change, choose **Create undo proposal** in **Revisions**. The inverse is independently compiled and requires its own confirmation. **Latest English** then switches to the verified restored version. This is separate from Ctrl+Z in an uncommitted translation draft.
+To undo a source change, choose **Create undo proposal** in **Revisions**. The inverse is separately compiled and confirmed; the latest PDF follows the restored source. This differs from Ctrl+Z in an uncommitted translation draft. Newer author input is preserved.
+
+## Export the current source project or PDF
+
+Under **Export**, choose **LaTeX project ZIP** or **Latest English PDF**.
+
+The ZIP contains the current main `.tex` and every declared compilation input, including project-local classes/styles, bibliography and figures, with relative paths and `EXPORT_MANIFEST.json`. It is a complete source-input export, not just the main file. Installed TeX packages/fonts and private workbench drafts, review records, chats, credentials and transaction history are outside this export.
+
+The PDF download must match the current English source version and verified build. Finish writeback or build the current English PDF if it is unavailable. Exports do not write source or start model work. Unsaved translation edits are not source changes: complete writeback first when you want them reflected in the exported project and PDF.
 
 ## Choose the PDF and feedback scope
 
@@ -196,11 +177,15 @@ Current notes are shown by default. Open **History** in the notes controls to in
 
 In the review-import dialog, **Withdraw notes** hides an imported file's opinions and keeps them recoverable. **Delete** has a separate preview and confirmation. Removing the imported record does not delete your original uploaded review file.
 
-## Continue editing after a confirmed writeback
+## Continue editing after writeback
 
-After **Write back English** succeeds, **Latest English** and its source identity update together. The translation used by that exact accepted revision keeps its text and receives a saved revision associated with the updated source. Click the same paragraph and continue editing; repeat the candidate, isolated compilation and confirmation cycle as needed. Editing another paragraph does not adopt its pending changes.
+After a complete author-task or verified full raw-source writeback, the exact saved draft and current source receive a matching applied record and the paragraph stops counting as unwritten. Compatible older raw-source writes can be recognized from their exact retained transaction evidence without another source write. This reports physical application; retained semantic-review diagnostics are history, not a demand to generate the same candidate again.
 
-Undo is another compiled and confirmed transaction. It restores only an exact matching prior draft state; newer author text remains available for review. A source change outside the verified transaction history is not automatically treated as an accepted translation change.
+An advanced protected partial adaptation can write its English candidate while retaining unfinished author changes. Its status distinguishes **source written** from **author changes still pending**; repair or adapt that remaining content before treating the draft as complete.
+
+A new edit becomes pending immediately. Undo restores the appropriate earlier pending intent and invalidates the reverted applied record. Neither an old candidate nor a matching paragraph number can hide newer text. A failed or interrupted source commit is not reported as completed.
+
+Review opinions have their own lifecycle. Only concerns explicitly adopted before a successful matching source write can become completed; pending/keep/revise opinions and unrelated paragraphs remain unchanged. Undo or explicit reopening returns the affected concern to review.
 
 ## Read or recover unsaved input through Codex
 
@@ -228,7 +213,7 @@ The displayed model is the setting verified for that submission. Desktop control
 
 If draft or project-record saving is refused, keep the window open and retain or export the editing buffer. Resolve the destination's intended write access and use the visible retry action. Do not recreate the paper or submit the same task repeatedly to bypass the error.
 
-If source writeback is refused, the existing English source and previous successful PDF remain available. A read-only source and another editor's file lock are different conditions: restore the intended source access or release the external lock, then retry the same reviewed candidate if its source version is still current. Source drift requires a fresh candidate/compile. The Workbench does not force file permissions, bypass protected objects or treat a refused write as applied.
+If source writeback is refused, the existing English source and previous successful PDF remain available. A read-only source and another editor's file lock are different conditions: restore the intended source access or release the external lock, then retry the same reviewed candidate if its source version is still current. Source drift requires a fresh candidate/compile. The workbench does not force file permissions or treat a refused write as applied. Content freedom does not bypass source identity, file locks or compiler isolation.
 
 An interrupted multi-file commit can require recovery after an earlier file was durably written. The Workbench reports a partial/recovery-required state rather than success. Retain its transaction journal and use the exact recovery path; do not overwrite the files or start a competing candidate to hide that state.
 

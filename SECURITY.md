@@ -4,13 +4,13 @@ Bilingual Paper Workbench processes untrusted LaTeX, PDFs, reviewer material and
 
 Include the affected version, Windows/Node/Codex versions, the exact operation, expected and observed behavior, and a minimal synthetic reproduction. Do not attach a real paper, review document, chat history, capability URL, bearer token, installation configuration, source snapshot or private application directory. Redact usernames and local paths. Describe what you omitted so a maintainer can request only the evidence needed.
 
-The supported release line is 1.3.x. This policy does not promise a response or fix deadline. The tested environment and release-specific evidence are recorded in [Verification](docs/verification.md); unsupported host changes require fresh compatibility checks.
+The supported release line is 1.6.x. This policy does not promise a response or fix deadline. The tested environment and release-specific evidence are recorded in [Verification](docs/verification.md); unsupported host changes require fresh compatibility checks.
 
 ## Boundaries to preserve
 
-- Treat imported material and model output as data, with exact selected scope and protected objects.
+- Treat imported material and model output as data. Keep exact selected scope; content freedom never grants host execution or source-application authority.
 - Keep native caller, project, snapshot, language and draft/preference revisions bound to reads and final writes.
-- Keep source acceptance and undo in the authenticated human UI, after exact isolated compilation and separate confirmation.
+- Require an authenticated author action for source writes: the default click authorizes one exact save/generate/compile/apply task; advanced manual candidates and compiled undo retain their separate confirmation. Never let model tools create that grant or apply source.
 - Keep compiler networking disabled and retain its file, process and resource restrictions. Do not replace an isolation failure with unrestricted compilation.
 - Keep manuscripts, chats, authentication, local capabilities and private runtime state outside packages and reports.
 

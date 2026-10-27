@@ -1,5 +1,29 @@
 # Bilingual Paper Workbench Verification
 
+## Version 1.6.4: free editing, one-click writeback and complete source export
+
+Date: 2026-10-28. **Status: PASSED for the synthetic release gates below.**
+
+The default translation and candidate editors accept ordinary inline TeX in a native text area. Formulas, citations, cross-references, spacing, macros and environments have no content lock. Raw candidates are checked as bounded UTF-8 source rather than against a closed command grammar; captured project identity, exact source ranges, isolated compilation, atomic promotion and undo remain enforced.
+
+**Write back English** is an author-triggered durable task: save the current draft, send one registered request to the same verified Desktop chat, compile its returned candidate, apply it and update the latest English PDF. This default does not open a second acceptance dialog. Advanced manual revisions retain their explicit review route. Cancellation, newer input, source changes, uncertain delivery and interrupted writes retain a recoverable state without automatically resending a model request. The background can finish a native result with the window closed.
+
+| Gate | Fresh result |
+| --- | --- |
+| Native regression | **1,434 passed**, zero failures/skips/cancellations: 1,416 with the actual isolated compiler enabled and 18 Desktop execution tests run separately |
+| Complete browser regression | **600 checks / 53 suites**, all passed against frozen UI/script hashes; two input-performance suites run alone, other suites at concurrency three |
+| One-click lifecycle | **19/19**: exact draft/source/task binding, duplicate clicks, lost acknowledgement, cancellation, compiler failure, restart, newer input and last-moment writer-lock races; actual two-round compilation, undo and reopen |
+| Packaged native transport | A persistent secondary runs the final manifest-verified bundled MCP server against a signed synthetic primary; **two queue submissions, two actual automatic writes and one compiled undo** across changed snapshots. Same transport, no new chat, no screen control, no live model inference |
+| General multi-round acceptance | Self-authored **16-unit translation, four matched opinions with adopt/pending/revise, 12 writes and one compiled undo**. Includes ordinary/nonbreaking spaces, escaped symbols, nested formatting, formulas, labels, citations and cross-references. Reopen retains exact drafts, decisions, source and original/latest PDFs |
+| Accurate post-write status | Exact task receipts and private write ledgers distinguish physical source application from unresolved intent. A complete current raw write is no longer offered again as unwritten. An advanced partial adaptation remains pending; newer edits and undo reopen the appropriate state. Split/merged groups and delete/reinsert anchors retain their exact identities |
+| PDF updates | Repeated same-source state adoption does not cancel an in-flight latest PDF load. Project/source/user-selection changes still invalidate the old load. Browser checks verify the new canvas and exact build/hash rather than only a success message |
+| Project/PDF exports | **Export → LaTeX project ZIP** includes every captured compilation input plus a hash manifest, with case-insensitive collision avoidance. Independent Python ZIP/CRC/hash/extraction checks and actual isolated TeX + BibTeX compilation pass for a self-authored five-file project. Private drafts/reviews/workflows are excluded. **Latest English PDF** requires the exact current confirmed build. Hashing and late project/source changes are checked before download |
+| Build and clean reconstruction | Three manifests, **376 syntax files / 20 verified build artifacts**, no external UI assets. An independent finite 459-file source copy installs the frozen lock offline: **112 packages reused, zero downloads**. Initial build and two repeated builds match 20/20. Seven runtime dependency versions and complete package contents match development; a controlled byte-identical Zod layout experiment reproduces the four canonical pnpm/backend bundle differences, with all 20 artifacts matching after equal layout |
+| Installed delivery | Three copies match **57 public files / 20 build hashes**; original private settings and bindings remain intact. Fresh installed stdio exposes **33 tools** with disposable catalog-only data. Existing manuscript windows are not forcibly reloaded |
+
+All paper acceptance uses self-authored data. The packaged MCP proof uses a deterministic official-queue fixture, not a new GPT-6 Astra response. Compilation validates execution and layout; semantic fidelity remains model guidance and author responsibility. These gates do not establish support for every TeX package/font or remove OS compiler isolation. Earlier failure records are retained privately; the table reports newly completed gates only.
+
+
 ## Version 1.6.3: coherent authorization, general TeX review and reliable upgrades
 
 Date: 2026-10-28. **Status: PASSED for the release gates below.**

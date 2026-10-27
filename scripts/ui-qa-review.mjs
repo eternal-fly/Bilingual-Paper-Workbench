@@ -78,12 +78,13 @@ try {
   await page.locator('#edit-proposal').click();
   await page.locator('#edit-proposal-dialog').waitFor({ state: 'visible' });
   const candidate = page.locator(`.candidate-edit-input[data-segment-id="${a.id}"]`);
-  assert.equal(await candidate.locator('.protected-object').count(), 2);
+  assert.equal(await candidate.evaluate(node=>node.tagName),'TEXTAREA');assert.equal(await candidate.locator('.protected-object').count(),0);
   const originalCandidate = await candidate.evaluate(node => node.value);
-  await candidate.evaluate(node => { node.focus(); const chip = node.querySelector('.protected-object'), range = document.createRange(); range.setStartAfter(chip); range.collapse(true); getSelection().removeAllRanges(); getSelection().addRange(range); });
+  await candidate.evaluate(node => {const start=node.value.indexOf('$x=1$');node.focusRange(start,start+5);});
   await page.keyboard.press('Backspace');
+  assert.equal((await candidate.evaluate(node=>node.value)).includes('$x=1$'),false);await page.keyboard.press('Control+z');
   assert.equal(await candidate.evaluate(node => node.value), originalCandidate);
-  await candidate.evaluate(node => { const range = document.createRange(); range.setStart(node.firstChild, 0); range.collapse(true); getSelection().removeAllRanges(); getSelection().addRange(range); });
+  await candidate.evaluate(node => node.focusAt(0));
   await page.keyboard.insertText('Author reviewed: ');
   await page.locator('#edit-proposal-reason').fill('Human precision edit for synthetic browser QA.');
   await page.locator('#save-edited-proposal').click();
@@ -94,7 +95,7 @@ try {
   assert.ok(mixed.edits[0].replacement.startsWith('Author reviewed: '));
   assert.ok(mixed.edits[0].replacement.includes('$x=1$') && mixed.edits[0].replacement.includes('\\cite{example}'));
   assert.equal(app.getState().proposals.find(proposal => proposal.proposalId === original.proposalId).reviewState, 'superseded');
-  check('editing a candidate preserves raw formula/citation objects and creates a mixed proposal');
+  check('free candidate formula deletion and undo retain the final author text and create a scoped mixed proposal');
   assert.equal(app.getState().transactions.find(transaction => transaction.transactionId === oldPreview.transactionId).state, 'stale');
   await assert.rejects(app.applyTransaction({ transactionId: oldPreview.transactionId, confirmationToken: oldAcceptance.confirmationToken, idempotencyKey: 'must-not-write' }), { code: 'CONFIRMATION_INVALID' });
   assert.deepEqual(await readFile(path.join(paper, 'main.tex')), before);

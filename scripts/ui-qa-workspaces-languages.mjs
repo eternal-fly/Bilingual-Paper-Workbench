@@ -75,10 +75,10 @@ try {
   assert.equal(await page.evaluate(() => window.__paperState.pdfSelection.activeRole), 'latest'); assert.equal(await page.evaluate(() => window.__calls.some(call => ['reviewCycle', 'chatSend', 'runRequest'].includes(call.action))), false);
   check('verified initial PDF view is acknowledged without changing the default pair target or making a model request');
   await openTranslationEditor(page,editor); await (await openTranslationEditor(page,editor)).fill('尚未保存的中文编辑。');
-  await editor.evaluate(node => { node.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true })); const range = document.createRange(); range.setStart(node.firstChild, 4); range.collapse(true); const selection = getSelection(); selection.removeAllRanges(); selection.addRange(range); });
+  await editor.evaluate(node => { node.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true })); node.focusAt(4); });
   await page.evaluate(() => { const state = window.__paperState; state.pdfSelection = { ...state.pdfSelection, revision: state.pdfSelection.revision + 1, target: 'original', requestedRole: 'original', selectionSource: 'model' }; window.__publish(structuredClone(state)); });
   await page.waitForFunction(() => window.__paperState.pdfSelection.activeRole === 'original');
-  assert.equal(await editor.evaluate(node => node.value), '尚未保存的中文编辑。'); assert.equal(await editor.evaluate(node => node === document.activeElement), true); assert.equal(await editor.evaluate(() => getSelection().anchorOffset), 4);
+  assert.equal(await editor.evaluate(node => node.value), '尚未保存的中文编辑。'); assert.equal(await editor.evaluate(node => node === document.activeElement), true); assert.equal(await editor.evaluate(node=>node.selectionStart),4);
   assert.equal(await page.locator('#pdf-artifact').inputValue(), 'version-original');
   check('model PDF role changes update the exact displayed build while preserving a composing translation, focus, and caret');
   await editor.evaluate(node => node.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true })));

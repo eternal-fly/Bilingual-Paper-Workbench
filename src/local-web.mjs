@@ -14,6 +14,8 @@ import {publicUpdateChecker} from './update-checker.mjs';
 const packageRoot = fileURLToPath(new URL('../', import.meta.url));
 const actions = new Set(['state', 'listWorkspaces', 'openWorkspaceRecord', 'bootstrapHostProject', 'openProject', 'demo', 'configureEngine', 'saveDraft', 'splitTranslation', 'setAlignment', 'createRequest', 'editProposal', 'addComment', 'resolveComment', 'rejectProposal', 'previewTransaction', 'exportPatch', 'refreshProject', 'readPdf', 'readVersionPair', 'reviewCycle', 'cacheVersionPairContext', 'cacheActivePdfContext', 'recordPdfView', 'selectPdfReviewTarget', 'configureLanguages', 'readBuildLog', 'locateSource', 'locatePdf', 'importResult', 'compileBaseline', 'compileEnglish', 'importReviewNotes', 'setReviewImportActive', 'fullPaperReview', 'reviewParagraph', 'configureSync', 'syncParagraph', 'resolveReviewNote', 'setReviewDecision', 'anchorReviewNote', 'cancelJob', 'prepareAcceptance', 'applyTransaction', 'createUndoProposal', 'recoverTransactions', 'models', 'chatState', 'chatStart', 'chatSelectModel', 'chatSend', 'chatInterrupt', 'chatDisconnect', 'runRequest']);
 actions.add('compileReviewNote');
+actions.add('exportPaperProject');
+for(const action of ['startOneClickWriteback','cancelOneClickWriteback','resumeOneClickWriteback'])actions.add(action);
 for (const action of ['configureReviewHistory', 'prepareClearReviewHistory', 'clearReviewHistory']) actions.add(action);
 for (const action of ['prepareDeleteReviewImport', 'deleteReviewImport', 'revalidateReviewImport', 'reopenReviewImportNote']) actions.add(action);
 for (const action of ['listProjectSources', 'readProjectSource', 'prepareReviewOrganization', 'getReviewOrganizationContext', 'submitReviewOrganization', 'runReviewOrganization']) actions.add(action);

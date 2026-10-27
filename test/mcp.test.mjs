@@ -62,10 +62,10 @@ async function launch(t) {
   const initialized = await request('initialize', {
     protocolVersion: '2025-11-25',
     capabilities: {},
-    clientInfo: { name: 'synthetic-mcp-test', version: '1.6.3' },
+    clientInfo: { name: 'synthetic-mcp-test', version: '1.6.4' },
   });
   assert.equal(initialized.result?.serverInfo?.name, 'bilingual-paper-editor', 'server must complete the real MCP initialize exchange');
-  assert.equal(initialized.result.serverInfo.version, '1.6.3');
+  assert.equal(initialized.result.serverInfo.version, '1.6.4');
   child.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n');
   return request;
 }
@@ -81,7 +81,7 @@ test('native MCP exposes a thread workbench and keeps UI operations outside mode
   const entry = tools.find(tool => tool.name === 'bilingual_paper_panel');
   assert.ok(entry);
   assert.deepEqual(entry._meta['openai/ui'].entrypoints, [{ type: 'thread' }]);
-  assert.equal(entry._meta.ui.resourceUri, 'ui://bilingual-paper-editor/workbench/v1.6.3');
+  assert.equal(entry._meta.ui.resourceUri, 'ui://bilingual-paper-editor/workbench/v1.6.4');
   assert.equal(entry.inputSchema.required?.length ?? 0, 0);
   const ui = tools.find(tool => tool.name === 'bilingual_paper_ui');
   assert.deepEqual(ui._meta.ui.visibility, ['app']);
@@ -169,7 +169,7 @@ test('registered UI resource is delivered through the actual MCP resource protoc
   const { createPaperServer, WORKBENCH_URI } = await import('../src/server.mjs');
   const server = createPaperServer({ service: { getState: () => ({ project: null, segments: [], proposals: [] }) }, uiHtml: '<!doctype html><title>Synthetic workbench</title>' });
   const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
-  const client = new Client({ name: 'synthetic-resource-test', version: '1.6.3' });
+  const client = new Client({ name: 'synthetic-resource-test', version: '1.6.4' });
   t.after(async () => { await client.close(); await server.close(); });
   await server.connect(serverSide);
   await client.connect(clientSide);
@@ -185,7 +185,7 @@ test('native UI accepts large review payloads and 5000 opinions while ordinary m
   const { createPaperServer } = await import('../src/server.mjs');
   const service = { getState: () => ({ project: null }), importReviewNotes: async payload => ({ bytes: Buffer.byteLength(payload.text), notes: payload.annotations.length, page: payload.annotations.at(-1).page }) };
   const server = createPaperServer({ service, uiHtml: '<!doctype html><title>Synthetic capacity</title>' });
-  const [clientSide, serverSide] = InMemoryTransport.createLinkedPair(), client = new Client({ name: 'synthetic-large-review', version: '1.6.3' });
+  const [clientSide, serverSide] = InMemoryTransport.createLinkedPair(), client = new Client({ name: 'synthetic-large-review', version: '1.6.4' });
   t.after(async () => { await client.close(); await server.close(); }); await server.connect(serverSide); await client.connect(clientSide);
   const entry = await client.callTool({ name: 'bilingual_paper_panel', arguments: {} }), uiToken = entry._meta.paperUiToken;
   const text = 'Synthetic large review.\n'.repeat(110000), annotations = Array.from({ length: 5000 }, () => ({ body: 'Opinion.', page: 2000 }));

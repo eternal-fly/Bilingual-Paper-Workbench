@@ -80,8 +80,8 @@ try {
 
   await page.locator('#layer-edit-final').click(); await page.locator('#edit-proposal-dialog').waitFor({ state: 'visible' });
   const candidate = page.locator(`.candidate-edit-input[data-segment-id="${segment.id}"]`);
-  assert.equal(await candidate.locator('.protected-object').count(), 2);
-  await candidate.evaluate(node => { node.focus(); const range = document.createRange(); range.setStart(node.firstChild, 0); range.collapse(true); getSelection().removeAllRanges(); getSelection().addRange(range); });
+  assert.equal(await candidate.evaluate(node=>node.tagName),'TEXTAREA');assert.equal(await candidate.locator('.protected-object').count(),0);
+  await candidate.evaluate(node => node.focusAt(0));
   await page.keyboard.insertText('Final author choice: '); await page.locator('#edit-proposal-reason').fill('Synthetic final author choice.');
   await page.locator('#save-edited-proposal').click(); await page.locator('#edit-proposal-dialog').waitFor({ state: 'hidden' });
   await until(() => app.getState().proposals.some(proposal => proposal.supersedes === ai.proposalId));
@@ -91,12 +91,12 @@ try {
   assert.ok((await page.locator('#layer-suggestions').innerText()).includes(ai.reason));
   assert.ok(!(await page.locator('#layer-suggestions').innerText()).includes('Final author choice: '));
   await verifyOriginals();
-  check('final-layer editing uses protected raw objects and retains the separate original AI suggestion');
+  check('final-layer editing uses free inline TeX and retains the separate original AI suggestion');
 
   await page.locator('#show-drafts').click();
   const draft = page.locator(`#translation-${segment.id} .translation-input`); await openTranslationEditor(page,draft);
   assert.equal(await draft.evaluate(node => node.value), draftText);
-  await draft.evaluate(node => { node.focus(); const range = document.createRange(); range.setStart(node.firstChild, 0); range.collapse(true); getSelection().removeAllRanges(); getSelection().addRange(range); });
+  await draft.evaluate(node => node.focusAt(0));
   await page.keyboard.insertText('保留切换缓冲：'); await page.keyboard.press('Control+s');
   await until(() => app.getState().translations['zh-CN'][segment.id].text.startsWith('保留切换缓冲：'));
   await page.locator('#show-layers').click(); await page.locator('#four-layer-view').waitFor({ state: 'visible' }); await verifyOriginals();
