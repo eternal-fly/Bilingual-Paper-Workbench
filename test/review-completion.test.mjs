@@ -144,3 +144,28 @@ test('one explicit batch index handles 5000 independent decisions without a pers
   f.state.readingParagraphs[0].source = 'Later source text.'; f.state.readingParagraphs[0].sourceHash = hash(f.state.readingParagraphs[0].source);
   assert.equal(deriveReviewCompletion(f.note, f.state).completed, false);
 });
+
+
+test('partial adaptive source writes cannot complete adopted concerns, including retained ledgers without request history', () => {
+  const f = fixture();
+  f.proposal.context = {requestId:'adaptive-request',sourceReviewSegmentIds:['p1']};
+  assert.equal(deriveReviewCompletion(f.note, f.state).completed, false);
+  const ledger = ledgerFixture(); ledger.transaction.reviewCompletions = ledger.evidence;
+  ledger.proposal.context = {requestId:'adaptive-request',sourceReviewSegmentIds:['p1']};
+  assert.equal(deriveReviewCompletion(ledger.note, ledger.state).completed, false);
+  const before = 'Another original.', after = 'Another reviewed.';
+  f.proposal.edits.push({segmentId:'p2',path:'main.tex',before,beforeHash:hash(before),replacement:after});
+  f.state.readingParagraphs.push({id:'p2',path:'main.tex',source:after,sourceHash:hash(after)});
+  const other = {...f.note,noteId:'normal-other-concern',sourceSegmentIds:['p2'],sourceHashes:{p2:hash(before)}};
+  assert.equal(deriveReviewCompletion(other,f.state).completed,true,'A different fully applied segment must retain its own completion.');
+});
+
+test('commit evidence and legacy completion exclude the exact adaptive request segment only', () => {
+  const f = ledgerFixture(), request = {requestId:'adaptive-request',projectId:'paper',snapshotId:'before',segments:[{id:'p1',draftReview:{mode:'adaptive-human-draft'}}]};
+  f.raw.requests = [request]; f.raw.proposals[0].context = {requestId:request.requestId};
+  assert.deepEqual(captureAdoptedReviewEvidence(f.raw,{transaction:f.committing}),[]);
+  f.state.requests = [request]; f.proposal.context = {requestId:request.requestId};
+  assert.equal(deriveReviewCompletion(f.note,f.state).completed,false);
+  delete f.state.requests[0].segments[0].draftReview;
+  assert.equal(deriveReviewCompletion(f.note,f.state).completed,true);
+});

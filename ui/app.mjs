@@ -1466,6 +1466,7 @@ function renderLayers() {
   $('layer-final').replaceChildren(finalBody);
 }
 function paragraphInventoryNotice(draft) {
+  if(draft&&(draft.sourceReviewRequired||draft.referenceEditUnmapped||draft.referenceEditsConflict||draft.inlineStructureConflict||draft.inlineStructureUnmapped))return translationReadCopy('草稿已保存；英文原文未变。可依照受保护的原文生成英文候选，再核对、安全编译并确认写回。','Draft saved. English source unchanged. Prepare an English candidate against the protected original, then review, compile and confirm it.','草稿已儲存；英文原文未變。可依照受保護的原文產生英文候選，再核對、安全編譯並確認寫回。');
   return draft?.origin === 'human' && (draft.formulaEditUnmapped || draft.formulaEditsConflict) && !draft.referenceEditUnmapped && !draft.referenceEditsConflict && !draft.inlineStructureConflict && !draft.inlineStructureUnmapped ? translationReadCopy('整段公式修改已保存；生成英文候选时会自动列出修改前后的完整公式清单，供编译与确认。', 'Paragraph formula edits saved. Generating an English candidate will list the complete math inventory for compilation and confirmation.') : '';
 }
 function mathIntentReview(selected, sourceSnapshotId) {

@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const output = path.join(root, 'work/ui-acceptance-summary.json');
 const suites = [
+  ['source-review-draft','ui-qa-source-review-draft.mjs','work/ui-source-review-draft-qa/report.json',6],
   ['pdf-zoom','ui-qa-pdf-zoom.mjs','work/ui-pdf-zoom-qa/report.json',13],
   ['inline-structures','ui-qa-inline-structures.mjs','work/ui-inline-structures-report.json',7],
   ['pdf-controls','ui-qa-pdf-controls.mjs','work/ui-pdf-controls-qa/report.json',8],
@@ -23,7 +24,7 @@ const suites = [
   ['translation-typography','ui-qa-translation-typography.mjs','work/ui-translation-typography-qa/report.json',16],
   ['formula-editing','ui-qa-formula-editing.mjs','work/ui-formula-editing-qa/report.json',10],
   ['formula-runtime','ui-qa-formula-runtime.mjs','work/ui-formula-runtime-qa/report.json',10],
-  ['reference-editing','ui-qa-reference-editing.mjs','work/ui-reference-editing-qa/report.json',15],
+  ['reference-editing','ui-qa-reference-editing.mjs','work/ui-reference-editing-qa/report.json',16],
   ['background-connection','ui-qa-background-connection.mjs','work/ui-background-connection-qa/report.json',17],
   ['origin-chat','ui-qa-origin-chat.mjs','work/ui-origin-chat-qa/report.json',11],
   ['desktop-translation','ui-qa-desktop-translation.mjs','work/ui-desktop-translation-qa/report.json',15],

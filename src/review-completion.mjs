@@ -46,22 +46,31 @@ function sourceIndex(state) {
   for (const source of [...(state.readingParagraphs || []), ...(state.segments || [])]) if (!result.has(source.id)) result.set(source.id, source);
   return result;
 }
+function reviewRequestIndex(requests = []) {
+  return new Map(requests.map(request => [request.requestId, { projectId: request.projectId, snapshotId: request.snapshotId, ids: new Set((request.segments || []).filter(segment => segment.draftReview?.mode === 'adaptive-human-draft').map(segment => segment.id)) }]));
+}
+function sourceReviewPending(proposal, segmentId, requests) {
+  const captured = proposal.context?.sourceReviewSegmentIds;
+  if (captured !== undefined && (!Array.isArray(captured) || captured.includes(segmentId))) return true;
+  const request = requests?.get(proposal.context?.requestId);
+  return request?.projectId === proposal.projectId && request.snapshotId === proposal.baseSnapshotId && request.ids.has(segmentId);
+}
 /** One immutable-state projection may reuse this index for thousands of notes.
  * No index is retained across calls or silently reused after state mutation. */
 export function createReviewCompletionContext(state, options = {}) {
   const transactions = options.transactions || state.transactions || [], proposals = options.proposals || state.proposals || [], notes = options.notes || [...(state.reviewNotes || []), ...(state.reviewHistory || [])];
-  const proposalMap = new Map(proposals.map(proposal => [proposal.proposalId, proposal])), records = [], byBefore = new Map(), ledgerByNote = new Map();
+  const proposalMap = new Map(proposals.map(proposal => [proposal.proposalId, proposal])), requestIndex = reviewRequestIndex(state.requests), records = [], byBefore = new Map(), ledgerByNote = new Map();
   for (const transaction of transactions) {
     const selected = applied(transaction, proposalMap, state.project?.id);
     if (!selected) continue;
     const record = { transaction, proposals: selected }; records.push(record);
-    const keys = new Set(selected.flatMap(proposal => proposal.edits).filter(edit => typeof edit.segmentId === 'string' && digest(edit.beforeHash)).map(edit => JSON.stringify([edit.segmentId, edit.beforeHash.toLowerCase()])));
+    const keys = new Set(selected.flatMap(proposal => proposal.edits.filter(edit => !sourceReviewPending(proposal, edit.segmentId, requestIndex))).filter(edit => typeof edit.segmentId === 'string' && digest(edit.beforeHash)).map(edit => JSON.stringify([edit.segmentId, edit.beforeHash.toLowerCase()])));
     for (const key of keys) { if (!byBefore.has(key)) byBefore.set(key, []); byBefore.get(key).push(record); }
     for (const evidence of transaction.reviewCompletions || []) { const key = JSON.stringify([evidence.sourceNoteId, evidence.sourceBatchId]); if (!ledgerByNote.has(key)) ledgerByNote.set(key, []); ledgerByNote.get(key).push({ transaction, evidence }); }
   }
   for (const values of byBefore.values()) values.sort((a, b) => time(b.transaction.appliedAt) - time(a.transaction.appliedAt));
   for (const values of ledgerByNote.values()) values.sort((a, b) => time(b.transaction.appliedAt) - time(a.transaction.appliedAt));
-  return { projectId: state.project?.id || null, snapshotId: state.project?.snapshotId || null, transactions, proposals, notes, proposalMap, records, byBefore, ledgerByNote, sources: sourceIndex(state), notesById: new Map(notes.map(note => [JSON.stringify([note.noteId, note.batchId]), note])) };
+  return { projectId: state.project?.id || null, snapshotId: state.project?.snapshotId || null, transactions, proposals, notes, proposalMap, requestIndex, records, byBefore, ledgerByNote, sources: sourceIndex(state), notesById: new Map(notes.map(note => [JSON.stringify([note.noteId, note.batchId]), note])) };
 }
 function hasAncestry(from, to, decisionAt, committedAt, transactions, proposals, projectId, indexedRecords = null) {
   if (from === to) return true;
@@ -77,10 +86,10 @@ function hasAncestry(from, to, decisionAt, committedAt, transactions, proposals,
   for (let at = 0; at < queue.length; at++) for (const next of edges.get(queue[at]) || []) { if (next === to) return true; if (!visited.has(next)) { visited.add(next); queue.push(next); } }
   return false;
 }
-function currentEditProof(id, expectedBeforeHash, transaction, proposals, sources) {
+function currentEditProof(id, expectedBeforeHash, transaction, proposals, sources, requests) {
   const source = sources.get(id), currentHash = sourceHash(source);
   if (!digest(currentHash)) return null;
-  const matches = proposals.flatMap(proposal => proposal.edits.filter(edit => edit.segmentId === id).map(edit => ({ proposal, edit }))).filter(({ edit }) => edit.beforeHash?.toLowerCase() === expectedBeforeHash && typeof edit.before === 'string' && sha(edit.before) === expectedBeforeHash && typeof edit.replacement === 'string' && (!source.path || edit.path === source.path));
+  const matches = proposals.flatMap(proposal => proposal.edits.filter(edit => edit.segmentId === id && !sourceReviewPending(proposal, id, requests)).map(edit => ({ proposal, edit }))).filter(({ edit }) => edit.beforeHash?.toLowerCase() === expectedBeforeHash && typeof edit.before === 'string' && sha(edit.before) === expectedBeforeHash && typeof edit.replacement === 'string' && (!source.path || edit.path === source.path));
   if (matches.length !== 1) return null;
   const { proposal, edit } = matches[0], afterHash = currentHash.toLowerCase();
   if (afterHash === expectedBeforeHash || ![sha(edit.replacement), sha(edit.replacement.trim())].includes(afterHash) || typeof source.source === 'string' && sha(source.source) !== afterHash) return null;
@@ -102,7 +111,7 @@ function proveEvidence(note, evidence, state, context, onlyTransactionId = null)
     for (const { transaction, proposals } of context.byBefore.get(JSON.stringify([id, original.hashes[id]])) || []) {
       if (onlyTransactionId && transaction.transactionId !== onlyTransactionId || time(transaction.committedAt) < adoptedAt) continue;
       if (!hasAncestry(evidence.decisionSnapshotId, transaction.baseSnapshotId, adoptedAt, time(transaction.committedAt), context.transactions, context.proposals, state.project.id, context.records)) continue;
-      const found = currentEditProof(id, original.hashes[id], transaction, proposals, sources);
+      const found = currentEditProof(id, original.hashes[id], transaction, proposals, sources, context.requestIndex);
       if (found) { proof = found; break; }
     }
     if (proof) paragraphs.push(proof);
@@ -116,11 +125,12 @@ export function captureAdoptedReviewEvidence(raw, { transaction, transactions = 
   const projectId = raw.project?.id, committedAt = time(transaction?.committedAt), selected = transactionProposals(transaction, proposals, projectId, true);
   if (!projectId || transaction?.state !== 'committing' || transaction.baseSnapshotId !== raw.project.snapshotId || committedAt === null || !selected) return [];
   const batches = new Map((raw.reviewBatches || []).map(batch => [batch.batchId, batch]));
+  const requestIndex = reviewRequestIndex(raw.requests);
   return (raw.reviewNotes || []).flatMap(note => {
     if (note.origin !== 'external' || note.projectId && note.projectId !== projectId || batches.get(note.batchId)?.active === false || batches.get(note.batchId)?.status === 'retired') return [];
     const captured = decisionEvidence(note), adoptedAt = time(note.decisionUpdatedAt);
     if (!captured || adoptedAt > committedAt || !hasAncestry(note.decisionSnapshotId, transaction.baseSnapshotId, adoptedAt, committedAt, transactions, proposals, projectId)) return [];
-    const edits = selected.flatMap(proposal => proposal.edits);
+    const edits = selected.flatMap(proposal => proposal.edits.filter(edit => !sourceReviewPending(proposal, edit.segmentId, requestIndex)));
     if (captured.ids.some(id => edits.filter(edit => edit.segmentId === id && edit.beforeHash?.toLowerCase() === captured.hashes[id] && typeof edit.before === 'string' && sha(edit.before) === captured.hashes[id] && typeof edit.replacement === 'string' && sha(edit.replacement.trim()) !== captured.hashes[id]).length !== 1)) return [];
     return [{ schemaVersion: 1, projectId, sourceNoteId: note.noteId, sourceBatchId: note.batchId, sourceFileHash: batches.get(note.batchId)?.fileHash || null, concernHash: reviewConcernHash(note), decision: 'adopt', decisionSnapshotId: note.decisionSnapshotId, decisionUpdatedAt: note.decisionUpdatedAt, sourceSegmentIds: captured.ids, sourceHashes: captured.hashes, transactionId: transaction.transactionId }];
   });

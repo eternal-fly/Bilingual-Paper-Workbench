@@ -77,7 +77,8 @@ for (const conflicted of [false, true]) test(`legacy ${conflicted ? 'conflicted-
   const f = await fixture(t, true), text = f.initial.replace('$x=1$', '$x=4$').replace(String.raw`\cite{A}`, String.raw`\cite{B}`); await f.save(text); const old = structuredClone(f.current()); const applied = await apply(f, await candidate(f));
   await f.app._flowAction(() => { delete f.app.flow.transactions.find(row => row.transactionId === applied.transactionId).draftRebases; });
   await f.app.core._serial(async () => { const state = f.app.core.getState(), namespace = state.readingDrafts?.['zh-CN']?.[f.paragraph.id] ? 'readingDrafts' : 'translations'; state[namespace]['zh-CN'][f.paragraph.id] = { ...old, status: 'stale', ...(conflicted ? { sourceHash: f.app.getState().readingParagraphs.find(row => row.id === f.paragraph.id).sourceHash, formulaEditsConflict: true, referenceEditsConflict: true } : {}) }; await f.app.core._commit(state); });
-  if (!conflicted) await assert.rejects(f.save(text.replace('$x=4$', '$x=5$')), { code: 'FORMULA_STALE_DRAFT' });
+  // Keep this exact accepted legacy draft unchanged for the explicit repair.
+  // New human text is durably saved as deferred intent by the free-draft API.
   const input = { segmentId: f.paragraph.id, language: 'zh-CN', expectedRevision: f.current().revision, expectedProjectId: f.app.getState().project.id, expectedSnapshotId: f.app.getState().project.snapshotId }, result = await f.app.reconcileTranslationDraft(input);
   assert.equal(result.repaired, true); assert.equal(f.current().text, text); assert.equal(f.current().sourceHash, f.app.getState().readingParagraphs.find(row => row.id === f.paragraph.id).sourceHash); assert(!f.current().formulaEditsConflict); assert(!f.current().referenceEdits?.length);
   assert.equal(deriveEnglishWriteback(f.app.getState(), 'zh-CN').mode, 'empty');

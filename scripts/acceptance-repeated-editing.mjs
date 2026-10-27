@@ -21,7 +21,7 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const releaseVersion = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')).version;
 const runtimeRoot = process.env.PAPER_EDITOR_TEST_RUNTIME;
 assert(runtimeRoot && path.isAbsolute(runtimeRoot), 'Set PAPER_EDITOR_TEST_RUNTIME to a prepared isolated compiler runtime.');
-const parent = path.join(root, 'work/a160'); await mkdir(parent, { recursive: true });
+const parent = path.join(root, 'work/a161'); await mkdir(parent, { recursive: true });
 const run = await mkdtemp(path.join(parent, 'roundtrip-')), sourceRoot = path.join(run, 'source'), dataRoot = path.join(run, 'state'), contextDir = path.join(run, 'context');
 await mkdir(sourceRoot); await mkdir(contextDir);
 const hash = value => createHash('sha256').update(value).digest('hex');
@@ -30,6 +30,7 @@ const failedActions = [];
 const checks = [], artifacts = [], check = (name, details = {}) => { checks.push({ name, ...details }); console.log(JSON.stringify({ check: name, ...details })); };
 const original = String.raw`\documentclass[11pt]{article}
 \usepackage{amsmath}
+\renewcommand{\figurename}{Illustration}
 \title{A Small Synthetic Revision Study}
 \author{Example Research Group}
 \date{}
@@ -56,7 +57,7 @@ The demonstration has no experimental data and makes no accuracy guarantee. A re
 
 \section{Inline formatting}
 
-An inline example uses Section~1 and \textbf{clear scope}, with a literal 10\% value.
+An inline example uses Section~1 and \textbf{clear scope}, with a literal 10\% value. A removable sentence links Part~2 to Section~3 and Appendix~A.
 
 \bibliographystyle{plain}
 \bibliography{references}
@@ -81,7 +82,7 @@ function translateFixture(text) {
     ['The independent second paragraph keeps the illustrative value ', '独立的第二段保留示例数值 '],
     [' while the first paragraph changes. Its source identity should remain stable when unrelated text is written back, and it cites ', '，同时允许第一段发生变化。其他段落写回时，本段的源码关联应保持稳定，并引用 '],
     ['The demonstration has no experimental data and makes no accuracy guarantee. A reviewer may keep this concern pending, ask for another revision, or accept a precisely scoped wording change after checking it.', '本演示没有实验数据，也不保证准确率。审阅者可以将此意见保持待定、要求再次修改，或在核对后采纳范围明确的措辞修改。'],
-    ['An inline example uses Section', '一个行内示例使用第'], ['1 and ', '1节和'], ['clear scope', '清晰的范围'], [', with a literal 10', '，其中包含字面值10'], [' value.', '。'],
+    ['An inline example uses Section', '一个行内示例使用第'], ['1 and ', '1节和'], ['clear scope', '清晰的范围'], [', with a literal 10', '，其中包含字面值10'], [' value.', '。'], ['A removable sentence links Part', '可删除句子连接第'], [' to Section', '到第'], [' and Appendix', '和附录'],
   ];
   for (const [before, after] of pairs) text = text.replaceAll(before, after);
   return text.replace(/\.$/u, '。');
@@ -170,8 +171,9 @@ try {
     const current = await editor.evaluate(el => el.value);
     const inlineEdit = sourceId === inline.id;
     const updated = (inlineEdit
-      ? current.replace(/第(?:~|\s+)1/u, scalar === 11 ? '第 1' : '第~1').replace(/\\(?:textbf|emph|textit)\{/u, scalar === 11 ? String.raw`\emph{` : String.raw`\textit{`).replace(/10\\[%&]/u, scalar === 11 ? String.raw`10\&` : String.raw`10\%`)
+      ? (scalar === 11 ? current.replace(/ 可删除句子[^。]*。/u, '') : current.replace(/第~1/u, '第 1').replace(String.raw`\textbf{清晰的范围}`, '清晰的范围').replace(String.raw`10\%`, '10百分比'))
       : current.replace(/\$x=\d+\$/u, `$x=${scalar}$`).replace(/\$y=\d+\$/u, `$y=${scalar}$`).replace(/\\cite\{(?:Alpha|Beta)\}/u, String.raw`\cite{${scalar === 3 ? 'Beta' : 'Alpha'}}`).replace(/\\eqref\{eq:(?:first|second)\}/u, String.raw`\eqref{eq:${scalar === 3 ? 'second' : 'first'}}`).replace(/^我们(?:研究|分析|描述)/u, verb === 'analyze' ? '我们分析' : '我们描述')) + ` 第${scalar}轮作者补充。`;
+    if(inlineEdit&&scalar===11)assert.equal((current.match(/~/gu)||[]).length-(updated.match(/~/gu)||[]).length,3,'Delete exactly the three spacing atoms in the removed sentence.');
     await editor.evaluate((el, text) => { el.value = text; el.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText' })); }, updated + ' $');
     // Capture before the ordinary autosave debounce. Native access sees the
     // actual live text, not a screen scrape or a persisted-draft substitute.
@@ -196,8 +198,9 @@ try {
     await page.waitForFunction(id => { const node = document.querySelector(`[data-unit-id="${id}"] .save-marker`); return node && /Saved|已保存/u.test(node.textContent); }, sourceId);
     const request = await native('bilingual_paper_prepare_request', { ...scope(), kind: 'revision', segmentIds: [sourceId], language: 'zh-CN', prompt: 'Apply only the exact saved illustrative author intent.' });
     const selected = request.segments[0];
+    if(inlineEdit){assert.equal(selected.inlineStructureRequest?.mode,'existing-inline-omission');assert(!selected.draftReview);}
     const english = inlineEdit
-      ? selected.text.replaceAll('一个行内示例使用第', 'An inline example uses Section').replaceAll('1节和', '1 and ').replaceAll('清晰的范围', 'clear scope').replaceAll('，其中包含字面值10', ', with a literal 10').replace(/ 第(\d+)轮作者补充。/gu, ' The author adds detail for synthetic round $1.').replaceAll('。', '.')
+      ? selected.text.replaceAll('一个行内示例使用第', 'An inline example uses Section').replaceAll('1节和', '1 and ').replaceAll('清晰的范围', 'clear scope').replaceAll('，其中包含字面值10', ', with a literal 10').replaceAll('百分比', ' percent').replace(/ 第(\d+)轮作者补充。/gu, ' The author adds detail for synthetic round $1.').replaceAll('。', '.')
       : selected.text.replace(/We (?:study|analyze|describe)/u, `We ${verb}`).replace('The independent second paragraph', 'The separate method paragraph');
     const proposed = await native('bilingual_paper_propose_revision', { requestId: request.requestId, reason: 'Apply the saved synthetic author edit.', edits: [{ segmentId: sourceId, beforeHash: selected.beforeHash, replacement: english + ` The author records synthetic revision ${scalar}.` }] });
     const compiled = await native('bilingual_paper_compile', { kind: 'candidate', proposalIds: [proposed.proposalId] }); assert.equal(compiled.status, 'success');
@@ -238,9 +241,39 @@ try {
   await editAndApply(method.id, 9, 'describe', 'final-writeback');
   await editAndApply(inline.id, 11, 'describe', 'inline-first-writeback');
   await editAndApply(inline.id, 13, 'describe', 'inline-second-writeback');
+  // Raw formatting is durable independently of source authority. A real
+  // compiled partial adaptation cannot silently consume its unresolved draft.
+  const inlineHost = page.locator(`[data-unit-id="${inline.id}"]`), inlineInput = inlineHost.locator('.translation-input');
+  if(!await inlineInput.isVisible())await inlineHost.locator('.translation-reading').click();
+  const validInline = await inlineInput.evaluate(node=>node.value), rawInline = validInline + String.raw` \textsf{unfinished`;
+  await inlineInput.evaluate((node,text)=>{node.value=text;node.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText'}));},rawInline);
+  await page.waitForFunction(id=>/Saved|已保存/u.test(document.querySelector(`[data-unit-id="${id}"] .save-marker`)?.textContent||''),inline.id);
+  const rawCapture = await native('bilingual_paper_read_editor_drafts',{...scope(),segmentIds:[inline.id],language:'zh-CN'}), capturedRaw = rawCapture.drafts[0];
+  assert.equal(capturedRaw.text,rawInline);
+  await native('bilingual_paper_save_editor_draft',{...scope(),captureId:rawCapture.captureId,segmentId:inline.id,language:'zh-CN',baseDraftRevision:capturedRaw.baseDraftRevision,textHash:capturedRaw.textHash});
+  assert.equal(app.getState().translations['zh-CN'][inline.id].text,rawInline);assert.equal(app.getState().translations['zh-CN'][inline.id].sourceReviewRequired,true);
+  await inlineHost.locator('.translation-edit-done').click();
+  async function compileAndConfirm(request,replacement,label){
+    const selected=request.segments[0],p=await native('bilingual_paper_propose_revision',{requestId:request.requestId,reason:'Adapt the exact saved synthetic author text without treating unresolved formatting as resolved.',edits:[{segmentId:inline.id,beforeHash:selected.beforeHash,replacement}]});
+    const compiled=await native('bilingual_paper_compile',{kind:'candidate',proposalIds:[p.proposalId]});assert.equal(compiled.status,'success');
+    const grant=await ui('prepareAcceptance',{transactionId:compiled.transactionId}),applied=await ui('applyTransaction',{transactionId:compiled.transactionId,confirmationToken:grant.confirmationToken,idempotencyKey:label});assert.equal(applied.state,'applied');if(applied.englishPdfJobId)await app.waitJob({jobId:applied.englishPdfJobId});await snapshot(label);return applied;
+  }
+  const adaptive=await native('bilingual_paper_prepare_request',{...scope(),kind:'revision',segmentIds:[inline.id],language:'zh-CN',prompt:'Use protected baseline source while retaining unfinished author formatting for later repair.'});
+  assert.equal(adaptive.segments[0].draftReview.mode,'adaptive-human-draft');assert.equal(adaptive.segments[0].translationDraft.text,rawInline);
+  await compileAndConfirm(adaptive,adaptive.segments[0].text+' A bounded source adaptation retains unfinished author formatting.','adaptive-partial-writeback');
+  const pendingRaw=app.getState().translations['zh-CN'][inline.id];assert.equal(pendingRaw.text,rawInline);assert.equal(pendingRaw.sourceReviewRequired,true);assert(!pendingRaw.sourceWritebackReceipt);assert.notEqual(deriveEnglishWriteback(app.getState(),'zh-CN').mode,'empty');
+  if(!await inlineInput.isVisible())await inlineHost.locator('.translation-reading').click();
+  await inlineInput.evaluate((node,text)=>{node.value=text;node.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText'}));},validInline);
+  await new Promise((resolve,reject)=>{const deadline=Date.now()+10000,timer=setInterval(()=>{const draft=app.getState().translations['zh-CN'][inline.id];if(draft.text===validInline&&!draft.sourceReviewRequired){clearInterval(timer);resolve();}else if(Date.now()>deadline){clearInterval(timer);reject(Error('The repaired author draft did not recover valid source intent.'));}},40);});
+  await inlineHost.locator('.translation-edit-done').click();
+  const repaired=await native('bilingual_paper_prepare_request',{...scope(),kind:'revision',segmentIds:[inline.id],language:'zh-CN',prompt:'Use the repaired valid author draft.'});assert(!repaired.segments[0].draftReview);
+  await compileAndConfirm(repaired,repaired.segments[0].text.replace('A bounded source adaptation retains unfinished author formatting.','The repaired author paragraph is ready for final review.'),'adaptive-repaired-writeback');
+  assert(!app.getState().translations['zh-CN'][inline.id].sourceReviewRequired);assert(app.getState().translations['zh-CN'][inline.id].sourceWritebackReceipt);assert.equal(deriveEnglishWriteback(app.getState(),'zh-CN').mode,'empty');
+  check('Incomplete structural text saves through native capture; partial compiled adaptation preserves pending intent, and repair permits an exact final writeback');
   const finalState = app.getState(), finalSource = await readFile(path.join(sourceRoot, 'main.tex')), finalDrafts = structuredClone(finalState.translations), finalNotes = structuredClone(finalState.reviewNotes), finalPdfHash = (await app.readVersionPair()).latest.hash;
   assert(finalSource.includes(Buffer.from('$x=5$')) && finalSource.includes(Buffer.from('$y=9$')) && finalSource.includes(Buffer.from(String.raw`\label{eq:first}`)));
-  assert(finalSource.includes(Buffer.from(String.raw`Section~1 and \textit{clear scope}, with a literal 10\%.`)));
+  assert(finalSource.includes(Buffer.from(String.raw`Section 1 and clear scope, with a literal 10 percent.`)));
+  assert(!finalSource.includes(Buffer.from('A removable sentence links Part'))&&!finalSource.includes(Buffer.from(String.raw`\textsf{unfinished`)));
   await writeFile(path.join(run, 'final-translation.md'), finalState.readingParagraphs.map(p => `## ${p.kind || 'paragraph'}\n\n${readableDraft(p, finalState)}`).join('\n\n'));
   await writeFile(path.join(run, 'final-opinions.json'), JSON.stringify(finalNotes, null, 2));
   const finalIntro = page.locator(`[data-unit-id="${intro.id}"]`); await finalIntro.scrollIntoViewIfNeeded();
@@ -252,7 +285,7 @@ try {
   assert.deepEqual(await readFile(path.join(sourceRoot, 'main.tex')), finalSource); assert.deepEqual(app.getState().translations, finalDrafts); assert.deepEqual(app.getState().reviewNotes, finalNotes); assert.equal((await app.readVersionPair()).latest.hash, finalPdfHash); assert.equal((await app.readVersionPair()).original.hash, originalPdfHash);
   const authorFiles = (await readdir(contextDir)).filter(name => name.endsWith('.pdf')); assert.deepEqual(authorFiles.sort(), ['latest-english.pdf', 'original.pdf']);
   check('Reopening preserves final source, translations, decisions, frozen original and exactly two author PDFs');
-  const receipt = { success: true, version: releaseVersion, syntheticOnly: true, originalManuscriptAccessed: false, modelTurns: 0, nativeMcpOperations: true, screenScraping: false, actualIsolatedCompiler: true, sourceWriteback: 'authenticated_ui_only', translated, checks, artifacts, sourceRoot, finalSourceHash: hash(finalSource), finalPdfHash, originalPdfHash, inlineStructureWritebacks: 2, reviewDecisions: finalNotes.map(n => ({ title: n.title, decision: n.decision || 'pending' })), firstTransactionId: first.transactionId };
+  const receipt = { success: true, version: releaseVersion, syntheticOnly: true, originalManuscriptAccessed: false, modelTurns: 0, nativeMcpOperations: true, screenScraping: false, actualIsolatedCompiler: true, sourceWriteback: 'authenticated_ui_only', translated, checks, artifacts, sourceRoot, finalSourceHash: hash(finalSource), finalPdfHash, originalPdfHash, inlineStructureWritebacks: 2, adaptiveWritebacks: 2, reviewDecisions: finalNotes.map(n => ({ title: n.title, decision: n.decision || 'pending' })), firstTransactionId: first.transactionId };
   await writeFile(path.join(run, 'acceptance.json'), JSON.stringify(receipt, null, 2)); await writeFile(path.join(parent, 'latest-run.json'), JSON.stringify({ run, success: true }, null, 2));
   console.log(JSON.stringify({ success: true, checks: checks.length, run }));
 } catch (error) {

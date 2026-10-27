@@ -1,4 +1,4 @@
-# Bilingual Paper Workbench 1.6.0
+# Bilingual Paper Workbench 1.6.1
 
 A local Windows plugin for reading, translating and revising LaTeX papers with Codex. Three aligned columns show the English PDF, an editable translation in reading view, and paragraph-linked notes. Import the original LaTeX project to preserve its document class, columns, figures and bibliography when compiling English revisions.
 
@@ -97,6 +97,14 @@ Review imports allow **64 MiB per file**, **32 MiB of extracted text/annotations
 PDF review supplies text and paragraph evidence, not visual inspection of binary figures. SyncTeX offers coarse navigation. Compilation and feedback do not prove scientific correctness. The compiler enforces CPU, memory, wall-time and process limits with sampled output monitoring rather than a hard volume quota. Private state relies on user filesystem access controls; encryption at rest and a VM boundary are not claimed.
 
 See [Data and Source Boundaries](docs/core-boundaries.md), [Compiler Security](docs/compiler-security.md) and [Font Support](docs/fonts-support.md).
+
+## Version 1.6.1: durable drafts and adaptive source review
+
+Authoring and English source authority are separate. Translation paragraphs save the exact bounded author text, including incomplete formulas, unknown keys and unproved structural notation. **Saved** means the draft is durable; a source-review notice does not mean storage failed.
+
+Deleting existing nonbreaking spaces or balanced safe formatting can produce a validated omission candidate despite unrelated project macros. Other unresolved changes remain available to the bound Codex through an exact-draft adaptive request with original source and protected objects. Codex can prepare and compile a candidate in the same chat turn, using a fresh same-scope request if a compile needs repair. It cannot invent file/exec controls or retarget an unproved source invocation. Review and confirm the exact compiled candidate before writeback.
+
+A partial adaptation keeps unresolved author text pending, with no all-applied receipt or completed-review exemption. Repairing the draft restores validated reference/math intent; source/PDF promotion and reviewed undo remain unchanged.
 
 ## Version 1.6.0: inline structures and genuine PDF zoom
 

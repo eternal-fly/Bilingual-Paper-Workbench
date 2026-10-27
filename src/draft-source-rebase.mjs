@@ -2,9 +2,9 @@ import { sha256 } from './latex.mjs';
 import { captureFormulaRequest } from './formula-edits.mjs';
 import { parseEditableReference } from './reference-edits.mjs';
 import { deriveTranslationProtectedTokens } from '../ui/translation-protection.mjs';
-import { inlineStructureFields } from './inline-structures.mjs';
+import { inlineStructureFields,prepareInlineStructureIntent } from './inline-structures.mjs';
 
-const fields = ['formulaEdits', 'formulaEditHistory', 'formulaEditsConflict', 'formulaEditUnmapped', 'referenceEdits', 'referenceEditHistory', 'referenceEditsConflict', 'referenceEditUnmapped',...inlineStructureFields];
+const fields = ['formulaEdits', 'formulaEditHistory', 'formulaEditsConflict', 'formulaEditUnmapped', 'referenceEdits', 'referenceEditHistory', 'referenceEditsConflict', 'referenceEditUnmapped',...inlineStructureFields,'sourceReviewRequired','sourceReviewDiagnostics'];
 const copy = value => structuredClone(value), same = (a, b) => JSON.stringify(a) === JSON.stringify(b), sourceHash = row => row?.sourceHash || row?.beforeHash;
 const fingerprint = draft => sha256(JSON.stringify({ ...draft, status: null }));
 const index = state => new Map([...(state.segments || []), ...(state.readingParagraphs || [])].map(row => [row.id, row]));
@@ -12,10 +12,10 @@ const footprint = (text, source) => deriveTranslationProtectedTokens(text, sourc
 const receipt = (transaction, project, source, language, revision) => ({ schemaVersion: 1, projectId: project.id, language, segmentId: source.id, transactionId: transaction.transactionId, revision, sourceHash: sourceHash(source) });
 function targetsCurrent(edits, registry) { return (edits || []).every(edit => { if (!edit.replacement) return true; const parsed = parseEditableReference(edit.replacement); return parsed && parsed.keys.every(key => !registry.dynamic[parsed.category].has(key) && registry.counts[parsed.category].get(key) === 1 && (parsed.category !== 'citations' || registry.citationFoldCounts.get(key.toLowerCase()) === 1)); }); }
 function retag(draft, source, oldProject, project, registry, language) {
-  try { captureFormulaRequest({ id: source.id, text: source.displayText, protectedTokens: source.protectedTokens }, source, draft, oldProject, language); } catch { return null; }
+  try { const captured=captureFormulaRequest({ id: source.id, text: source.displayText, protectedTokens: source.protectedTokens }, source, draft, oldProject, language);if(captured.draftReview&&!draft.sourceReviewRequired)return null; } catch { return null; }
   if (!targetsCurrent(draft.referenceEdits, registry)) return null;
   const result = copy(draft), edits = rows => (rows || []).map(row => ({ ...row, snapshotId: project.snapshotId, sourceHash: sourceHash(source), ...(row.registryHash ? { registryHash: registry.hash } : {}) }));
-  if(result.inlineStructureIntent){if(!project.inlineStructureSafety?.safe)return null;Object.assign(result.inlineStructureIntent,{snapshotId:project.snapshotId,sourceHash:sourceHash(source),syntaxHash:project.inlineStructureSafety.fingerprint});}
+  if(result.inlineStructureIntent){try{Object.assign(result,prepareInlineStructureIntent(source,draft.text,project,language));}catch{return null;}}
   for (const kind of ['formula', 'reference']) {
     if (result[kind + 'Edits']) result[kind + 'Edits'] = edits(result[kind + 'Edits']);
     const history = kind + 'EditHistory'; if (result[history]) result[history] = result[history].filter(row => row.projectId === oldProject.id && row.snapshotId === oldProject.snapshotId && row.sourceHash === sourceHash(source) && targetsCurrent(kind === 'reference' ? [...(row.beforeIntent?.edits || []), ...(row.afterIntent?.edits || [])] : [], registry)).map(row => ({ ...row, snapshotId: project.snapshotId, beforeIntent: { ...row.beforeIntent, edits: edits(row.beforeIntent?.edits) }, afterIntent: { ...row.afterIntent, edits: edits(row.afterIntent?.edits) } }));
@@ -30,7 +30,7 @@ function acceptedDraft(before, source, draft, language, transaction) {
     const selected = request.segments.find(row => (row.segmentId || row.id) === source.id), captured = selected?.translationDraft;
     if (!selected || captured?.text !== draft.text || (request.draftRevisions?.[source.id] || 0) !== draft.revision || captured.translationUnitIds?.some(id => id !== source.id)) continue;
     const edit = proposal.edits.find(row => row.segmentId === source.id && row.path === source.path && row.beforeHash === sourceHash(source) && row.startByte === source.startByte && row.endByte === source.endByte);
-    if (edit) return edit;
+    if (edit) return {edit,selected};
   }
   return null;
 }
@@ -54,8 +54,9 @@ export function rebaseConfirmedTranslationDrafts({ before, after, transaction, r
     const inverse = undoRows.get(`${namespace}\0${language}\0${segmentId}`);
     if (inverse && fingerprint(draft) === inverse.afterHash && draft.revision === inverse.afterDraft.revision && sourceHash(source) === inverse.beforeDraft.sourceHash) rebased = retag(inverse.beforeDraft, source, { ...after.project, snapshotId: undoTransaction.baseSnapshotId }, after.project, registry, language);
     else if (draft.status !== 'stale' && draft.sourceHash === sourceHash(oldSource)) {
-      const edit = acceptedDraft(before, oldSource, draft, language, transaction);
-      if (edit && edit.replacement.trim() === source.source && same(footprint(draft.text, source), footprint(source.source, source))) { rebased = copy(draft); for (const key of fields) delete rebased[key]; written = true; }
+      const accepted=acceptedDraft(before,oldSource,draft,language,transaction),edit=accepted?.edit;
+      if(edit&&edit.replacement.trim()===source.source&&accepted.selected.draftReview){rebased=copy(draft);for(const key of fields)delete rebased[key];delete rebased.sourceWritebackReceipt;rebased.sourceReviewRequired=true;rebased.sourceReviewDiagnostics=[...(draft.sourceReviewDiagnostics||accepted.selected.draftReview.diagnostics||[]).filter(row=>row.code!=='ADAPTIVE_SOURCE_BASELINE_RETAINED').slice(0,7),{code:'ADAPTIVE_SOURCE_BASELINE_RETAINED',message:'The confirmed English candidate retained the listed original TeX objects. Your exact raw author draft is saved; its unresolved changes still need review.'}];}
+      else if (edit && !draft.sourceReviewRequired && edit.replacement.trim() === source.source && same(footprint(draft.text, source), footprint(source.source, source))) { rebased = copy(draft); for (const key of fields) delete rebased[key]; written = true; }
       else if (sourceHash(oldSource) === sourceHash(source) && oldSource.source === source.source && same(oldSource.protectedTokens, source.protectedTokens) && fields.some(key => Object.hasOwn(draft, key))) rebased = retag(draft, source, before.project, after.project, registry, language);
     }
     if (!rebased) { if (draft.sourceHash !== sourceHash(source) || fields.some(key => Object.hasOwn(draft, key)) && before.project.snapshotId !== after.project.snapshotId) current.status = 'stale'; continue; }
@@ -71,13 +72,14 @@ export function rebaseConfirmedTranslationDrafts({ before, after, transaction, r
 export function reconcileLegacyConfirmedDraft({ state, transactions, segmentId, language }) {
   const namespace = state.readingDrafts?.[language]?.[segmentId] ? 'readingDrafts' : 'translations', draft = state[namespace]?.[language]?.[segmentId], source = index(state).get(segmentId);
   if (!draft || !source) return null;
+  if(draft.sourceReviewRequired)return{draft,repaired:false};
   if (draft.sourceHash === sourceHash(source) && draft.status !== 'stale' && !fields.some(key => Object.hasOwn(draft, key))) return { draft, repaired: false };
   for (const transaction of [...transactions].reverse()) {
     if (transaction.state !== 'applied' || transaction.revertedBy || transaction.projectId !== state.project.id) continue;
     for (const proposal of state.proposals || []) {
       if (!transaction.proposalIds.includes(proposal.proposalId) || proposal.context?.undoOf) continue;
       const request = state.requests?.find(row => row.requestId === proposal.context?.requestId), selected = request?.segments?.find(row => (row.segmentId || row.id) === segmentId), captured = selected?.translationDraft, revision = request?.draftRevisions?.[segmentId];
-      if (request?.kind !== 'revision' || request.projectId !== state.project.id || request.snapshotId !== transaction.baseSnapshotId || request.language !== language || captured?.text !== draft.text || !Number.isSafeInteger(revision) || draft.revision !== revision || captured.translationUnitIds?.some(id => id !== segmentId)) continue;
+      if (request?.kind !== 'revision' || selected?.draftReview || request.projectId !== state.project.id || request.snapshotId !== transaction.baseSnapshotId || request.language !== language || captured?.text !== draft.text || !Number.isSafeInteger(revision) || draft.revision !== revision || captured.translationUnitIds?.some(id => id !== segmentId)) continue;
       const edit = proposal.edits.find(row => row.segmentId === segmentId && row.path === source.path && row.beforeHash === selected.beforeHash && row.replacement.trim() === source.source);
       if (!edit || ![edit.beforeHash, sourceHash(source)].includes(draft.sourceHash) || !same(footprint(draft.text, source), footprint(source.source, source))) continue;
       const rebased = copy(draft); for (const key of fields) delete rebased[key]; Object.assign(rebased, { sourceHash: sourceHash(source), revision: draft.revision + 1, status: 'saved', updatedAt: new Date().toISOString() });

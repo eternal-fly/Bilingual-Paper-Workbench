@@ -5,7 +5,7 @@ import { lstat, realpath, readdir, readFile, mkdir, open, rename, unlink } from 
 import { commands, extractSegments, restoreProtected, sha256 } from './latex.mjs';
 import { extractBilingualPairs } from './bilingual-import.mjs';
 import { prepareRangeFile, authorizeReadingRange, maskRawReplacement, literalLexicalSafety } from './range-authority.mjs';
-import {reconcileFormulaDraft,captureFormulaRequest,formulaSourceForRequest,formulaDraftFromState,carryFormulaDraft,requestDraft} from './formula-edits.mjs';
+import {reconcileFormulaDraft,captureFormulaRequest,formulaSourceForRequest,formulaDraftFromState,carryFormulaDraft,requestDraft,validateDraftSourceReplacement} from './formula-edits.mjs';
 import {inlineStructureSafetyForFiles} from './inline-structures.mjs';
 
 const MAX_FILE = 4 * 1024 * 1024;
@@ -432,12 +432,13 @@ export class PaperService {
       if (!segment.translatable) fail('UNSUPPORTED_TEX', 'Opaque blocks cannot receive generated replacements.');
       const effective = formulaSourceForRequest(segment, selected, request, this._state);
       const replacement = restoreProtected(effective, edit.replacement);
+      validateDraftSourceReplacement(segment,selected,replacement);
       const newline = this._files.get(segment.path).text.includes('\r\n') ? '\r\n' : '\n';
       edits.push({ kind: 'replace', segmentId: segment.id, path: segment.path, startByte: segment.startByte, endByte: segment.endByte,
         beforeHash: segment.beforeHash, before: segment.source, replacement: replacement.replace(/\r?\n/g, newline), protectedTokenIds: segment.protectedTokens.map(t => t.id), ...(segment.sourceAuthority ? { sourceAuthority: segment.sourceAuthority } : {}) });
     }
     const proposal = { schemaVersion: 1, proposalId: `proposal-${randomUUID()}`, projectId: this._state.project.id, baseSnapshotId: request.snapshotId,
-      context: { requestId: request.requestId, threadBindingId: request.bindingId, translationRevision: Math.max(0, ...Object.values(request.draftRevisions)), alignmentRevision: 0 },
+      context: { requestId: request.requestId, threadBindingId: request.bindingId, translationRevision: Math.max(0, ...Object.values(request.draftRevisions)), alignmentRevision: 0, ...(request.segments.some(segment=>segment.draftReview?.mode==='adaptive-human-draft')?{sourceReviewSegmentIds:request.segments.filter(segment=>segment.draftReview?.mode==='adaptive-human-draft').map(segment=>segment.id)}:{}) },
       author: 'ai', reviewState: 'pending', applicationState: 'notApplied', reason: input.reason, edits, createdAt: now() };
     const next = this.getState(); next.proposals.push(proposal);
     const record = next.requests.find(r => r.requestId === request.requestId);
@@ -495,8 +496,9 @@ export class PaperService {
         const selected = request?.segments.find(item => item.id === edit.segmentId);
         const original=this._revisionSource(edit.segmentId,selected?.sourceAuthority||edit.sourceAuthority);
         const effective=original&&request?formulaSourceForRequest(original,selected,request,this._state):original;
+        if(original&&selected)validateDraftSourceReplacement(original,selected,edit.replacement);
         const authority = selected?.sourceAuthority || edit.sourceAuthority;
-        if (!authority) {if(selected?.formulaEdits?.length||selected?.referenceEdits?.length||selected?.paragraphMathIntent)maskRawReplacement(effective,edit.replacement);continue;}
+        if (!authority) {if(selected?.formulaEdits?.length||selected?.referenceEdits?.length||selected?.paragraphMathIntent||selected?.inlineStructureRequest||selected?.draftReview)maskRawReplacement(effective,edit.replacement);continue;}
         const segment = this._revisionSource(edit.segmentId, authority);
         if (JSON.stringify(edit.sourceAuthority) !== JSON.stringify(authority) || edit.path !== segment.path || edit.startByte !== segment.startByte || edit.endByte !== segment.endByte || edit.beforeHash !== segment.beforeHash || edit.before !== segment.source) fail('VERSION_CONFLICT', 'The candidate no longer matches its verified literal interval.');
         maskRawReplacement(effective||segment, edit.replacement);

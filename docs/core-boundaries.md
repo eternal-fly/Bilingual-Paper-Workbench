@@ -1,4 +1,10 @@
-# Bilingual Paper Workbench: Data and Source Boundaries, Version 1.6.0
+# Bilingual Paper Workbench: Data and Source Boundaries, Version 1.6.1
+
+Version 1.6.1 separates durable human authoring from source authority. Exact bounded raw text persists under paper/revision CAS and native capture checks even when math, reference or structural analysis is incomplete. Diagnostics use `sourceReviewRequired`; they cannot masquerade as storage failure or a source grant. Physical source validation remains mandatory for requests, candidate construction, compilation and writeback.
+
+Existing-only ordered inline omissions have their own source-pinned proof. New controls retain strict checks; known surviving rebound calls and unknown-arity ranges stay whole original opaque objects, including their operands and boundaries. Adaptive requests bind the exact saved raw draft and retain a validated original source inventory. Partial source adaptations keep unresolved drafts pending and cannot issue full-applied receipts or completed-review exemptions. Native compile/repair stays in the same author-requested chat; source acceptance remains a separate exact human action.
+
+The following earlier source-authority boundaries apply to candidate generation and writeback, not to raw draft persistence.
 
 This document explains source protection, private state and recovery. Start with the [User Guide](USER_GUIDE.md) for normal operation. English is the default interface language; selecting another interface or translation language does not change source authority.
 

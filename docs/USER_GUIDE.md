@@ -1,6 +1,6 @@
 # Bilingual Paper Workbench — User Manual
 
-**Version 1.6.0 · Windows · English edition**
+**Version 1.6.1 · Windows · English edition**
 
 Bilingual Paper Workbench connects an English LaTeX paper, an editable translation and paragraph-linked review notes in one workspace. Your existing Codex Desktop chat performs translation and review; the workbench provides the reading, editing and confirmation interface. English is the default interface language. The translation language is a separate choice.
 
@@ -95,9 +95,9 @@ Reading mode uses offline Markdown and KaTeX. Supported equation/split environme
 
 A complete inline formula inside a math-only `\mbox` displays without the TeX wrapper. Balanced `\texorpdfstring` headings show their display branch. These are reading projections: the editable text, references and source bytes stay intact. Incomplete or unsupported formatting remains visible for inspection.
 
-Labels, references, citations and equation tags inside math remain fixed. You can edit the mathematical body around them, but cannot delete their containing formula as a whole. Individual mapped edits retain their delimiter/environment type and are limited to 32 KiB of validated math syntax. The full-paragraph inventory described below also permits complete added or reordered formulas, while retaining the original boundaries of any formula containing fixed labels or references.
+For English source authority, labels, references, citations and equation tags inside math remain fixed. Raw author drafts can retain their edits as source-review input. You can edit the mathematical body around them, but cannot delete their containing formula as a whole. Individual mapped edits retain their delimiter/environment type and are limited to 32 KiB of validated math syntax. The full-paragraph inventory described below also permits complete added or reordered formulas, while retaining the original boundaries of any formula containing fixed labels or references.
 
-An incomplete expression, such as `$x^`, stays in the current editing buffer with an error rather than overwriting the last valid saved draft. Complete it and save again. A failed save provides retry/export controls. Do not reload or close the window while an unsaved buffer is awaiting correction.
+An incomplete expression, such as `$x^`, now saves as exact author text with a **Source review required** notice. It can reopen safely and remains available to Codex; it does not grant that malformed math permission to change English source. Complete or adapt it before the corresponding source edit. Actual storage, permission, version or connection failures remain **Save failed** and retain retry/export controls.
 
 Uniquely mapped changes to existing formulas can become English revision intent. If your saved human paragraph adds or reorders complete formulas, **Suggest source revision** captures the paragraph's exact new mathematical inventory instead of guessing old-to-new formula matches. Review the **Original formulas** and **Requested formulas** lists. The model must use that complete inventory, preserve citations and labels, and return a pending English candidate. Added formulas still require a successful candidate compile and your final confirmation. Incomplete, unsafe or structurally ambiguous TeX remains unavailable for source changes; AI-generated drafts cannot grant themselves this authority.
 
@@ -111,7 +111,7 @@ The same paragraph editor accepts existing standalone citation and cross-referen
 \eqref{eq:bound}
 ```
 
-The supported commands are `cite`, `citep`, `citet`, `citealp`, `citealt`, `citeauthor`, `citeyear`, `ref`, `eqref`, `pageref`, `autoref`, `cref` and `Cref`. Choose keys already declared unambiguously in the paper's reachable bibliography/source files. Bibliography keys and label keys are checked separately. An unknown, incomplete, dynamic or ambiguous target shows an inline error and keeps your current input so you can repair it.
+The supported commands are `cite`, `citep`, `citet`, `citealp`, `citealt`, `citeauthor`, `citeyear`, `ref`, `eqref`, `pageref`, `autoref`, `cref` and `Cref`. Choose keys already declared unambiguously in the paper's reachable bibliography/source files. Bibliography keys and label keys are checked separately. An unknown, incomplete, dynamic or ambiguous target is saved as author text with a source-review notice. Codex can review it against the original protected inventory, while the unresolved key cannot retarget English source. Repairing a valid known reference restores its validated intent.
 
 This release accepts literal ASCII keys up to 128 characters, using letters, digits, `_`, `.`, `:`, `/`, `+` and `-`. Case-colliding bibliography entries are treated as ambiguous; label names remain case-sensitive.
 
@@ -129,11 +129,11 @@ Section~3.1 and \textbf{the main result}, with a literal 10\% value.
 
 Supported source-revision intent includes nonbreaking spaces and safe spacing controls, escaped literal characters, and balanced static formatting such as `\emph{...}`, `\textbf{...}`, `\textit{...}`, `\textnormal{...}`, `\textrm{...}`, `\textsf{...}`, `\texttt{...}`, `\textsc{...}`, `\underline{...}` and `\mbox{...}`. The backend derives this intent from your exact saved paragraph and current source, alongside its formula and reference checks. The model must retain the exact authorized inventory in its English candidate.
 
-The source grant is also bound to the captured project dependencies. Projects that redefine spacing, escapes or formatting controls, or use unproved dynamic definitions, require source review before these structural changes can become English candidates. The draft remains editable.
+Source grants remain bound to captured project dependencies. Deleting existing safe inline notation does not require a blanket proof that every project macro is standard. New or genuinely rebound controls receive source review; surviving risky calls and unknown-arity ranges retain their complete original bindings in the candidate. Raw authoring remains available in every case.
 
-Being able to type a command does not make every command a valid source edit. An incomplete wrapper or a change to a label, environment boundary, file-loading control or executable macro receives a validation message and retains the current input for correction. It does not become an immutable browser object or permission to execute that TeX. The last valid saved draft remains available; keep or export input awaiting correction before closing the window.
+Being able to type and save a command does not make it a valid source edit. Incomplete wrappers, labels, environment boundaries, file controls and unknown macros are retained durably as raw author text, with source-review diagnostics. They are not forced browser chips and cannot execute through draft saving. Only an actual failed save requires retry/export before closing.
 
-Generate and compile the corresponding English candidate, review it and confirm **Write back English** as usual. Repeated confirmed writes update the draft's association with the new source. Model translation/review output cannot silently overwrite pending structural author intent; resolve any stated mapping conflict before replacing that paragraph.
+Generate the corresponding English candidate through the bound Codex chat. For a source-review draft, Codex receives the exact saved text, original source and retained protected objects. It can adapt wording/formatting and compile a pending candidate through native tools, repairing a failed candidate within the same turn. Review the resulting English and confirm **Write back English** as usual. Repeated confirmed writes update the draft's association with the new source. Model translation/review output cannot silently overwrite pending structural author intent. A partial source adaptation leaves unresolved text pending after writeback and does not mark an adopted concern complete. Repair or explicitly review that remaining intent; an older receipt cannot hide it.
 
 ## Default writing Skills and translation checks
 
@@ -260,7 +260,8 @@ Use **History** to inspect earlier records and **Manage projects** to import or 
 | Chat unavailable | Open the paper's existing Desktop chat and workbench; check its displayed identity/model and required background services. Do not create a replacement chat merely to retry. |
 | Selected project already has an open window | Use that paper's existing workbench window. The selector keeps the current project intact rather than creating a duplicate or replacing another window's unsaved editing state. |
 | A formula remains source text | Check the complete delimiters, current macro definitions and source/context version. Unsupported dynamic TeX stays readable as source. Do not delete labels or mathematical content to hide the warning. |
-| Save failed or formula unfinished | Keep the current buffer, correct the expression, then retry or export the unsaved text. |
+| Source review required | The exact draft is saved. Ask Codex to adapt an English candidate, inspect retained source objects and resolve any remaining intent before final source approval. |
+| Save failed | Storage, permissions, connection or draft identity prevented saving. Keep the input and retry or export it before closing. |
 | Source changed elsewhere | Refresh the project and inspect retained drafts before generating another candidate. Old approvals cannot apply to the new source. |
 | Imported opinions blocked after a source edit | Open the organizer, inspect the per-opinion counts and recheck current associations. Unchanged paragraphs remain usable; affected opinions need individual matching or confirmation. Reimporting the complete file is unnecessary. |
 | Imported opinion not located | Provide an exact quote or ask Codex to match the remaining notes using the approved source context. Confirm genuinely uncertain matches. |

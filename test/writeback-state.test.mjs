@@ -36,8 +36,13 @@ test('writeback receipts never hide newer text or revisions, foreign scopes, cha
   }
 });
 test('an applied receipt cannot consume a new or unresolved inline structure intent',()=>{
-  for(const key of ['inlineStructureIntent','inlineStructureConflict','inlineStructureUnmapped']){
+  for(const key of ['inlineStructureIntent','inlineStructureConflict','inlineStructureUnmapped','sourceReviewRequired']){
     const f=receiptFixture();f.state.translations['zh-CN'].a[key]=key==='inlineStructureIntent'?{projectId:'project',snapshotId:'after',segmentId:'a',language:'zh-CN',before:'old',after:'new'}:true;
     assert.notEqual(deriveEnglishWriteback(f.state,'zh-CN').mode,'empty',key+' remains pending author intent');
   }
+});
+test('a source-review draft remains eligible for candidate preparation even if an older applied request captured its revision',()=>{
+ const f=receiptFixture(),draft=f.state.translations['zh-CN'].a;draft.sourceReviewRequired=true;
+ f.state.requests[0].draftRevisions.a=draft.revision;
+ const plan=deriveEnglishWriteback(f.state,'zh-CN');assert.equal(plan.mode,'missing');assert.deepEqual(plan.missingIds,['a']);
 });

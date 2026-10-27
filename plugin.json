@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "bilingual-paper-editor",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "description": "Bilingual Paper Workbench: original-format LaTeX PDFs, protected translations and reviews, with model execution in your existing Codex Desktop chat.",
   "author": {
     "name": "Luofei"
