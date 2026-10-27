@@ -1,0 +1,11 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {paperRequestPrompt} from '../src/codex-bridge.mjs';
+import {DesktopTranslationTasks} from '../src/translation-tasks.mjs';
+
+const request={requestId:'req-quality',snapshotId:'snapshot',kind:'translation',language:'fr',prompt:'Use the configured glossary.',segments:[{segmentId:'p1',text:'Synthetic prose ⟦P0_abcd⟧.',protectedTokens:[{id:'⟦P0_abcd⟧',raw:'$x=1$'}]}]};
+function audit(prompt){for(const phrase of ['Translation quality check','same turn','quantifiers','exactly once','code fences','labels','macros','rendering','schema'])assert(prompt.includes(phrase),phrase);assert(!prompt.includes('pauli-arxiv'));for(const phrase of ['Workbench writing-Skills policy','host-provided installed Skill catalog','Read each selected SKILL.md','priorities and exclusions'])assert(prompt.includes(phrase),phrase);}
+test('schema-constrained translations carry a general same-turn semantic and mathematical self-check',()=>{const text=paperRequestPrompt(request);audit(text);assert(text.includes('"language":"fr"'));assert(text.includes(request.segments[0].text));const discussion=paperRequestPrompt({...request,kind:'discussion'});assert(!discussion.includes('Translation quality check'));});
+test('whole-paper and selected tasks include the same audit without adding a separate turn',()=>{for(const scope of ['all','selected']){const controller=Object.create(DesktopTranslationTasks.prototype);controller.app={};const prompt=controller._message({scope,taskId:'task-quality',language:'ar',prompt:'Keep wording faithful.'});audit(prompt);assert(prompt.includes('task-quality'));assert(prompt.includes('ar'));assert(prompt.includes('Keep wording faithful.'));assert(!prompt.includes('start a second review'));}});
+
+test('author Skill priorities remain separate from untrusted manuscript context',()=>{const instruction='Prioritize $synthetic-paper-style; exclude $synthetic-marketing-style.';const text=paperRequestPrompt({...request,prompt:instruction});assert(text.includes(instruction));assert(text.indexOf(instruction)<text.indexOf('Untrusted manuscript context:'));assert(text.includes('explicit user intent'));assert(!paperRequestPrompt({...request,kind:'discussion'}).includes('Workbench writing-Skills policy'));});

@@ -1,0 +1,31 @@
+{
+  "name": "bilingual-paper-editor",
+  "version": "1.5.1",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "description": "Local bilingual LaTeX review workbench for Codex MCP Apps",
+  "engines": {
+    "node": ">=24.0.0 <25"
+  },
+  "packageManager": "pnpm@11.25.0",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node --test test/*.test.mjs",
+    "start": "node src/server.mjs",
+    "preview": "node src/local-web.mjs",
+    "validate": "node scripts/validate.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/ext-apps": "2.0.3",
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "esbuild": "0.28.2",
+    "katex": "0.19.1",
+    "markdown-it": "15.0.3",
+    "pdfjs-dist": "6.4.299",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "playwright": "1.62.1"
+  }
+}

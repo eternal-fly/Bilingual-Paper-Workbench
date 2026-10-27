@@ -1,0 +1,22 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdir, mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+import { PaperApplication } from '../src/application.mjs';
+test('navigation pins current build and preserves ambiguous source hits', async t => {
+  const owned = fileURLToPath(new URL('../work/nav-tests/', import.meta.url)); await mkdir(owned, { recursive: true });
+  const dir = await mkdtemp(path.join(owned, 'case-')); t.after(() => rm(dir, { recursive: true, force: true }));
+  const source = path.join(dir, 'source'); await mkdir(source);
+  await writeFile(path.join(source, 'main.tex'), '\\documentclass{article}\n\\begin{document}\n\nFirst paragraph.\n\nSecond paragraph.\n\n\\end{document}');
+  const compiler = { locate: async input => ({ verified: true, matches: [{ page: 1, x: 10, y: 20 }], line: input.line }), inverse: async () => ({ verified: true, matches: [{ sourcePath: 'main.tex', line: 4, column: -1 }, { sourcePath: 'main.tex', line: 6, column: -1 }] }) };
+  const app = new PaperApplication({ dataRoot: path.join(dir, 'private'), compiler }); await app.openProject({ root: source, mainFile: 'main.tex' });
+  const [first, second] = app.getState().segments;
+  app._verifyBuildArtifact = async () => Buffer.from('%PDF-test');
+  const build = { buildId: 'build-current', status: 'success', isolation: { verified: true }, snapshotId: app.getState().project.snapshotId, kind: 'baseline' }; app.flow.builds.push(build);
+  assert.equal((await app.locateSource({ buildId: build.buildId, segmentId: first.id })).line, 4);
+  const reverse = await app.locatePdf({ buildId: build.buildId, page: 1, x: 10, y: 20 });
+  assert.deepEqual(reverse.matches.map(item => item.segmentIds), [[first.id], [second.id]]); assert.equal(reverse.ambiguous, true);
+  build.kind = 'candidate'; await assert.rejects(app.locateSource({ buildId: build.buildId, segmentId: first.id }), { code: 'ANCHOR_UNAVAILABLE' });
+  build.kind = 'baseline'; build.snapshotId = 'old'; await assert.rejects(app.locatePdf({ buildId: build.buildId, page: 1, x: 10, y: 20 }), { code: 'ANCHOR_UNAVAILABLE' });
+});

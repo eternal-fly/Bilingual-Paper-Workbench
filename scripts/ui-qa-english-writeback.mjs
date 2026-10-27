@@ -1,0 +1,87 @@
+import assert from 'node:assert/strict';
+import { build } from 'esbuild';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { loadPlaywright, browserOptions } from './ui-qa-support.mjs';
+
+const root = fileURLToPath(new URL('../', import.meta.url)), output = path.join(root, 'work/ui-english-writeback-qa'); await mkdir(output, { recursive: true });
+const bundled = await build({ stdin: { contents: `import{initializeEnglishWriteback}from'./ui/english-writeback.mjs';window.__controller=initializeEnglishWriteback({api:window.__api,getState:()=>window.__state,getLanguage:()=> 'zh-CN',getInterfaceLanguage:()=>window.__interface||'en',getBuffers:()=>window.__buffers,flushDrafts:window.__flush,refreshState:async()=>{if(window.__refreshHook)await window.__refreshHook();return window.__state},getBusy:()=>window.__externalBusy,notify:(text,error)=>window.__notices.push({text,error}),lockEditing:locked=>document.querySelector('#draft').inert=locked,onCompile:result=>window.__compiled.push(result),onPrepareRequest:async ids=>window.__preparedScopes.push(ids),onApplied:async result=>window.__applied.push(result)});`, resolveDir: root }, bundle: true, format: 'iife', platform: 'browser', write: false });
+const html = `<!doctype html><html data-theme="light"><head><style>${await readFile(path.join(root, 'ui/style.css'), 'utf8')}</style></head><body><div class="english-writeback"><button id="writeback-english" class="button primary"></button><p id="writeback-status" role="status"></p></div><textarea id="draft"></textarea><script>${bundled.outputFiles[0].text.replaceAll('</script', '<\\/script')}</script></body></html>`;
+const { chromium } = await loadPlaywright(), browser = await chromium.launch(browserOptions), page = await browser.newPage({ viewport: { width: 1200, height: 700 } }), checks = [], errors = [], check = text => { checks.push(text); console.log(text); };
+page.on('pageerror', error => errors.push(error.message));
+await page.route('https://paper.invalid/**', route => route.fulfill({ contentType: 'text/html', body: html }));
+await page.addInitScript(() => {
+  window.__reset = (mode = 'ready') => {
+    const sources = ['a', 'b'].map(id => ({ id, source: 'Original ' + id, sourceHash: id.repeat(64), beforeHash: id.repeat(64), translatable: true, writableSource: true }));
+    const request = (id, revision) => ({ requestId: id, projectId: 'project', snapshotId: 'snapshot', kind: 'revision', status: 'completed', language: 'zh-CN', draftRevisions: { a: revision }, segments: [{ id: 'a', segmentId: 'a', sourceHash: sources[0].sourceHash, translationDraft: { text: 'Current human intent', revision } }] });
+    window.__state = { project: { id: 'project', snapshotId: 'snapshot', sourceLanguage: 'en' }, workspaceIndex: { currentRecordId: 'record' }, readingParagraphs: sources, segments: sources, translations: { 'zh-CN': { a: { text: 'Current human intent', revision: 8, origin: 'human', sourceHash: sources[0].sourceHash }, b: { text: 'AI translation', revision: 1, origin: 'ai', sourceHash: sources[1].sourceHash } } }, requests: [request('request-old', 7), request('request-current', 8)], proposals: [{ proposalId: 'old-test', projectId: 'project', baseSnapshotId: 'snapshot', context: { requestId: 'request-old' }, reviewState: 'pending', applicationState: 'notApplied', createdAt: '2026-10-26T10:00:00Z', edits: [{ segmentId: 'a', beforeHash: sources[0].sourceHash, replacement: 'Old test' }] }, { proposalId: 'current', projectId: 'project', baseSnapshotId: 'snapshot', context: { requestId: 'request-current' }, reviewState: 'pending', applicationState: 'notApplied', createdAt: '2026-10-26T12:00:00Z', edits: [{ segmentId: 'a', beforeHash: sources[0].sourceHash, replacement: 'Current revised English' }] }], transactions: [{ transactionId: 'transaction-current', state: mode === 'ready' ? 'ready' : 'compiling', projectId: 'project', baseSnapshotId: 'snapshot', proposalIds: ['current'], candidateHash: 'c'.repeat(64), buildId: 'build-current' }], builds: [{ buildId: 'build-current', kind: 'candidate', status: 'success', snapshotId: 'snapshot', candidateHash: 'c'.repeat(64), pdfHash: 'd'.repeat(64), isolation: { verified: true } }], capabilities: { secureCompile: true, directApply: true }, jobs: [], activeProposal: 'old-test' };
+    if (mode === 'uncompiled') window.__state.transactions = [];
+    if (mode === 'missing') window.__state.translations['zh-CN'].b.origin = 'human';
+    window.__calls = []; window.__buffers = []; window.__notices = []; window.__compiled = []; window.__preparedScopes = []; window.__applied = []; window.__externalBusy = false; window.__holdPrepare = false; window.__failApply = false; window.__refreshHook = null; window.__holdCompile = false; window.__holdApply = false; window.__finishPrepare = window.__finishCompile = window.__finishApply = null;
+    window.__controller?.adopt();
+  };
+  window.__reset();
+  window.__flush = async () => { window.__calls.push({ action: 'flush' }); if (window.__failSave) throw Error('Synthetic save failure'); };
+  window.__api = async (action, payload) => {
+    window.__calls.push({ action, payload }); const state = window.__state;
+    if (action === 'prepareAcceptance') { if (window.__holdPrepare) await new Promise(resolve => window.__finishPrepare = resolve); return { transactionId: payload.transactionId, confirmationToken: 'synthetic-human-click-token', candidateHash: 'c'.repeat(64), buildId: 'build-current', expiresAt: new Date(Date.now() + 60000).toISOString() }; }
+    if (action === 'applyTransaction') { if (window.__holdApply) await new Promise(resolve => window.__finishApply = resolve); if (window.__failApply) throw Error('Synthetic write conflict'); state.transactions[0].state = 'applied'; state.transactions[0].afterSnapshotId = 'snapshot-applied'; state.proposals[1].applicationState = 'applied'; state.proposals[1].transactionId = state.transactions[0].transactionId; state.project.snapshotId = 'snapshot-applied'; state.readingParagraphs[0].source = 'Current revised English'; state.readingParagraphs[0].sourceHash = 'e'.repeat(64); return { state: 'applied', transactionId: payload.transactionId, snapshotId: state.project.snapshotId, englishPdfBuildId: 'build-current' }; }
+    if (action === 'previewTransaction') { if (window.__holdCompile) await new Promise(resolve => window.__finishCompile = resolve); state.transactions = [{ transactionId: 'transaction-current', state: 'compiling', projectId: 'project', baseSnapshotId: 'snapshot', proposalIds: payload.proposalIds, candidateHash: 'c'.repeat(64), buildId: 'build-current' }]; return { jobId: 'job-current', transactionId: 'transaction-current' }; }
+    throw Error('Unexpected writeback fixture action ' + action);
+  };
+});
+try {
+  await page.goto('https://paper.invalid/');
+  assert.equal(await page.locator('#writeback-english').textContent(), 'Write back English'); assert.match(await page.locator('#writeback-status').textContent(), /1 paragraph/);
+  await page.evaluate(() => { for (let i = 0; i < 5; i++) window.__controller.adopt(); }); assert.equal(await page.evaluate(() => window.__calls.length), 0);
+  check('a complete latest compiled candidate exposes one scoped Write back English action and polling never applies it');
+  await page.locator('#writeback-english').click(); await page.waitForFunction(() => window.__applied.length === 1);
+  const calls = await page.evaluate(() => window.__calls); assert.deepEqual(calls.filter(call => ['prepareAcceptance', 'applyTransaction'].includes(call.action)).map(call => call.action), ['prepareAcceptance', 'applyTransaction']);
+  assert.equal(calls.find(call => call.action === 'applyTransaction').payload.transactionId, 'transaction-current'); assert.equal(await page.locator('dialog,input[type=checkbox]').count(), 0);
+  assert.match(await page.locator('#writeback-status').textContent(), /applied|up.to.date|no.*changes|written/i); assert.equal(await page.locator('#writeback-english').isDisabled(), true);
+  check('one human click writes only the current exact candidate without a redundant confirmation dialog and marks the saved draft as already applied');
+  await page.evaluate(() => window.__reset('uncompiled')); await page.locator('#writeback-english').click(); await page.waitForFunction(() => window.__compiled.length === 1);
+  assert.equal(await page.evaluate(() => window.__calls.some(call => call.action === 'applyTransaction')), false);
+  await page.evaluate(() => { window.__state.transactions[0].state = 'ready'; window.__controller.adopt(); });
+  assert.equal(await page.locator('#writeback-english').textContent(), 'Write back English'); assert.equal(await page.evaluate(() => window.__applied.length), 0);
+  check('an uncompiled candidate queues one preview build and later readiness waits for a separate human writeback click');
+  await page.evaluate(() => window.__reset('missing')); await page.locator('#writeback-english').click(); await page.waitForFunction(() => window.__preparedScopes.length === 1);
+  assert.deepEqual(await page.evaluate(() => window.__preparedScopes[0]), ['b']); assert.equal(await page.evaluate(() => window.__calls.some(call => ['prepareAcceptance', 'applyTransaction'].includes(call.action))), false);
+  check('a missing candidate in a multi-paragraph human scope opens preparation and never writes the ready subset');
+  await page.evaluate(() => { window.__reset(); window.__holdPrepare = true; }); await page.locator('#writeback-english').click(); await page.waitForFunction(() => Boolean(window.__finishPrepare));
+  assert.equal(await page.locator('#draft').evaluate(node => node.inert), true); await page.evaluate(() => { window.__state.translations['zh-CN'].a.revision = 9; window.__finishPrepare(); });
+  await page.waitForFunction(() => !document.querySelector('#draft').inert); assert.equal(await page.evaluate(() => window.__calls.some(call => call.action === 'applyTransaction')), false);
+  assert.match(await page.evaluate(() => window.__notices.at(-1).text), /changed|重新|变化/i);
+  check('a draft change while the exact acceptance is prepared aborts before writeback and restores editing');
+  await page.evaluate(() => { window.__reset(); window.__refreshHook = async () => { window.__state.project.id = 'another-project'; window.__refreshHook = null; }; }); await page.locator('#writeback-english').click();
+  await page.waitForFunction(() => window.__notices.some(note => note.error)); assert.equal(await page.evaluate(() => window.__calls.some(call => ['prepareAcceptance', 'applyTransaction'].includes(call.action))), false);
+  check('the first asynchronous save or refresh cannot substitute a different project for the ready candidate the human clicked');
+  await page.evaluate(() => { window.__reset('compiling'); window.__state.transactions[0].state = 'failed'; window.__controller.adopt(); window.__refreshHook = async () => { window.__state.transactions[0].state = 'ready'; window.__refreshHook = null; }; }); await page.locator('#writeback-english').click();
+  await page.waitForFunction(() => window.__notices.length > 0); assert.equal(await page.evaluate(() => window.__calls.some(call => ['prepareAcceptance', 'applyTransaction'].includes(call.action))), false);
+  check('a preparatory click that becomes ready during refresh still requires a later explicit Write back English click');
+  await page.evaluate(() => { window.__reset('uncompiled'); window.__holdCompile = true; }); await page.locator('#writeback-english').click(); await page.waitForFunction(() => Boolean(window.__finishCompile));
+  await page.evaluate(() => { window.__state.project.snapshotId = 'source-changed'; window.__finishCompile(); }); await page.waitForFunction(() => !document.querySelector('#draft').inert);
+  assert.equal(await page.evaluate(() => window.__compiled.length), 0);
+  check('a late compilation response cannot select an obsolete candidate after the current source changes');
+  await page.evaluate(() => { window.__reset(); window.__holdApply = true; }); await page.locator('#writeback-english').click(); await page.waitForFunction(() => Boolean(window.__finishApply));
+  await page.evaluate(() => { window.__state = { ...window.__state, project: { ...window.__state.project, id: 'another-project' }, workspaceIndex: { currentRecordId: 'another-record' } }; window.__finishApply(); }); await page.waitForFunction(() => !document.querySelector('#draft').inert);
+  assert.equal(await page.evaluate(() => window.__applied.length), 0);
+  check('a completed old-project write never updates the new project view or claims its PDF was written');
+  await page.evaluate(() => { window.__reset(); window.__holdPrepare = true; }); await page.locator('#writeback-english').click(); await page.waitForFunction(() => Boolean(window.__finishPrepare));
+  await page.evaluate(() => { document.querySelector('#writeback-english').dispatchEvent(new Event('click')); window.__finishPrepare(); }); await page.waitForFunction(() => window.__applied.length === 1);
+  assert.equal(await page.evaluate(() => window.__calls.filter(call => call.action === 'applyTransaction').length), 1);
+  check('a second click during preparation cannot duplicate the source transaction');
+  await page.evaluate(() => { window.__reset(); window.__failApply = true; }); await page.locator('#writeback-english').click();
+  await page.waitForFunction(() => window.__notices.some(note => note.error)); assert.equal(await page.evaluate(() => window.__state.project.snapshotId), 'snapshot'); assert.equal(await page.evaluate(() => window.__applied.length), 0);
+  assert.equal(await page.locator('#draft').evaluate(node => node.inert), false);
+  check('a write conflict preserves the old source and PDF identity while retaining the human draft');
+  await page.evaluate(() => { window.__reset('uncompiled'); const state = window.__state; state.readingParagraphs = state.segments = Array.from({ length: 60 }, (_, index) => ({ id: 'large-' + index, source: 'Synthetic source ' + index, sourceHash: index.toString(16).padStart(64, 'a'), beforeHash: index.toString(16).padStart(64, 'a'), writableSource: true, translatable: true })); state.translations['zh-CN'] = Object.fromEntries(state.segments.map(source => [source.id, { text: 'Human intent ' + source.id, revision: 8, origin: 'human', sourceHash: source.sourceHash }])); state.requests = []; state.proposals = []; state.transactions = []; window.__controller.adopt(); }); await page.locator('#writeback-english').click(); await page.waitForFunction(() => window.__preparedScopes.length === 1); assert.equal(await page.evaluate(() => window.__preparedScopes[0].length), 60); assert.equal(await page.evaluate(() => window.__calls.some(call => ['prepareAcceptance', 'applyTransaction'].includes(call.action))), false);
+  check('sixty missing English candidates pass as one exact preparation scope without manual groups or partial source writes');
+  await page.evaluate(() => { const state = window.__state; state.requests = state.segments.map(source => ({ requestId: 'r-' + source.id, projectId: state.project.id, snapshotId: state.project.snapshotId, kind: 'revision', status: 'completed', language: 'zh-CN', draftRevisions: { [source.id]: 8 }, segments: [{ id: source.id, segmentId: source.id, sourceHash: source.sourceHash, translationDraft: { text: state.translations['zh-CN'][source.id].text, revision: 8 } }] })); state.proposals = state.segments.map(source => ({ proposalId: 'proposal-' + source.id, projectId: state.project.id, baseSnapshotId: state.project.snapshotId, context: { requestId: 'r-' + source.id }, reviewState: 'pending', applicationState: 'notApplied', createdAt: '2026-10-26T12:00:00Z', edits: [{ segmentId: source.id, beforeHash: source.sourceHash, replacement: 'Revised ' + source.id }] })); window.__calls = []; window.__compiled = []; window.__controller.adopt(); }); await page.locator('#writeback-english').click(); await page.waitForFunction(() => window.__compiled.length === 1); assert.equal(await page.evaluate(() => window.__calls.find(call => call.action === 'previewTransaction').payload.proposalIds.length), 60); await page.evaluate(() => { window.__state.transactions[0].state = 'ready'; window.__controller.adopt(); }); assert.equal(await page.evaluate(() => window.__calls.some(call => ['prepareAcceptance', 'applyTransaction'].includes(call.action))), false);
+  check('one isolated preview includes all sixty current proposals and readiness never triggers automatic acceptance');
+  await page.evaluate(() => { window.__reset(); window.__interface = 'zh-CN'; window.__externalBusy = true; window.__controller.adopt(); });
+  assert.equal(await page.locator('#writeback-english').textContent(), '写回英文'); assert.equal(await page.locator('#writeback-english').isDisabled(), true);
+  assert.deepEqual(errors, []); check('busy guards and Chinese labels retain a single human action without uncaught browser errors');
+  await writeFile(path.join(output, 'report.json'), JSON.stringify({ syntheticOnly: true, passed: checks.length, checks, pageErrors: errors }, null, 2));
+} finally { await browser.close(); }

@@ -1,0 +1,33 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { PaperService } from '../src/core.mjs';
+
+test('original bilingual layers stay immutable across drafts, model results and source refresh', async t => {
+  const owned = fileURLToPath(new URL('../work/original-tests/', import.meta.url));
+  await mkdir(owned, { recursive: true });
+  const temp = await mkdtemp(path.join(owned, 'case-'));
+  t.after(() => rm(temp, { recursive: true, force: true }));
+  const source = path.join(temp, 'source'); await mkdir(source);
+  const document = english => '\\documentclass{article}\n\\newcommand{\\eng}{\\noindent{\\normalfont\\sffamily\\scriptsize\\color{Muted}EN}\\enspace\\ignorespaces}\n\\newcommand{\\chin}{\\noindent{\\normalfont\\sffamily\\scriptsize\\color{Muted}中}\\enspace\\ignorespaces}\n\\begin{document}\n\n\\eng ' + english + '\\par\\chin 原有中文。\n\n\\end{document}\n';
+  await writeFile(path.join(source, 'main.tex'), document('An original claim.'));
+  const service = new PaperService({ dataRoot: path.join(temp, 'private') });
+  await service.openProject({ root: source, mainFile: 'main.tex' });
+  const initial = service.getState(), segment = initial.segments.find(item => item.bilingualCompanion);
+  assert.ok(segment);
+  const original = initial.originals[segment.id];
+  assert.equal(original.source, 'An original claim.'); assert.equal(original.translation, '原有中文。');
+  assert.equal(initial.originalSnapshotId, initial.project.snapshotId);
+  await service.saveDraft({ segmentId: segment.id, language: 'zh-CN', text: '作者编辑的草稿。', expectedRevision: 1 });
+  const request = await service.createRequest({ kind: 'translation', segmentIds: [segment.id] });
+  await service.submitTranslationResult({ requestId: request.requestId, translations: [{ segmentId: segment.id, text: '模型的新译文。' }] });
+  assert.deepEqual(service.getState().originals[segment.id], original);
+  await writeFile(path.join(source, 'main.tex'), document('An externally changed claim.'));
+  await service.refreshProject();
+  assert.deepEqual(service.getState().originals[segment.id], original);
+  assert.equal(service.getState().originalSnapshotId, initial.originalSnapshotId);
+  const reloaded = new PaperService({ dataRoot: path.join(temp, 'private') }); await reloaded.openProject({ root: source, mainFile: 'main.tex' });
+  assert.deepEqual(reloaded.getState().originals[segment.id], original);
+});

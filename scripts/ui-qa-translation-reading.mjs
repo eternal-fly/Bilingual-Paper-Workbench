@@ -1,0 +1,91 @@
+import assert from 'node:assert/strict';
+import { build } from 'esbuild';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { loadPlaywright, browserOptions } from './ui-qa-support.mjs';
+import { loadMarkdownCss } from './markdown-css.mjs';
+
+const root = fileURLToPath(new URL('../', import.meta.url)), output = path.join(root, 'work/ui-translation-reading-qa'); await mkdir(output, { recursive: true });
+const bridge = `export const getHostState=()=>({mode:'local-preview',connected:false});export const api=(action,payload={})=>window.__api(action,payload);export const sendToHost=async()=>{throw Error('No native message channel')};export const subscribe=fn=>{window.__publish=fn;return()=>{}};`;
+const bundled = await build({ entryPoints: [path.join(root, 'ui/app.mjs')], bundle: true, platform: 'browser', format: 'iife', write: false, define: { __PDF_WORKER_SOURCE__: "''" }, plugins: [{ name: 'translation-reading-fixture', setup(builder) { builder.onResolve({ filter: /^\.\/bridge\.mjs$/ }, args => ({ path: args.path, namespace: 'fixture' })); builder.onLoad({ filter: /.*/, namespace: 'fixture' }, () => ({ contents: bridge, loader: 'js' })); } }] });
+let html = await readFile(path.join(root, 'ui/index.html'), 'utf8'); html = html.replace(/<link[^>]*href="\.\/style\.css"[^>]*>/, `<style>${await loadMarkdownCss(root)}\n${await readFile(path.join(root, 'ui/style.css'), 'utf8')}</style>`).replace(/<script[^>]*src="\.\/app\.mjs"[^>]*><\/script>/, () => `<script>${bundled.outputFiles[0].text.replaceAll('</script', '<\\/script')}</script>`).replaceAll('../assets/paper-editor.svg', 'data:image/svg+xml;base64,' + (await readFile(path.join(root, 'assets/paper-editor.svg'))).toString('base64'));
+const { chromium } = await loadPlaywright(), browser = await chromium.launch(browserOptions), page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' }), errors = [], checks = [];
+const check = name => { checks.push(name); console.log(name); }; page.on('pageerror', error => errors.push(error.message));
+await page.route('http://127.0.0.1:9154/', route => route.fulfill({ contentType: 'text/html', body: html }));
+await page.addInitScript(() => {
+  const sources = [1, 2, 3].map(index => ({ id: `source-${index}`, path: 'main.tex', source: `Source ${index} $x=1$.`, displayText: `Source ${index} $x=1$.`, section: 'Introduction', beforeHash: String(index).repeat(64), translatable: index !== 3, writableSource: true, protectedTokens: [{ id: '⟦P1_abc123⟧', raw: '$x=1$' }] }));
+  window.__state = { project: { id: 'translation-reading', rootLabel: 'Synthetic reading edits', mainFile: 'main.tex', snapshotId: 'snapshot-1', sourceLanguage: 'en', targetLanguage: 'zh-CN' }, segments: sources, readingParagraphs: sources, translations: { 'zh-CN': { 'source-1': { text: '**译文第一段** $x=1$、$y=2$，见 [1--4]。', revision: 1, status: 'humanEdited' }, 'source-2': { text: '译文第二段 $x=1$。', revision: 1, status: 'humanEdited' } } }, proposals: [], transactions: [], jobs: [], comments: [], reviewNotes: [{ noteId: 'note-1', body: 'First note.', revision: 1, sourceSegmentIds: ['source-1'] }, { noteId: 'note-2', body: 'Second note.', revision: 1, sourceSegmentIds: ['source-2'] }], requests: [], builds: [], capabilities: { codexChat: false, secureCompile: false }, chat: { busy: false, status: 'idle', connected: false }, languagePreferences: { revision: 1, uiLanguage: 'zh-CN', translationLanguage: 'zh-CN', effectiveTargetLanguage: 'zh-CN' }, syncPreferences: { revision: 0, sentenceEnd: false, englishToTranslation: false, glossary: [] } };
+  window.__state.translations['zh-CN']['split-unit'] = { text: '拆分译文 $x=1$。', revision: 1, status: 'humanEdited', unitKind: 'split', sourceSegmentIds: ['source-2'] };
+  window.__state.alignments = [{ alignmentId: 'alignment-split', language: 'zh-CN', sourceSegmentIds: ['source-2'], translationUnitIds: ['source-2', 'split-unit'], snapshotId: 'snapshot-1', revision: 1, status: 'active' }];
+  window.__calls = []; window.__pendingSaves = []; window.__failSave = false; window.__deferSave = false;
+  window.__api = async (action, payload) => {
+    window.__calls.push({ action, payload: structuredClone(payload) });
+    if (action === 'state') return structuredClone(window.__state);
+    if (['saveDraft','saveTranslationDraftWithFormulaEdits'].includes(action)) {
+      if (window.__failSave) throw Object.assign(Error('Synthetic revision conflict; buffer retained.'), { code: 'VERSION_CONFLICT' });
+      if (window.__deferSave) await new Promise(resolve => window.__pendingSaves.push(resolve));
+      const old = window.__state.translations[payload.language][payload.segmentId];
+      if (old && old.revision !== payload.expectedRevision) throw Object.assign(Error('Synthetic revision conflict.'), { code: 'VERSION_CONFLICT' });
+      const draft = { ...old, text: payload.text, revision: payload.expectedRevision + 1, status: 'humanEdited' }; window.__state.translations[payload.language][payload.segmentId] = draft;
+      return { draft, state: structuredClone(window.__state) };
+    }
+    throw Error('Unexpected synthetic action ' + action);
+  };
+});
+const one = page.locator('[data-unit-id="source-1"]'), two = page.locator('[data-unit-id="source-2"]'), input = one.locator('.translation-input');
+const setText = async value => input.evaluate((editor, text) => { editor.value = text; editor.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText' })); }, value);
+try {
+  await page.addInitScript(()=>{localStorage.setItem('paper-editor-ui-language-explicit-v1','zh-CN');}); // Explicit legacy Chinese fixture; production defaults to English.
+  await page.goto('http://127.0.0.1:9154/'); await one.waitFor();
+  assert.equal(await input.isVisible(), false); assert.equal(await two.locator('.translation-input').isVisible(), false); assert.equal(await one.locator('.translation-reading').isVisible(), true); assert.ok((await one.locator('.translation-reading').textContent()).includes('第一段'));
+  assert.equal(await one.locator('.translation-reading strong').textContent(), '译文第一段'); assert.equal(await one.locator('.translation-reading .katex').count(), 2);
+  check('translation paragraphs start in reading mode even when selected');
+  await one.locator('.translation-reading').click(); assert.equal(await input.isVisible(), true); assert.equal(await two.locator('.translation-input').isVisible(), false); assert.equal(await input.locator('.protected-object').count(), 1);
+  assert.equal(await page.locator('[data-note-id="note-1"]').count(), 1); assert.equal(await page.locator('[data-note-id="note-2"]').count(), 0);
+  check('click enters only the chosen paragraph protected editor and selects its exact notes');
+  await setText('修改后的第一段 $x=1$。');
+  await input.focus(); await input.evaluate(editor => { const range = document.createRange(); range.setStart(editor.firstChild, 2); range.collapse(true); getSelection().removeAllRanges(); getSelection().addRange(range); });
+  await page.evaluate(() => window.__publish(structuredClone(window.__state)));
+  assert.equal(await input.evaluate(editor => editor.value), '修改后的第一段 $x=1$。'); assert.equal(await input.evaluate(editor => editor.selectionStart), 2); assert.equal(await input.isVisible(), true);
+  check('state polling preserves the live editing buffer and caret');
+  await page.evaluate(() => { window.__deferSave = true; }); await one.locator('[data-translation-action="done"]').click();
+  await page.waitForFunction(() => window.__pendingSaves.length === 1); assert.equal(await input.isVisible(), true); assert.equal(await one.getAttribute('data-translation-view'), 'editing');
+  await page.evaluate(() => { window.__deferSave = false; window.__pendingSaves.shift()(); });
+  await page.waitForFunction(() => document.querySelector('[data-unit-id="source-1"]').dataset.translationView === 'reading');
+  assert.ok((await one.locator('.translation-reading').textContent()).includes('修改后'));
+  check('Done waits for the exact save before returning to reading');
+  await one.locator('.translation-reading').focus(); await page.keyboard.press('Enter'); await setText('失焦保存第一段 $x=1$。'); await page.locator('#annotations-toggle').focus();
+  await page.waitForFunction(() => document.querySelector('[data-unit-id="source-1"]').dataset.translationView === 'reading');
+  assert.equal(await page.evaluate(() => window.__state.translations['zh-CN']['source-1'].text), '失焦保存第一段 $x=1$。');
+  check('keyboard activation opens editing and leaving the paragraph saves and restores reading');
+  await one.locator('.translation-reading').click(); await page.evaluate(() => { window.__failSave = true; }); await setText('保留失败缓冲 $x=1$。'); await one.locator('[data-translation-action="done"]').click();
+  await one.locator('.save-marker.saveFailed').waitFor(); assert.equal(await input.isVisible(), true); assert.equal(await input.evaluate(editor => editor.value), '保留失败缓冲 $x=1$。'); assert.ok((await one.locator('.draft-message').textContent()).includes('VERSION_CONFLICT'));
+  await page.evaluate(() => { window.__failSave = false; }); await one.locator('[data-translation-action="done"]').click(); await page.waitForFunction(() => document.querySelector('[data-unit-id="source-1"]').dataset.translationView === 'reading');
+  check('failed saves retain the editor and exact buffer until an explicit successful retry');
+  await one.locator('.translation-reading').click(); const savesBeforeIme = await page.evaluate(() => window.__calls.filter(call => ['saveDraft','saveTranslationDraftWithFormulaEdits'].includes(call.action)).length);
+  await input.dispatchEvent('compositionstart'); await setText('正在输入拼音 $x=1$。'); await page.keyboard.press('Escape'); await page.locator('#annotations-toggle').focus(); await page.waitForTimeout(750);
+  assert.equal(await input.isVisible(), true); assert.equal(await page.evaluate(() => window.__calls.filter(call => ['saveDraft','saveTranslationDraftWithFormulaEdits'].includes(call.action)).length), savesBeforeIme);
+  assert.equal(await page.locator('#annotation-panel').isVisible(), true, 'IME Escape must not reach the global pane-close shortcut.');
+  await input.dispatchEvent('compositionend'); await page.waitForFunction(() => document.querySelector('[data-unit-id="source-1"]').dataset.translationView === 'reading');
+  check('IME composition blocks closing and saving until composition ends');
+  await one.locator('.translation-reading').click(); await setText('Escape 也保存 $x=1$。'); await page.keyboard.press('Escape'); await page.waitForFunction(() => document.querySelector('[data-unit-id="source-1"]').dataset.translationView === 'reading');
+  assert.equal(await page.evaluate(() => window.__state.translations['zh-CN']['source-1'].text), 'Escape 也保存 $x=1$。');
+  check('Escape saves and returns to reading without silently discarding edits');
+  await page.evaluate(() => { window.__state.translations['zh-CN']['source-2'] = { text: '轮询新译文 $z+1$，见 [4–8]。', revision: 2, status: 'machineTranslated' }; window.__publish(structuredClone(window.__state)); }); await two.locator('.translation-reading').click(); assert.equal(await two.locator('.protected-object').count(), 1); assert.equal(await two.locator('.protected-object[data-protected-kind="citation"]').getAttribute('data-raw'), '[4–8]'); assert.equal(await two.locator('.translation-input').evaluate(editor => editor.value), '轮询新译文 $z+1$，见 [4–8]。'); await two.locator('[data-translation-action="done"]').click(); check('beginning a new edit refreshes exact inferred atoms from the latest clean draft without changing its text');
+  const split = page.locator('[data-unit-id="split-unit"]'); await split.locator('.translation-reading').click();
+  await split.locator('.translation-input').evaluate(editor => { editor.value = '独立修改拆分译文 $x=1$。'; editor.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText' })); });
+  await split.locator('[data-translation-action="done"]').click(); await page.waitForFunction(() => document.querySelector('[data-unit-id="split-unit"]').dataset.translationView === 'reading');
+  const splitSave = await page.evaluate(() => window.__calls.filter(call => ['saveDraft','saveTranslationDraftWithFormulaEdits'].includes(call.action)).at(-1));
+  assert.equal(splitSave.payload.segmentId, 'split-unit'); assert.equal(await page.evaluate(() => window.__state.translations['zh-CN']['source-2'].text), '轮询新译文 $z+1$，见 [4–8]。');
+  assert.equal(await page.locator('[data-note-id="note-2"]').count(), 1); assert.equal(await page.locator('[data-note-id="note-1"]').count(), 0);
+  check('split translation units edit their own draft and retain the exact parent-source note mapping');
+  await one.locator('.translation-reading').click(); const preserved = await input.evaluate(editor => editor.value); await page.evaluate(() => { window.__state.translations['zh-CN']['source-1'] = { text: 'Other writer update $x=1$.', revision: 99, status: 'humanEdited' }; window.__publish(structuredClone(window.__state)); });
+  await one.locator('.save-marker.saveFailed').waitFor(); assert.equal(await input.isVisible(), true); assert.equal(await input.evaluate(editor => editor.value), preserved);
+  check('a concurrent draft revision keeps the active editor buffer visible instead of replacing it');
+  assert.equal(await page.locator('[data-unit-id="source-3"] .translation-input').isVisible(), false);
+  assert.deepEqual(errors, []); assert.equal(await page.evaluate(() => window.__calls.some(call => ['chatSend', 'chatStart', 'runRequest', 'compileReviewNote', 'syncParagraph'].includes(call.action))), false);
+  check('read-only structures remain readable and reading/editing introduces no model or compile requests');
+  await page.screenshot({ path: path.join(output, 'reading-editing.png') }); await writeFile(path.join(output, 'report.json'), JSON.stringify({ syntheticOnly: true, passed: checks.length, checks, errors }, null, 2));
+  console.log(JSON.stringify({ success: true, passed: checks.length, output }));
+} finally { await browser.close(); }

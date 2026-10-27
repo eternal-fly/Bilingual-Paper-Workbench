@@ -1,0 +1,34 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+import { PaperApplication } from '../src/application.mjs';
+
+test('verified literal originals beyond the lexer cutoff can request protected source candidates', async t => {
+  const owned = fileURLToPath(new URL('../work/reading-tests/', import.meta.url)); await mkdir(owned, { recursive: true });
+  const temp = await mkdtemp(path.join(owned, 'case-')); t.after(() => rm(temp, { recursive: true, force: true }));
+  const source = path.join(temp, 'source'); await mkdir(source);
+  const text = '\\documentclass{article}\n\\newcommand{\\eng}{\\noindent{\\normalfont\\sffamily\\scriptsize\\color{Muted}EN}\\enspace\\ignorespaces}\n\\newcommand{\\chin}{\\noindent{\\normalfont\\sffamily\\scriptsize\\color{Muted}中}\\enspace\\ignorespaces}\n\\newenvironment{pairedoriginal}[1]{\\par\\begingroup\\color{#1}}{\\par\\endgroup\\smallskip}\n\\begin{document}\n\\def\\unrelated{opaque}\n\\begin{pairedoriginal}{Old}\n\\eng An original state $x=1$ remains.\\par\\chin 原始状态 $x=1$ 保持不变。\n\\end{pairedoriginal}\n\\end{document}\n';
+  const file = path.join(source, 'main.tex'); await writeFile(file, text);
+  const app = new PaperApplication({ dataRoot: path.join(temp, 'private') }); await app.openProject({ root: source, mainFile: 'main.tex' });
+  const state = app.getState(), paragraph = state.readingParagraphs.find(item => item.source.includes('An original state'));
+  assert.ok(paragraph); assert.equal(paragraph.writableSource, true);
+  const comment = await app.addComment({ segmentIds: [paragraph.id], text: '仅讨论此派生译文的表述。' });
+  assert.deepEqual(comment.segmentIds, [paragraph.id]);
+  const draft = state.translations['zh-CN'][paragraph.id]; assert.ok(draft.text.includes('原始状态'));
+  await app.saveDraft({ segmentId: paragraph.id, language: 'zh-CN', text: '人工修改译文中的表达。', expectedRevision: draft.revision });
+  assert.equal(app.getState().translations['zh-CN'][paragraph.id].text, '人工修改译文中的表达。');
+  const revision = await app.createRequest({ kind: 'revision', segmentIds: [paragraph.id] });
+  assert.equal(revision.segments[0].sourceAuthority.kind, 'literal-reading-v1');
+  const proposal = await app.proposeRevision({ requestId: revision.requestId, reason: 'Clarify the selected Chinese intent.', edits: [{ segmentId: paragraph.id, beforeHash: paragraph.beforeHash, replacement: revision.segments[0].text.replace('remains.', 'is preserved.') }] });
+  assert.equal(proposal.edits[0].replacement, 'An original state $x=1$ is preserved.');
+  assert.equal(proposal.edits[0].sourceAuthority.snapshotId, state.project.snapshotId);
+  const request = await app.createRequest({ kind: 'translation', segmentIds: [paragraph.id] });
+  await app.submitTranslationResult({ requestId: request.requestId, translations: [{ segmentId: paragraph.id, text: request.segments[0].text.replace('An original state', '原始状态').replace('remains.', '保持不变。') }] });
+  assert.equal(app.getState().requests.find(item => item.requestId === request.requestId).status, 'completed');
+  assert.equal(await readFile(file, 'utf8'), text);
+  const next = new PaperApplication({ dataRoot: path.join(temp, 'private') }); await next.openProject({ root: source, mainFile: 'main.tex' });
+  assert.equal(next.getState().readingParagraphs[0].id, paragraph.id);
+  assert.deepEqual(next.getState().originals[paragraph.id], state.originals[paragraph.id]);
+});

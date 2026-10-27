@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "fonts": [
+    {
+      "filename": "NotoSerifCJKsc-Regular.otf",
+      "family": "Noto Serif CJK SC",
+      "style": "Regular",
+      "version": "Serif2.003",
+      "url": "https://raw.githubusercontent.com/notofonts/noto-cjk/Serif2.003/Serif/OTF/SimplifiedChinese/NotoSerifCJKsc-Regular.otf",
+      "sha256": "2a2eae2628df83556c54018c41e20fa532c1b862c5256ae8b3f23feb918d12ca",
+      "license": "SIL Open Font License 1.1",
+      "licenseUrl": "https://raw.githubusercontent.com/notofonts/noto-cjk/Serif2.003/Serif/LICENSE"
+    },
+    {
+      "filename": "NotoSerifCJKsc-Bold.otf",
+      "family": "Noto Serif CJK SC",
+      "style": "Bold",
+      "version": "Serif2.003",
+      "url": "https://raw.githubusercontent.com/notofonts/noto-cjk/Serif2.003/Serif/OTF/SimplifiedChinese/NotoSerifCJKsc-Bold.otf",
+      "sha256": "8af07d4b6c2e82bcc72a30e066eaf295f11b9424f4aad2eaa9fe0e9c3b38fc73",
+      "license": "SIL Open Font License 1.1",
+      "licenseUrl": "https://raw.githubusercontent.com/notofonts/noto-cjk/Serif2.003/Serif/LICENSE"
+    },
+    {
+      "filename": "NotoSansCJKsc-Regular.otf",
+      "family": "Noto Sans CJK SC",
+      "style": "Regular",
+      "version": "Sans2.004",
+      "url": "https://raw.githubusercontent.com/notofonts/noto-cjk/Sans2.004/Sans/OTF/SimplifiedChinese/NotoSansCJKsc-Regular.otf",
+      "sha256": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b",
+      "license": "SIL Open Font License 1.1",
+      "licenseUrl": "https://raw.githubusercontent.com/notofonts/noto-cjk/Sans2.004/LICENSE"
+    },
+    {
+      "filename": "ukai.ttc",
+      "family": "AR PL UKai CN",
+      "style": "Book",
+      "version": "0.2.20080216.2-5",
+      "url": "https://deb.debian.org/debian/pool/main/f/fonts-arphic-ukai/fonts-arphic-ukai_0.2.20080216.2-5_all.deb",
+      "downloadFilename": "fonts-arphic-ukai_0.2.20080216.2-5_all.deb",
+      "downloadSha256": "b9db73184895b067f7911f9adbf3b137df99c2d4ec5425b4ad779a9834b7110b",
+      "archivePath": "./usr/share/fonts/truetype/arphic/ukai.ttc",
+      "sha256": "cfc758e69386a21bade8cb3b373fda20d7f2fac6e8904ced2ded98588b63e274",
+      "license": "ARPHIC PUBLIC LICENSE",
+      "licenseArchivePath": "./usr/share/doc/fonts-arphic-ukai/copyright",
+      "licenseUrl": "https://sources.debian.org/src/fonts-arphic-ukai/0.2.20080216.2-5/debian/copyright/"
+    }
+  ]
+}

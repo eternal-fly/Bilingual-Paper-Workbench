@@ -1,0 +1,1876 @@
+{
+  "schemaVersion": 1,
+  "version": "1.5.1",
+  "files": [
+    {
+      "path": ".gitignore",
+      "size": 32,
+      "sha256": "3c97a16d7b81b20e4e708cf0eb0cfcaf4342a2e9ac9fe68a79d5b54e98112b0b"
+    },
+    {
+      "path": "CONTRIBUTING.md",
+      "size": 3067,
+      "sha256": "f739b9f804f24abd48f804cbf917bbb4743ea325c18a64a143c6957ffeb604dd"
+    },
+    {
+      "path": "LICENSE",
+      "size": 1063,
+      "sha256": "efa29a813e59790e1657e04a235be9cd9b0598b132323a3687b0d59fe8dec71c"
+    },
+    {
+      "path": "NOTICE",
+      "size": 1129,
+      "sha256": "3e9dcaf498eb0ae38bb4b7744ef8fde073b07aef7139fd9792b1dd4b10caa8c7"
+    },
+    {
+      "path": "README.md",
+      "size": 33050,
+      "sha256": "29c5b61216debc457bf0c011845b13c400265be1dc5a5b74bb6ccbbed8b94643"
+    },
+    {
+      "path": "SECURITY.md",
+      "size": 2102,
+      "sha256": "17901d1f61c25dea341065cc689a7411fffbf6ba7b32dd64aa3db728031a570b"
+    },
+    {
+      "path": "assets/icon-manifest.json",
+      "size": 1672,
+      "sha256": "60c1d8dab09eedb9c103ffe7edf72102a74c3617be098b37d1c7870bc46a8d27"
+    },
+    {
+      "path": "assets/katex-fonts-OFL.txt",
+      "size": 4875,
+      "sha256": "5baa70361518651e47ee3d1c9ceaa5e9bb0f7392c54e07c2a2ac74ea940691f4"
+    },
+    {
+      "path": "assets/paper-editor-128.png",
+      "size": 4586,
+      "sha256": "e50aaab9cc49db29079ad3a28047d26b43903325b345bf3c1fd7dec6c511be59"
+    },
+    {
+      "path": "assets/paper-editor-16.png",
+      "size": 632,
+      "sha256": "c2df1a0e0652b8945abe0f71fdbe8a3669c95ef4a1ef2f7f5335cca688ba6e86"
+    },
+    {
+      "path": "assets/paper-editor-24.png",
+      "size": 1051,
+      "sha256": "42a276d4860335bfb9d987dbfd57a389bf31ae32092f5343b1a7542f65ae0747"
+    },
+    {
+      "path": "assets/paper-editor-256.png",
+      "size": 9095,
+      "sha256": "980948b8c747eec7ad764a63bea86f4c445e65b663566898d5184be30366f417"
+    },
+    {
+      "path": "assets/paper-editor-32.png",
+      "size": 1294,
+      "sha256": "946cf3f2b7b84022d396890895242ef3fb6fd41a7140daeb4616b941a4ecebbc"
+    },
+    {
+      "path": "assets/paper-editor-48.png",
+      "size": 1906,
+      "sha256": "004192f1e82ec90aad8fb13b5a5d3bc5b1f707059cb1f5d8cf88590df9653a8c"
+    },
+    {
+      "path": "assets/paper-editor-64.png",
+      "size": 2526,
+      "sha256": "754a34faef9a3c3745de438ef63c00357275abe83a8b4fae6d6bb405cf502eef"
+    },
+    {
+      "path": "assets/paper-editor.ico",
+      "size": 21208,
+      "sha256": "02c1620cdd33aadb6ebc503e2efa6f5876fb704f9a3de087fdd30573ac3c3ef2"
+    },
+    {
+      "path": "assets/paper-editor.svg",
+      "size": 1139,
+      "sha256": "4fdacdce0339ecf979117693c195d8d0be8d5504d767cf7ca24309b4f1f8a461"
+    },
+    {
+      "path": "docs/OPEN_SOURCE.md",
+      "size": 6032,
+      "sha256": "1fab4a4a4f5bfb32a4cb90fbc944add1ce51fe0de7c8a54e0de08993bb390fad"
+    },
+    {
+      "path": "docs/USER_GUIDE.md",
+      "size": 30875,
+      "sha256": "9b08aceac3b287a3c6ba6330b87de7015435303808542917afb60f066f8e75e7"
+    },
+    {
+      "path": "docs/codex-bilingual-import.md",
+      "size": 3034,
+      "sha256": "dbab92709ef482beb07c6e3b90bc291d74d3e2a0eb6823ad36ba439293351db2"
+    },
+    {
+      "path": "docs/codex-integration.md",
+      "size": 26439,
+      "sha256": "3c6b981d6a1e1fd203ef18b8c699b8328eaab68876c9508bc0e19339a4e8bd93"
+    },
+    {
+      "path": "docs/compiler-security.md",
+      "size": 13074,
+      "sha256": "2e3fce6ae70ceacc23cd7c5c3a8b2d593dd8d991c0a314e479f2c7a2cb0cf4af"
+    },
+    {
+      "path": "docs/core-boundaries.md",
+      "size": 23019,
+      "sha256": "00f17876cca88adc77f66c3afd1d6ea0fa32f221c261d6428f4da0ea51d79d5c"
+    },
+    {
+      "path": "docs/fonts-support.md",
+      "size": 3344,
+      "sha256": "5af577b6c522b14d635ad90913f74d868795dee24163e61f271474a39890cc83"
+    },
+    {
+      "path": "docs/implementation-plan.md",
+      "size": 5004,
+      "sha256": "10c261e9e9a7ed1bb5d7fbacebad510b7908a21b2b6d3eb0ec652ca29d6a1c9a"
+    },
+    {
+      "path": "docs/phase2-plan.md",
+      "size": 4153,
+      "sha256": "dd8a5cc43e335719b2dacca10ba5c4071a4c48e20cbbbc17a71b2a2794e88ab0"
+    },
+    {
+      "path": "docs/plans/2026-10-25-background-chat.md",
+      "size": 872,
+      "sha256": "36b5a0b6ae3303cd81ca8343b041ddfd55d2e7feb784cd7e357be5daa66ddec5"
+    },
+    {
+      "path": "docs/plans/2026-10-25-desktop-translation.md",
+      "size": 2246,
+      "sha256": "2b72b419eebb98c8805c08012e1168f920344318329fb6f6c27673fc0454c44d"
+    },
+    {
+      "path": "docs/plans/2026-10-25-markdown-paragraph-review.md",
+      "size": 1790,
+      "sha256": "8fb26b9b6143ee06e09fe9bd7526b4436ce530939e11497238fdbacaa0ec26ff"
+    },
+    {
+      "path": "docs/plans/2026-10-25-opinion-reading-view.md",
+      "size": 1671,
+      "sha256": "02d6c688c0062888f9e6da330264fae8dd87b9efd97ac3225e36636edf8461ca"
+    },
+    {
+      "path": "docs/plans/2026-10-25-review-anchors-and-bound-chat.md",
+      "size": 3608,
+      "sha256": "5e6f8bdce03092d44eb89a99fc997dd7e2982a98fe322e27195cb470a9ff865a"
+    },
+    {
+      "path": "docs/plans/2026-10-25-review-history.md",
+      "size": 1536,
+      "sha256": "8b33a7586d25fa63554af2486b9733cdecb4c2910e12b077c10747fc40c0623d"
+    },
+    {
+      "path": "docs/plans/2026-10-25-source-project-workflow.md",
+      "size": 5565,
+      "sha256": "8204fe4e068311efb4b220402dd26fa64a904ee0f6692b3b5b79cc7a79df612c"
+    },
+    {
+      "path": "docs/plans/2026-10-25-v1.1-onboarding.md",
+      "size": 2273,
+      "sha256": "1f7c814eca04359e55d09ae1bd7b4e5d36eba69d8736420c6b4b6929beb24bf0"
+    },
+    {
+      "path": "docs/plans/2026-10-25-v1.2-origin-window.md",
+      "size": 1965,
+      "sha256": "493f5e6b5c728bb1d805e8612c42c836bc8b8cc42ccd01a9c5d00099f3c35a73"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-10-24-full-paper-project-workflow.md",
+      "size": 1884,
+      "sha256": "9c0789660fba21e09b57a019436e662bcde6240fb6bc70084a78755938c254f4"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-10-25-formula-editing.md",
+      "size": 4540,
+      "sha256": "549e3f51f730fe6090932f10f98c01efea380101093da2378c91b7b2c6e7641b"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-10-25-inline-formula-editing.md",
+      "size": 1730,
+      "sha256": "6f9ba2dcb641ad75e146ccd0dc6845c4f5bf94c46ee54781e966d3b92e7bd1b0"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-10-26-latest-pdf-promotion.md",
+      "size": 1680,
+      "sha256": "206e1a1502c51ee2a9eaf2b082abc83871dfff62be5e4e82394c7320dfc847af"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-10-26-native-release-acceptance.md",
+      "size": 2363,
+      "sha256": "ab689f0ebb40514ffd753d598d9af047e1d6ff7b8aa33562b69eed08e4cfc44e"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-10-26-typography-native-tools.md",
+      "size": 1934,
+      "sha256": "c19517b18c1552d34208da766ed9e8bdd5c78541da68141e15d512ac3d536e23"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-10-26-v140-project-revision-workflow.md",
+      "size": 3383,
+      "sha256": "66a9d02022c6064e5ca34ea5ad6f7b4122c317cebc82b7e9af9730831fce133e"
+    },
+    {
+      "path": "docs/three-column-plan.md",
+      "size": 5475,
+      "sha256": "818ed4eab92e767e209d8d55a127e7da17f1897ada255d959d4bf28d0d9f34c6"
+    },
+    {
+      "path": "docs/verification.md",
+      "size": 111494,
+      "sha256": "02524ff869b5b72ffd59a8a4d7f534f8d400cdfdbd3bd9d0752cd8d8daf53a6d"
+    },
+    {
+      "path": "fixtures/sample-paper/main.pdf",
+      "size": 70775,
+      "sha256": "fdcd07816ba78761f3cbd89bcf6d8cdd42c8f86f415afc1904d7a9e3469db96a"
+    },
+    {
+      "path": "fixtures/sample-paper/main.tex",
+      "size": 1382,
+      "sha256": "097fc599b2ed8123dcb6a6b2dfdcaff6426402b025649411c902d4f89f4afb3b"
+    },
+    {
+      "path": "mcp.json",
+      "size": 233,
+      "sha256": "29682ef1e2c20b6e1c76685edd4a7620be621ee001e031782deec90d3bbc0fb7"
+    },
+    {
+      "path": "package.json",
+      "size": 799,
+      "sha256": "bdcb6bf290527b638c13e0c01707641cf4819dce8c1b89e5d6d1c13012e50a8c"
+    },
+    {
+      "path": "plugin.json",
+      "size": 2937,
+      "sha256": "738a4cbd717769c0b4240275b3c67198d69f347ae65fe8694598564b874d46fc"
+    },
+    {
+      "path": "pnpm-lock.yaml",
+      "size": 41409,
+      "sha256": "743d776614956e088e677f407bd4e6dc51e3c79948e0917310e4deb23a7b06eb"
+    },
+    {
+      "path": "pnpm-workspace.yaml",
+      "size": 29,
+      "sha256": "ac02d96368617c760f093cfe61fdec64b6244007ab3553e0d6621f706f54a353"
+    },
+    {
+      "path": "scripts/browser-qa.mjs",
+      "size": 187,
+      "sha256": "df209f5434d26646d314995d5d7738810954afc12af11328d6bff95f01dc0dd5"
+    },
+    {
+      "path": "scripts/build.mjs",
+      "size": 5724,
+      "sha256": "f38083e64ff78e83abc0de79c8eeacd86493bcaee703132aa8c8f6dcc09cb7be"
+    },
+    {
+      "path": "scripts/compiler-build.ps1",
+      "size": 1110,
+      "sha256": "35a21126b7fd3035cc37eef4f5e06c2ce545400ef7dc0adcac2bda5ddcd70817"
+    },
+    {
+      "path": "scripts/compiler-install64.ps1",
+      "size": 3365,
+      "sha256": "4d5beb2d25deae8e9aa18507c9c795716c3277341fc38aa9268d4e065835ec9a"
+    },
+    {
+      "path": "scripts/compiler-prepare.ps1",
+      "size": 5841,
+      "sha256": "749e735d21ac79c7258569724f09963fcc7bd6140cd2fd85a21322efbabf02f4"
+    },
+    {
+      "path": "scripts/configure-native-mcp.mjs",
+      "size": 7888,
+      "sha256": "4d735ea9919acbf12390a6c55fc832c31a7b2ad63e92790d0fb10354585f1055"
+    },
+    {
+      "path": "scripts/desktop-discovery.ps1",
+      "size": 6411,
+      "sha256": "66198978dbafc88adb94c2582f101537006d5de4a14c8770634e074517658c31"
+    },
+    {
+      "path": "scripts/fonts-config.mjs",
+      "size": 1718,
+      "sha256": "169ebed64f94f04f39846c5a59944a51bbb797872c9b394d8b161aa8186f9a22"
+    },
+    {
+      "path": "scripts/fonts-install.ps1",
+      "size": 9170,
+      "sha256": "ab47439b67accca50e02f80bcb4b6420637eebadbcaa03677922a4c96e02e217"
+    },
+    {
+      "path": "scripts/fonts-smoke.ps1",
+      "size": 2416,
+      "sha256": "838e8a2047d1ce824cc7d540f8ec771edcbdbbbdf73f0a3b516c2ea132d7bc8d"
+    },
+    {
+      "path": "scripts/fonts-sources.json",
+      "size": 2373,
+      "sha256": "e4899cb86b27effd51eb893116f7ee158ecd1f7eef483d4d195949e1e0760a3c"
+    },
+    {
+      "path": "scripts/icons-build.mjs",
+      "size": 3640,
+      "sha256": "3e2c79d43432d953f0bd0c29f347e5f25135c45b36a5741d0af45145c096b225"
+    },
+    {
+      "path": "scripts/icons-verify.mjs",
+      "size": 2491,
+      "sha256": "ca0814a6b839c34ae437fad17cc4134aaeefb9ccaf92463fdd0f253ddd865e12"
+    },
+    {
+      "path": "scripts/install.ps1",
+      "size": 12307,
+      "sha256": "d098a841c8357c6bf4d2e38bfb2c8941f6cd63a44d1ceee2a964d421189f21a1"
+    },
+    {
+      "path": "scripts/installed-smoke.mjs",
+      "size": 3372,
+      "sha256": "532ad53e7603a699e0b494c4bd99bc05d40bf5c680d2e47ee0268e398e5777dc"
+    },
+    {
+      "path": "scripts/launch-preview.ps1",
+      "size": 206,
+      "sha256": "b488dd11710af958ac4e022dbfd205b84821ea194867ef82ad2e813be0f5d448"
+    },
+    {
+      "path": "scripts/launch-workbench.ps1",
+      "size": 1513,
+      "sha256": "0b04ec3500275fbf55ac5ade5528cf93f08bd3c058a04dfaa53cb1ccdf174945"
+    },
+    {
+      "path": "scripts/markdown-css.mjs",
+      "size": 1354,
+      "sha256": "b84372d2d023be24b2fc54f2853cfd1b0b2b6dfbf1aaa1beeec946abaf76a4b4"
+    },
+    {
+      "path": "scripts/native-app-control.mjs",
+      "size": 8142,
+      "sha256": "b4d4f46caff5f7f379829897a07977d3dc764515500552bd72b23c2fd720f6be"
+    },
+    {
+      "path": "scripts/native-ui-transaction-acceptance.mjs",
+      "size": 23177,
+      "sha256": "0521d3a8a46eb2e03328316d26c028643900ead1d48c0394be18288563cd03b9"
+    },
+    {
+      "path": "scripts/open-window.ps1",
+      "size": 4475,
+      "sha256": "c42ee0c136e9d742e5244abc571bd08c3d1cc44f4825f732473fc615e1f0cd88"
+    },
+    {
+      "path": "scripts/package-source.mjs",
+      "size": 16580,
+      "sha256": "6b64142dc66876b5caf1577afb61d37dfc6fab12283ea2961936aa969486e09c"
+    },
+    {
+      "path": "scripts/paper-acceptance.mjs",
+      "size": 10476,
+      "sha256": "60338dc1bb10779148d53c08b40f8b044a11eb6df4b1f8e1c6a1f8b01afa121f"
+    },
+    {
+      "path": "scripts/paper-complex-acceptance.mjs",
+      "size": 7019,
+      "sha256": "3594de14735d3492c87cf4f198c126be19d76e8c299653c78f4b20c14b032ed2"
+    },
+    {
+      "path": "scripts/paper-external-import-acceptance.mjs",
+      "size": 7499,
+      "sha256": "88b7fbd8012ff1b03790ec580f4eb61630c4a227070787459275f04ce8541cd4"
+    },
+    {
+      "path": "scripts/paper-markdown-reading-acceptance.mjs",
+      "size": 23125,
+      "sha256": "8ef4162fcd3562f8f8451de8d2f6cc3ca1529dc77cb7f39259c637b1a3de8b9f"
+    },
+    {
+      "path": "scripts/paper-opinion-reading-acceptance.mjs",
+      "size": 9049,
+      "sha256": "703e3dc5fe54bda1f3a00d85021a5cc7bf1c77217f593a612dbac2d9ab34c919"
+    },
+    {
+      "path": "scripts/paper-review-cycle-acceptance.mjs",
+      "size": 26528,
+      "sha256": "1d7bb4dffdbd608b1ede7878234e549c45a335d7c733bc0d09dee6cec9751407"
+    },
+    {
+      "path": "scripts/paper-review-history-acceptance.mjs",
+      "size": 8766,
+      "sha256": "587b5ef5ae5de5a4da7b5b24318faba8071af397c923e240ac0d4baf321b266a"
+    },
+    {
+      "path": "scripts/paper-review-import-delete-acceptance.mjs",
+      "size": 9413,
+      "sha256": "65bef64928e4b8db667293048e2526c328df1109012a22c7dd158592a2f9de07"
+    },
+    {
+      "path": "scripts/paper-three-column-acceptance.mjs",
+      "size": 28972,
+      "sha256": "3e1449cccd379674748551dd15f9a3aa6058bd500e261e832197fe9586f2b029"
+    },
+    {
+      "path": "scripts/paper-ui-acceptance.mjs",
+      "size": 19673,
+      "sha256": "fe6461334090494b363acd8223ce7dd3a5e5076dadc86ecb183a4caa176ddafc"
+    },
+    {
+      "path": "scripts/reassign-window.ps1",
+      "size": 1102,
+      "sha256": "7b757de048685d76b26f9711825b8ad4b63ffa664a22968fdfd5b28427329570"
+    },
+    {
+      "path": "scripts/shortcut-migration.ps1",
+      "size": 5693,
+      "sha256": "150df51e67c27dfe24d9c1d57e36225daff541e333197168dfe5fb29589cadac"
+    },
+    {
+      "path": "scripts/standalone-smoke.ps1",
+      "size": 4438,
+      "sha256": "aeb60bbfaa654b80f61032ced74b8d2dce96162ccdc466f1200c97caf0b5a170"
+    },
+    {
+      "path": "scripts/third-party-notices.mjs",
+      "size": 4273,
+      "sha256": "0d7fcbf1c3a11517df585c3411563b978b1ef348921c6b3839b4c8a80c14f213"
+    },
+    {
+      "path": "scripts/three-column-runtime-acceptance.mjs",
+      "size": 13318,
+      "sha256": "596c03ae3834ecde7eb707582a6cf93a10da5a35f94a7a673aae932b1645fd4a"
+    },
+    {
+      "path": "scripts/ui-qa-alignment.mjs",
+      "size": 7146,
+      "sha256": "4cc8f1aab8287e34d821184b5bfcbdd5d813e4e3341f6294b5c597984411f9e0"
+    },
+    {
+      "path": "scripts/ui-qa-background-connection.mjs",
+      "size": 20020,
+      "sha256": "25057a0a80c6c8db3d37acc5e7b1fd2759aac40f8aab3f8f22a839051e250bff"
+    },
+    {
+      "path": "scripts/ui-qa-compact-geometry.mjs",
+      "size": 4152,
+      "sha256": "f92430b041e6f8a448c231b50c3e3c07591b8a7e576e4a2089c93ede5d7fd9bd"
+    },
+    {
+      "path": "scripts/ui-qa-core.mjs",
+      "size": 14983,
+      "sha256": "df14dce169446e707b4cded39568bfd8e70cdd4eb8ee8d358f8fef30c0173776"
+    },
+    {
+      "path": "scripts/ui-qa-desktop-translation.mjs",
+      "size": 12410,
+      "sha256": "fa0e94348ff6ee70c2cba40390911ee41f6daf84fe1d549b3c7a41f843dfecb5"
+    },
+    {
+      "path": "scripts/ui-qa-empty-onboarding.mjs",
+      "size": 10268,
+      "sha256": "69756b78239701431e6e504b70f3920857f36ddef98087dd4af3c0ef49b89dc0"
+    },
+    {
+      "path": "scripts/ui-qa-english-writeback.mjs",
+      "size": 17168,
+      "sha256": "0a25c320d4637f52c449e322443758df5ec44951bafd1a2322a3f9dc923d9b28"
+    },
+    {
+      "path": "scripts/ui-qa-existing-chat-binding.mjs",
+      "size": 9902,
+      "sha256": "9cba5e60f358e7eeb50c567459bace42630b85807ca6e32e7b2cc4c6ba8405f7"
+    },
+    {
+      "path": "scripts/ui-qa-formula-editing.mjs",
+      "size": 10438,
+      "sha256": "7414ab928fba16720923255cddea6fb3943fb623700e718bec8c4ad7c0e2b5f3"
+    },
+    {
+      "path": "scripts/ui-qa-formula-runtime.mjs",
+      "size": 10953,
+      "sha256": "d2cff2e11a1b0e2dea79a7980433b1512854b98c712ea8ad4d9dd5bcda22160d"
+    },
+    {
+      "path": "scripts/ui-qa-four-layer.mjs",
+      "size": 14064,
+      "sha256": "6a8710319412b8c954d6d423c239fa8be8ed0169fa61cc5b8c89917f065fce45"
+    },
+    {
+      "path": "scripts/ui-qa-full-review-chat.mjs",
+      "size": 34048,
+      "sha256": "c18f969dedf354568a3c11dfb20096f2c2cbce1bdd7702690d13177284d9c058"
+    },
+    {
+      "path": "scripts/ui-qa-markdown-reader.mjs",
+      "size": 8075,
+      "sha256": "6821806ab1ceed3054228d7b8a7599c41f339948468ee9ff2b7430d6f4c6160a"
+    },
+    {
+      "path": "scripts/ui-qa-native-bootstrap.mjs",
+      "size": 7498,
+      "sha256": "ad0f0a08ca9fb2b1ef2f18f6011af1b85b29d58816c216d239f98ae7aa7c257b"
+    },
+    {
+      "path": "scripts/ui-qa-native-host-routing.mjs",
+      "size": 34893,
+      "sha256": "5b04b6c6159ffd555ce02162b5ab3e310a9f42527c53a7cfced359d9ef569932"
+    },
+    {
+      "path": "scripts/ui-qa-native-window.mjs",
+      "size": 13914,
+      "sha256": "e140db785e2b7eefe8197fd555d7efa67395cc41975db8f239c7398adc2535a5"
+    },
+    {
+      "path": "scripts/ui-qa-opinion-reader.mjs",
+      "size": 12796,
+      "sha256": "c19add6e394f3c6aa36d61ea7adf7be822d8c3aa4a4e25feb4043b244429b31f"
+    },
+    {
+      "path": "scripts/ui-qa-origin-chat.mjs",
+      "size": 11247,
+      "sha256": "80b5b7c5763dba00a858d9a02f74fc190a335128790b090df5879c7c90b23a87"
+    },
+    {
+      "path": "scripts/ui-qa-paper-flow.mjs",
+      "size": 18590,
+      "sha256": "7eef01dedd80a2d74f529d004e9576ef88667c6d6c2bccdc995edac9aa3c4a5e"
+    },
+    {
+      "path": "scripts/ui-qa-paragraph-math-intent.mjs",
+      "size": 7435,
+      "sha256": "c0a15b0d656a1f7630625ac628fc91cf12c5df9c4c6e9addd0e36bb3bcffcc53"
+    },
+    {
+      "path": "scripts/ui-qa-paragraph-opinion.mjs",
+      "size": 5032,
+      "sha256": "5882ffb5c50e03247d57ba2015660733bcb46b7bf80af2fdc49439a81406e40e"
+    },
+    {
+      "path": "scripts/ui-qa-pdf-promotion.mjs",
+      "size": 17975,
+      "sha256": "b23eb9dc824b8c5fd9064f664a05a374b36c5afc046f87d91d29b86dd23d6275"
+    },
+    {
+      "path": "scripts/ui-qa-project-handoff.mjs",
+      "size": 7007,
+      "sha256": "17f6f3592de1f9f54fa8d934dc6b44ed0bb966131bd7997a53ef9bb0e1020d59"
+    },
+    {
+      "path": "scripts/ui-qa-project-switcher.mjs",
+      "size": 11645,
+      "sha256": "b4840c30465dfc7668a6122686cc8075c6d7ec3efb14d780a37a7a4e5e434931"
+    },
+    {
+      "path": "scripts/ui-qa-protected.mjs",
+      "size": 11181,
+      "sha256": "1a8f5c8a206cd46aea215587b5fea2550b1b3b28133842c5cccda47a26e2264c"
+    },
+    {
+      "path": "scripts/ui-qa-reference-editing.mjs",
+      "size": 13076,
+      "sha256": "af7aa853470dbe947fc20e08821565c9538e419c95047e9cbd264fcd152affa7"
+    },
+    {
+      "path": "scripts/ui-qa-review-anchor.mjs",
+      "size": 20607,
+      "sha256": "aa8730b1478cfb34c705e78af89394c9341999eb0e0ef100dd0f79eb36b53972"
+    },
+    {
+      "path": "scripts/ui-qa-review-cards.mjs",
+      "size": 19754,
+      "sha256": "6fc5064698a436b086dddd7fcc2954baf966ceb10ff4e350c5342a6384ceda84"
+    },
+    {
+      "path": "scripts/ui-qa-review-cycle.mjs",
+      "size": 20741,
+      "sha256": "ccd6ca9c1337203f5d0f50f3ff29041698f25e6b2b1a640a11f1f4caa570f565"
+    },
+    {
+      "path": "scripts/ui-qa-review-history.mjs",
+      "size": 14111,
+      "sha256": "018127cfcdc6249fab284a963ef7ad36d8d46dbedb69af58720a8419f8a2c8e9"
+    },
+    {
+      "path": "scripts/ui-qa-review-import-delete.mjs",
+      "size": 14522,
+      "sha256": "c2e2020f628526157c0139cb62d772e55f0a29da12f90526ebfab2d0a6856e94"
+    },
+    {
+      "path": "scripts/ui-qa-review-revalidation.mjs",
+      "size": 21297,
+      "sha256": "fa7d53ead15f6e7721117415206be264a387e886ddf4a61d5500f0b49ab37ff1"
+    },
+    {
+      "path": "scripts/ui-qa-review.mjs",
+      "size": 14961,
+      "sha256": "5b962a48c06148ba974c93ba75ee8eca98036bccda21c76cdf235190d58fa4ed"
+    },
+    {
+      "path": "scripts/ui-qa-source-workflow.mjs",
+      "size": 18493,
+      "sha256": "421e42d9a8044ce7d63ace1005a78bbbf1835145eff66288be54e4e5102b6ba3"
+    },
+    {
+      "path": "scripts/ui-qa-submission-model-refresh.mjs",
+      "size": 14071,
+      "sha256": "4eb2b8fd2c37ed07c56f73edd7664d5dae3c7a7be6a3c9c34ec2841ba1fe09d1"
+    },
+    {
+      "path": "scripts/ui-qa-support.mjs",
+      "size": 1693,
+      "sha256": "5232028c88047e682b9d65622bf2c14fdf9e4eac7d83e240585a7c1cde6daf56"
+    },
+    {
+      "path": "scripts/ui-qa-sync.mjs",
+      "size": 10877,
+      "sha256": "becd82f0b6f9d3b589405fbefa13adfa0826160372c1021c53cbbfaba70d4bd3"
+    },
+    {
+      "path": "scripts/ui-qa-synctex.mjs",
+      "size": 9706,
+      "sha256": "13e24850375e74e02dfea281217ee74f0e5bb9e2bb4cc8019c3dbcba8127ae78"
+    },
+    {
+      "path": "scripts/ui-qa-three-column.mjs",
+      "size": 35488,
+      "sha256": "797876971366549c02a5ad56469f1c56b0e462ff567d48c8d978c398a3dcd66f"
+    },
+    {
+      "path": "scripts/ui-qa-translation-reading.mjs",
+      "size": 14468,
+      "sha256": "48b443856e41b780b307b43d8ad2c744de26d35c057c7a9cdc865f7005512947"
+    },
+    {
+      "path": "scripts/ui-qa-translation-typography.mjs",
+      "size": 18167,
+      "sha256": "2d30ffa9abdf7812cdc4bd57d6cf91a4df3816ebe3c3323166938851ce8162ae"
+    },
+    {
+      "path": "scripts/ui-qa-window-relay.mjs",
+      "size": 16135,
+      "sha256": "9c7d06f5e1ceda1cfd46634bf5f166e342528f1be8b55d5683e6c5187dfaa8c6"
+    },
+    {
+      "path": "scripts/ui-qa-workspaces-languages.mjs",
+      "size": 28740,
+      "sha256": "e9c7d2c37d9279803e451029f6c8bc2befbc4b93265a9ca5fbe951db34065c3d"
+    },
+    {
+      "path": "scripts/ui-qa.mjs",
+      "size": 6448,
+      "sha256": "c1bd5254fe42092241e19fefe4aa0d5b39448066418a4eddeb0407b70324d270"
+    },
+    {
+      "path": "scripts/validate.mjs",
+      "size": 2414,
+      "sha256": "ce20758effe16b27b953bad42bc0b545a7cb4ce1d442345b17b733edc4329495"
+    },
+    {
+      "path": "scripts/window-placement.ps1",
+      "size": 2870,
+      "sha256": "b747eec77cc8fb9f2917dd47a3cc7c45a085fb967f96d71e10e5b293184b9036"
+    },
+    {
+      "path": "scripts/window-registry.ps1",
+      "size": 28180,
+      "sha256": "1be2f113f3f7610705a807d819adc74ddd8eee14343c3c898a1c9055efb4213e"
+    },
+    {
+      "path": "src/application.mjs",
+      "size": 111270,
+      "sha256": "38acc5939e3cecbb912722fad5df842799a41b0d500f50c04c005dca3270c54e"
+    },
+    {
+      "path": "src/assistant-import.mjs",
+      "size": 28165,
+      "sha256": "000b8c8e59ffe3c24e920f1ddd00940ce9cbfd853f68906717ad0e73d540f538"
+    },
+    {
+      "path": "src/assistant-onboarding.mjs",
+      "size": 5662,
+      "sha256": "6d1270cfa2bd35ad9e382ef2c54ca2bb994dfcefe720c088e2bb9dab4bfd4f76"
+    },
+    {
+      "path": "src/assistant-review-worker.mjs",
+      "size": 3444,
+      "sha256": "c7684532d542ee8a672c41f2a45623eb398221aef1efbd19f90fe1e54b11cdca"
+    },
+    {
+      "path": "src/background-connection.mjs",
+      "size": 5807,
+      "sha256": "920170033bf33559da54a73c7461a27c7860b480a4c1d5e596c52764ae96d853"
+    },
+    {
+      "path": "src/background-workbench.mjs",
+      "size": 49108,
+      "sha256": "a977d0571e9685a865eae3ccd896cc82609fbe1dce1019d038ada0aa0755bd10"
+    },
+    {
+      "path": "src/bilingual-import.mjs",
+      "size": 7331,
+      "sha256": "bfe0225214c07d29fd8f23a640e43ffec5d574e707448797eaa7c7e5db877db8"
+    },
+    {
+      "path": "src/build-identity.mjs",
+      "size": 890,
+      "sha256": "795d329ffc7c187be032edcac542815893cdf2ea670f8f22a266e48b95dba198"
+    },
+    {
+      "path": "src/codex-bridge.mjs",
+      "size": 35653,
+      "sha256": "c09ab72d106841fddf9c4a8dba08eee68094e898698d4eb491cbbe4d634c9df9"
+    },
+    {
+      "path": "src/compiler/AppContainerBroker.cs",
+      "size": 28808,
+      "sha256": "889a2e5316e0f1bee177abb01cf7209db39df2821457126f6d4a402f6410cef6"
+    },
+    {
+      "path": "src/compiler/AppContainerProbe.cs",
+      "size": 1730,
+      "sha256": "cbac7ba4b98780cf7333e49883f8f8ec4723949c5c9ac3a50811ee32ae5a4f7f"
+    },
+    {
+      "path": "src/compiler/worker.mjs",
+      "size": 26484,
+      "sha256": "9362556d99a371f5169190a8c4e8b5072c10a8b9b54b11507f3e665ef9a4aa86"
+    },
+    {
+      "path": "src/core.mjs",
+      "size": 41639,
+      "sha256": "e072d1ddcddca655fdcc53210125029d9f0395b55322d874a9a65bea37477eb0"
+    },
+    {
+      "path": "src/desktop-callback.mjs",
+      "size": 10373,
+      "sha256": "a1c6d3da184be0d311c074ac796c1cfdfed8116ecdd58fa9fac7f8c10c83a645"
+    },
+    {
+      "path": "src/desktop-execution.mjs",
+      "size": 26379,
+      "sha256": "09670421bbebb43fbf86aed6e3c929873b54b73efb306adbd12808eff88307bf"
+    },
+    {
+      "path": "src/desktop-queue.mjs",
+      "size": 19545,
+      "sha256": "3117ce31addb0e23ac7c86297c9b4ac1b5d792e17d18d22c81ffa167113b1942"
+    },
+    {
+      "path": "src/english-source-paragraphs.mjs",
+      "size": 22456,
+      "sha256": "c3fd41574755bf7ec1486db82fe860c8563568a201e9ac4a94bc570323bddc9c"
+    },
+    {
+      "path": "src/english-view.mjs",
+      "size": 27276,
+      "sha256": "1ec16763950efe72ad91acb11e228de31a386fe02590d6c2a03adbca0a219799"
+    },
+    {
+      "path": "src/existing-chat-binding.mjs",
+      "size": 4160,
+      "sha256": "0154357be022d49c5a4b52fbf3874a17ef92cef392ee6da7f7acca33a59f6c41"
+    },
+    {
+      "path": "src/formula-edits.mjs",
+      "size": 36589,
+      "sha256": "9dab38426dcd71b9b4c5bbe532ba8fa20d35585a6546e8f5f09acec58f334ff0"
+    },
+    {
+      "path": "src/full-review.mjs",
+      "size": 35015,
+      "sha256": "244aee6dd116168b88eaadf7878c9dd88fe9489a0b18419bac31229058be21f4"
+    },
+    {
+      "path": "src/host-context.mjs",
+      "size": 5649,
+      "sha256": "538dbe5b1e3023bad33e745c77f16548852e63c40d30d26a9d8d091666f23566"
+    },
+    {
+      "path": "src/latex.mjs",
+      "size": 22307,
+      "sha256": "de97c4f77bdb7a5c909af793770140c026c9f8090eb26cbb72058c89b5cc05f7"
+    },
+    {
+      "path": "src/local-web.mjs",
+      "size": 19053,
+      "sha256": "bcad7b26e0cd78a9ea066d69342a6ce192ad9afa236b83861c14cb8e16509860"
+    },
+    {
+      "path": "src/markdown-context.mjs",
+      "size": 4022,
+      "sha256": "46deab340283a8a140742370a1523a924ba0ddd6700c95531857f3e6db3375f6"
+    },
+    {
+      "path": "src/native-bound-chat.mjs",
+      "size": 29573,
+      "sha256": "ca3a0c88c968f31acc602c3c20e59bbf7f78c3a6a992922b52e965fac01cd208"
+    },
+    {
+      "path": "src/native-chat-relay.mjs",
+      "size": 9439,
+      "sha256": "bf2d5bfada6ff5875c2418dd67501cdf8bdade652d5b47ecdd938ea1fcfb12f5"
+    },
+    {
+      "path": "src/native-paper-tools.mjs",
+      "size": 15884,
+      "sha256": "6a92169ce46ef907e316c079039a1b5494143901b122793a52bf812de3b200d9"
+    },
+    {
+      "path": "src/native-pdf-context.mjs",
+      "size": 9369,
+      "sha256": "f9e5637bd5313cb0f0e0d1882e39e726289e497128ce87163c364a18e0604ea0"
+    },
+    {
+      "path": "src/native-relay-history.mjs",
+      "size": 562,
+      "sha256": "5ba8f99ab4484f98978262ca63fd0a8e24a0e92986299e99eabd06c3752e407c"
+    },
+    {
+      "path": "src/native-tool-dispatch.mjs",
+      "size": 4142,
+      "sha256": "07248fe5e02885302fbc3de3e68a3e1d1e10a11ce9c331ec154176f05cac7f2c"
+    },
+    {
+      "path": "src/native-window.mjs",
+      "size": 14094,
+      "sha256": "09217ec2890d73bf9dbdac99e566a36a5202de535ab5016ce38f4ac5619778c7"
+    },
+    {
+      "path": "src/opinion-math.mjs",
+      "size": 24886,
+      "sha256": "fc6424b493eb508460cbde8da4f7f841fdfdb165fa21a591120f1c4bf99a367d"
+    },
+    {
+      "path": "src/origin-chat-binding.mjs",
+      "size": 14920,
+      "sha256": "1d5ebc5dfef5cfb7765e280252e93cdae4aa9a451761b8433250729e1793190c"
+    },
+    {
+      "path": "src/paper-project-switch.mjs",
+      "size": 8677,
+      "sha256": "4c16f77b193e05dcebb9fcdc039c3f6e40e43bde080e469047432cc4f4086082"
+    },
+    {
+      "path": "src/paper-project-title.mjs",
+      "size": 2339,
+      "sha256": "429930a4e96464851f4c134abad1b5f8004e20495b75d63850465383c11f2be8"
+    },
+    {
+      "path": "src/paragraph-comparison.mjs",
+      "size": 9812,
+      "sha256": "8de6a7f08c6197a79f0670970977b8ccf8e6edf27080cd4fe710beed982fab28"
+    },
+    {
+      "path": "src/paragraph-review.mjs",
+      "size": 12929,
+      "sha256": "e49babb0b6699413d2bb3eb18356dcfd7c22d4201eb2b95e25f75ab9d0804918"
+    },
+    {
+      "path": "src/pdf-model-tools.mjs",
+      "size": 6313,
+      "sha256": "3f2374e03968a2975e84fd7c82b786e4ac0f7186029a71439afc53645f43ae19"
+    },
+    {
+      "path": "src/pdf-selection.mjs",
+      "size": 23178,
+      "sha256": "927f902bbf00f20473710e4fb6560a106c3509d4e9627d576410172d2bc209aa"
+    },
+    {
+      "path": "src/process-probe.mjs",
+      "size": 3395,
+      "sha256": "706948e5170d38242f1f5f712a2e5076913b38f295cc32b377f9587bdb82f8bc"
+    },
+    {
+      "path": "src/project-source.mjs",
+      "size": 2561,
+      "sha256": "03d45c62c4e4c2bbdbb8e9fd024bbe2ff9daec84d7d9b7b49e7c16337f038b51"
+    },
+    {
+      "path": "src/range-authority.mjs",
+      "size": 16221,
+      "sha256": "5069a099b5c335260c6e463a77abbbf6414604fef2fff891eb60770e110d5bae"
+    },
+    {
+      "path": "src/reading-workflow.mjs",
+      "size": 18384,
+      "sha256": "1d1e9067eb8e3e8fac08cac9b0b186e4b05158fc0c9a77c8734a8a1c06bcac13"
+    },
+    {
+      "path": "src/recommendation-format.mjs",
+      "size": 1724,
+      "sha256": "4f49e0cb866bc5928342ad2507d7d11a3e708a7ff173ea5087cb09a60a5053db"
+    },
+    {
+      "path": "src/reference-edits.mjs",
+      "size": 18577,
+      "sha256": "14838781847923ac6a81cc35b441030e759a5dddf469e6b25a250f0159c365fe"
+    },
+    {
+      "path": "src/request-budgets.mjs",
+      "size": 2146,
+      "sha256": "40ec6e01a13b9fbcf0422c00dea7b4f90a8a9a78133fc34f7baf6dc3770b31dc"
+    },
+    {
+      "path": "src/review-anchor-tools.mjs",
+      "size": 3260,
+      "sha256": "c370f2c4da73115838755a1482d18a8f9a7c8bf2aa45bb11c39fada005d7c8e6"
+    },
+    {
+      "path": "src/review-anchor.mjs",
+      "size": 32839,
+      "sha256": "c5e84ff3a2705136664c50fe25c62f56ec709ede3f03653c192dfdf2257b264f"
+    },
+    {
+      "path": "src/review-batches.mjs",
+      "size": 12812,
+      "sha256": "b56c685f0956fe6bb601f8edc82cc60dac4610250a52251e2fe6444d6fb33232"
+    },
+    {
+      "path": "src/review-completion.mjs",
+      "size": 16605,
+      "sha256": "628b8b29da0c2e6db8cabf108fa5c6b4d2c05c79bcebf92680b81b08956487c9"
+    },
+    {
+      "path": "src/review-cycle.mjs",
+      "size": 28792,
+      "sha256": "9160b7de9814cb65f0fbcfe39206ab775fd431ae0fbf0585272472b36ab1839d"
+    },
+    {
+      "path": "src/review-history-policy.mjs",
+      "size": 1891,
+      "sha256": "139209421d100fe049ffadb03e99ca54ebed754af1e9a7dc1d8400e7c7b41997"
+    },
+    {
+      "path": "src/review-history.mjs",
+      "size": 10385,
+      "sha256": "327576765b39ae6bb78b87a4d9046f325cbfbb2c6bcb7a4e6e7b3cd5ed8eba82"
+    },
+    {
+      "path": "src/review-import-continuity.mjs",
+      "size": 6986,
+      "sha256": "caff37e2dc6d61267c423393ab9cc35c2bb9d9a1e3bc1b56f10e1b80b8e9f9ec"
+    },
+    {
+      "path": "src/review-import-validation.mjs",
+      "size": 15175,
+      "sha256": "f58642af1ecf534a35c32af9375a8837cd77d075626f8ef8ccd1763c4970b979"
+    },
+    {
+      "path": "src/review-limits.mjs",
+      "size": 411,
+      "sha256": "64dfefcb03dd2e5a8cbe85bd6d1f9bc4bfda43aa7365aa22bdcd60cd3b9c0802"
+    },
+    {
+      "path": "src/review-notes.mjs",
+      "size": 24790,
+      "sha256": "c15d52e4116014054d24e0580050936b2ef45f6cb8b4cc55325a6d27b24a40dc"
+    },
+    {
+      "path": "src/review-organization-tools.mjs",
+      "size": 3498,
+      "sha256": "acaeb40aa6990fab5fd5d1530beeed14e7f3ccdd734727178a6bb089ea311861"
+    },
+    {
+      "path": "src/review-organization.mjs",
+      "size": 36114,
+      "sha256": "e4e3650b390b7b920489f00f0e174afa23015475e8ea387ba6ff9c05a30353e7"
+    },
+    {
+      "path": "src/runtime.mjs",
+      "size": 8330,
+      "sha256": "0a8a84103ebe4984974bcc87190e2b2f00fd074fee1855b328d1f3404ba1e120"
+    },
+    {
+      "path": "src/selection-result-staging.mjs",
+      "size": 8028,
+      "sha256": "53228cb9812e821cb548870af1b362fafdb82eca6ab63159483405013c878d17"
+    },
+    {
+      "path": "src/server.mjs",
+      "size": 57828,
+      "sha256": "9b42dc303dfa0c68b9a951327dc9a5378724e969d51e57827c8682af6d953b03"
+    },
+    {
+      "path": "src/sync-workflow.mjs",
+      "size": 15959,
+      "sha256": "a16124f475b263f4634720d51b7fe3f850b36f570a66c846ed3bc4d8c1bf0dce"
+    },
+    {
+      "path": "src/task-registry.mjs",
+      "size": 11008,
+      "sha256": "5728bc1726989f07c4b1f80c45152b7ead709f136d7cc802ed7f719f208297d5"
+    },
+    {
+      "path": "src/translation-quality.mjs",
+      "size": 2525,
+      "sha256": "cd3f5fdb24cd32154e9aa53088edf1ccec51794a1760b1a9804d4a69ea4e1e41"
+    },
+    {
+      "path": "src/translation-tasks.mjs",
+      "size": 28232,
+      "sha256": "9d335a79080e42e048d8021ec23270b07f1dfee2bbb84a1b313f322d451b0f15"
+    },
+    {
+      "path": "src/version-pair.mjs",
+      "size": 12695,
+      "sha256": "01345c718433ad7d9dd689921b471847c331648b9f96490925b3e2cb70e313b4"
+    },
+    {
+      "path": "src/version-workflow.mjs",
+      "size": 10619,
+      "sha256": "9b9970b5f8a78b986ccb1c14e2d8926af45d628fb298436c2a6e19ba4a3fb6fd"
+    },
+    {
+      "path": "src/window-handoff.mjs",
+      "size": 3392,
+      "sha256": "d36303adce387843ef882e084ac332e5eef85905909e578ddf31ef0629e1c2ec"
+    },
+    {
+      "path": "src/windows-writer.mjs",
+      "size": 5263,
+      "sha256": "0d11702d7cebf8b26c67d4c35e98da706fd034cf55d03e238ce69571c970f3b6"
+    },
+    {
+      "path": "src/windows-writer.ps1",
+      "size": 8346,
+      "sha256": "61371d4b817c0fa201800b7f4709e321d7550655022ce605d61d4f42145c38f4"
+    },
+    {
+      "path": "src/workspace-service.mjs",
+      "size": 22760,
+      "sha256": "bad3361c26891bc25dd5657f5a5d1642af43500cb02471279008be6972222b5b"
+    },
+    {
+      "path": "src/writing-skills-policy.mjs",
+      "size": 1282,
+      "sha256": "4eb40299855fdf93cbf62fe8d9b5b95acb954a8f53a8af0497863bd4ee72ba57"
+    },
+    {
+      "path": "test/alignment.test.mjs",
+      "size": 4031,
+      "sha256": "7f8694bd0d74efccb202678a1f84e04c91bd166c3934c6f56e7a3764f1582f6c"
+    },
+    {
+      "path": "test/application.test.mjs",
+      "size": 6689,
+      "sha256": "8a0e81a067080fd8fc9b9eaeb9daf1ef18715126f433e80d1bc32cf0accb405e"
+    },
+    {
+      "path": "test/applied-pdf-promotion.test.mjs",
+      "size": 8499,
+      "sha256": "aef643c14691f541888749a454726152d6b1854857740f71c96c782d2c19d90f"
+    },
+    {
+      "path": "test/assert-strict-output-schema.mjs",
+      "size": 962,
+      "sha256": "bb36ff918fe8e85fdc90a6d9b85913459804c47d358b32146b57ac3908ab85e2"
+    },
+    {
+      "path": "test/assistant-import.test.mjs",
+      "size": 14319,
+      "sha256": "99231e57997afbebb81abdcd2165e8a4ec6744517d910a58d1b095388404cd54"
+    },
+    {
+      "path": "test/assistant-onboarding.test.mjs",
+      "size": 8676,
+      "sha256": "42b9087c10f6c8857b348f5db746c95cf96285ff6a057eb8ae9b20da4d7df2cc"
+    },
+    {
+      "path": "test/background-connection.test.mjs",
+      "size": 5311,
+      "sha256": "6f5ab88784bf826e35119409e7079dbd18571fc7715b5ea2634152da85ba05ea"
+    },
+    {
+      "path": "test/background-model-tools.test.mjs",
+      "size": 4662,
+      "sha256": "887d6b2d96ab83c1b907bd3fd0bd9905861c28a5f9b0b979c0ec00d0741e6c96"
+    },
+    {
+      "path": "test/background-window.test.mjs",
+      "size": 12074,
+      "sha256": "9a9eb034e79387e3dd10663eab79364d179a8796a36d5832f154ce3787c40041"
+    },
+    {
+      "path": "test/background-workbench.test.mjs",
+      "size": 58947,
+      "sha256": "d105079ca1644ed143dbde310530fe1a44782201cc7ed189f1ff9800cf77c860"
+    },
+    {
+      "path": "test/bibliography-project.test.mjs",
+      "size": 11975,
+      "sha256": "9d28cc1a28f3878222fdcd957b0db7fbfb910a6e3ee378c02b6b73939e70545c"
+    },
+    {
+      "path": "test/bound-window-routing.test.mjs",
+      "size": 3361,
+      "sha256": "d6276ee537e86f11753663a9c7f4a5ca93c2943994dd96e50753550915b65f80"
+    },
+    {
+      "path": "test/build-identity.test.mjs",
+      "size": 2498,
+      "sha256": "780b04802d8fed6df767cbee795c72c02c3990075d574584ac7ec3fee808982a"
+    },
+    {
+      "path": "test/bundled-entry.test.mjs",
+      "size": 3557,
+      "sha256": "2f1dfaa6a77eb44650cb025fc04191025b14307595be6a6cf494c10c0d760813"
+    },
+    {
+      "path": "test/chat-scope.test.mjs",
+      "size": 5373,
+      "sha256": "ea4667a3f0218302abe414739c778a0127ce83b371b5a33ead98cc27609c468c"
+    },
+    {
+      "path": "test/codex-bilingual-import.test.mjs",
+      "size": 9849,
+      "sha256": "025e0b66361b8d8c94142efbb6ab1233785224ccc8a1a3dc3f0126d14cc963ca"
+    },
+    {
+      "path": "test/codex-fake-server.mjs",
+      "size": 6609,
+      "sha256": "5d872220e435aadcf0ebf7d3d31e0eb496f95950926b4521715eef71b92767ed"
+    },
+    {
+      "path": "test/codex-security.test.mjs",
+      "size": 12490,
+      "sha256": "e8e00297e9461c218f723b9de5090c86a7e1f6084bce787d05675ca0cd08e912"
+    },
+    {
+      "path": "test/codex.test.mjs",
+      "size": 13565,
+      "sha256": "5a80d7583478e4dc8c72103c4c00b63b6319bef500d40f8a3a21b0e86a775ec0"
+    },
+    {
+      "path": "test/compiler-output-race.test.mjs",
+      "size": 5140,
+      "sha256": "5c84b40d9ac0cfccc008d9bf47351c5ac72f67fe96896586fa58d2c24942a241"
+    },
+    {
+      "path": "test/compiler.test.mjs",
+      "size": 10448,
+      "sha256": "7dc1765be42f1b42060791b802eefc481ea52fc894557f696482bd6528768bcc"
+    },
+    {
+      "path": "test/configure-native-mcp.test.mjs",
+      "size": 6629,
+      "sha256": "837253b466f4e78c6f4ce6dbde5b0312ff27400822c6fb8a24e06bf8246df0a6"
+    },
+    {
+      "path": "test/core.test.mjs",
+      "size": 32779,
+      "sha256": "4c0b58fa31a46701c8ba7a5de19c19159f833351aa01316da26dc5b1daad8a0c"
+    },
+    {
+      "path": "test/desktop-callback.test.mjs",
+      "size": 7816,
+      "sha256": "6948ab949eda0a2eac8f0804d9bc8e61a701e1c54f935485b090dea10f046077"
+    },
+    {
+      "path": "test/desktop-discovery.test.mjs",
+      "size": 8089,
+      "sha256": "c5037a42e3f78ac6da1bdd1deee1ccd63fd21fc5ddac87d6decf5f64d8c97192"
+    },
+    {
+      "path": "test/desktop-execution.test.mjs",
+      "size": 14187,
+      "sha256": "f4296d514e253bc9d2519527da5494499e8e964b8332f3cd84a5031865d0adb6"
+    },
+    {
+      "path": "test/desktop-model-refresh.test.mjs",
+      "size": 10528,
+      "sha256": "6195b7d7e5747af6570a126d6c197029ad7c12f50d2d7f872fb893427b4c3c3a"
+    },
+    {
+      "path": "test/desktop-queue.test.mjs",
+      "size": 19441,
+      "sha256": "4191021fd8ae4fcf89984f9c6baf0ec36855a0ed10d23f1cee70198ffed0c2be"
+    },
+    {
+      "path": "test/desktop-review-binding.test.mjs",
+      "size": 8372,
+      "sha256": "514a632b139ec2d869bb76146d74f31218463544bf05387766c2f1eeead00dfd"
+    },
+    {
+      "path": "test/desktop-tools.test.mjs",
+      "size": 14623,
+      "sha256": "edb6ce81ab2cb2e87f62e9741bd01f0c0249dad604fef66026473d6300b78394"
+    },
+    {
+      "path": "test/display-preferences.test.mjs",
+      "size": 3845,
+      "sha256": "3c9c277a7361ba714d32157c3b8097b7b7f965ba396ce4730f073f72e4f4b3ea"
+    },
+    {
+      "path": "test/empty-workbench.test.mjs",
+      "size": 1927,
+      "sha256": "24c994db15b2f0fab2649e189c0903ab271430755e965e9cb3d5f15c4d26da4f"
+    },
+    {
+      "path": "test/english-source-paragraphs.test.mjs",
+      "size": 13322,
+      "sha256": "33e985ed7546604e886c8ce7cc62c683f4edd07e615952281959dcca0223e435"
+    },
+    {
+      "path": "test/english-view.test.mjs",
+      "size": 16419,
+      "sha256": "16417450d44e148db6bd8bc4482215bf360e85fee390961d20beac9d703c5641"
+    },
+    {
+      "path": "test/existing-chat-binding.test.mjs",
+      "size": 4241,
+      "sha256": "4438fda302d629f0c1e15df7eb1e3e2121932d094211b58483318903790eb3f6"
+    },
+    {
+      "path": "test/external-job-status.test.mjs",
+      "size": 6918,
+      "sha256": "bb82f60e4373187ec6692e090762e8096380e1287684f871c50a37a83689c0c9"
+    },
+    {
+      "path": "test/fonts.test.mjs",
+      "size": 2097,
+      "sha256": "4b07fe2a26f20b6e26838084782e8f7547d4da837b711d212f547ca4b14d5780"
+    },
+    {
+      "path": "test/formula-edits.test.mjs",
+      "size": 17370,
+      "sha256": "e625a323fd6b92134553357aba7ecf75064e59977e502a32459de9efb525cda5"
+    },
+    {
+      "path": "test/formula-review-protection.test.mjs",
+      "size": 9469,
+      "sha256": "c935f4f05ecc0ba6833e8380ff553fe492a7556f2d8586055c35dcc2a0e5989f"
+    },
+    {
+      "path": "test/formula-ui-api.test.mjs",
+      "size": 7465,
+      "sha256": "1abc0908bfb8e7c50efb4811bb42d92eec7a05d17b63477f090fb25ccc979ea9"
+    },
+    {
+      "path": "test/full-review-races.test.mjs",
+      "size": 11097,
+      "sha256": "3292a51af331fac6e71713e19a9919a51c47a9382a67e0c9fd4019f2d1a82a6b"
+    },
+    {
+      "path": "test/full-review.test.mjs",
+      "size": 4797,
+      "sha256": "e834c197f123818776e20a8b3b06aee936f7542e555e589dff978b0d4fc3f225"
+    },
+    {
+      "path": "test/inline-formula-draft.test.mjs",
+      "size": 11523,
+      "sha256": "8da180055df07d767ade0bd8270569ff9c9809a31c1c94fddad55a0e6c4ac5e9"
+    },
+    {
+      "path": "test/inline-formula-ui-api.test.mjs",
+      "size": 7453,
+      "sha256": "15786f336864d7b1826e70ed914b4d42a33c5adcdddc7f0bb9fea9c02a794e6e"
+    },
+    {
+      "path": "test/interface-preferences.test.mjs",
+      "size": 1238,
+      "sha256": "8cc22619b96e6aee8dfb7c53bb3f42ffb7ecb691bd83e042858b1574704b5a12"
+    },
+    {
+      "path": "test/local-session.test.mjs",
+      "size": 1689,
+      "sha256": "0808b8e1b0aa7289633ee9396b1abcc7d3a1b02e6316d37a494cf6a26acc9373"
+    },
+    {
+      "path": "test/markdown-application.test.mjs",
+      "size": 9306,
+      "sha256": "a91b52a0e78c011aaad73eff7b6c0ddbb6f294d423f9162280ac7e4f0baffee8"
+    },
+    {
+      "path": "test/markdown-context.test.mjs",
+      "size": 3134,
+      "sha256": "f832c9b765e8bb54401bb81b98b2fa9a5aa22c6ef50a9ca9af6a8a6bfa9a7733"
+    },
+    {
+      "path": "test/markdown-reader.test.mjs",
+      "size": 13088,
+      "sha256": "c047262f49922f43a8b0176339a7414aac92ec5181ff0373415dbd2d7edb57be"
+    },
+    {
+      "path": "test/mcp.test.mjs",
+      "size": 12794,
+      "sha256": "bfdbe2f19fef6e19d998248fd67af2e6d9ffa6e3e81027af4efd6f79c5a2a089"
+    },
+    {
+      "path": "test/native-app-control.test.mjs",
+      "size": 2174,
+      "sha256": "028e7d5ebc879d06a516339a0c1a8f30b86fa8829c2b040b2d7d607368c5b68f"
+    },
+    {
+      "path": "test/native-bound-chat.test.mjs",
+      "size": 24534,
+      "sha256": "17828a8076bb8e2e467c24863ad06fba5b1db43743956222201a0bb069e7ae81"
+    },
+    {
+      "path": "test/native-chat-relay.test.mjs",
+      "size": 10904,
+      "sha256": "52867fdf6504a8458e848603feb8255229243887860f44ad1ed2e7b270e3747e"
+    },
+    {
+      "path": "test/native-paper-tools.test.mjs",
+      "size": 24703,
+      "sha256": "2765da3a3bc7453342ff26b3061c6383c44738631057605d003642962d6635c9"
+    },
+    {
+      "path": "test/native-pdf-context.test.mjs",
+      "size": 12154,
+      "sha256": "6560c2f04e15f3c43b71cb0ac0c34610093c74d4377eee022c5667acfc4a4ade"
+    },
+    {
+      "path": "test/native-relay-history.test.mjs",
+      "size": 1681,
+      "sha256": "68aef5313a17cf45e8b33243f015f667882f41f05f137d823ebc54fc1706539e"
+    },
+    {
+      "path": "test/native-relay-project-scope.test.mjs",
+      "size": 7643,
+      "sha256": "74496cef773a8af017e0119416cef17611c773b8404b468b9a26f0c78294ce25"
+    },
+    {
+      "path": "test/native-relay-transport.test.mjs",
+      "size": 4852,
+      "sha256": "9e3bdfbd8269c244c18f41e5599032e8479ed130e81ea4ed67976fc6efd18b9a"
+    },
+    {
+      "path": "test/native-ui-transaction-acceptance.test.mjs",
+      "size": 16982,
+      "sha256": "c6f1c862fad8d7ff6cd3521de6650ad600571b032072c3dd50d595c092e94dc3"
+    },
+    {
+      "path": "test/native-window.test.mjs",
+      "size": 12786,
+      "sha256": "e698407944d37d0bdf898f9f3cba80ea99990f445d3b90c3b11b60acc57ca0b5"
+    },
+    {
+      "path": "test/navigation.test.mjs",
+      "size": 2191,
+      "sha256": "bc8c0ce7ddfa8768d9fc7ae8390a59f172f0df096fef3c68106634a30bb0e4cc"
+    },
+    {
+      "path": "test/open-window.test.mjs",
+      "size": 5342,
+      "sha256": "c6a877b5fdc1cc82afd0a0abd54cf0ec3c3ae07c3b85bc3b2aea77c14dfc239d"
+    },
+    {
+      "path": "test/opinion-math.test.mjs",
+      "size": 13396,
+      "sha256": "3962153e0d0f808b7bbde27fb6fefead0ce04cc6b0f78650f62071266addf309"
+    },
+    {
+      "path": "test/opinion-read-api.test.mjs",
+      "size": 9796,
+      "sha256": "b541f1d9b58f270941dfd977032b5e43404ce652d57269aef7d9e0ab0f675ad3"
+    },
+    {
+      "path": "test/origin-chat-binding.test.mjs",
+      "size": 13984,
+      "sha256": "44b8c4c21d83bc75f6cf923dc4ec2b651f296b4006ba6557640ea167df52d0a9"
+    },
+    {
+      "path": "test/origin-chat-metadata.test.mjs",
+      "size": 4044,
+      "sha256": "fb847907b2dc1b68f06713cb6b67a1b7703cb01a4b320f000eb45f7179d6292e"
+    },
+    {
+      "path": "test/originals.test.mjs",
+      "size": 2585,
+      "sha256": "048062c0e435cb867ee55585086ea68423d3d965b803d3036ea90c7c4b94aee2"
+    },
+    {
+      "path": "test/paper-project-switch.test.mjs",
+      "size": 10957,
+      "sha256": "6c3c8268d3a0dd7cfce66d18c4574f9d3d4214166d1b33f266d9f0ef1eab4b9a"
+    },
+    {
+      "path": "test/paragraph-comparison.test.mjs",
+      "size": 8707,
+      "sha256": "317197307dbf2424db4440d17ec23ec869b86cd0a6a97af869a8237fd0dd1bbe"
+    },
+    {
+      "path": "test/paragraph-math-intent.test.mjs",
+      "size": 12106,
+      "sha256": "f2d01e611bdc0c745dfff99b0fee70f1c4bf7149c4a0a218e94aca528d211655"
+    },
+    {
+      "path": "test/paragraph-review-scale.test.mjs",
+      "size": 2997,
+      "sha256": "f5502005725a14fc929c0edaec351876532aa1c3a482faaadca44a1028057d6d"
+    },
+    {
+      "path": "test/pdf-native-tools.test.mjs",
+      "size": 8259,
+      "sha256": "709af73f5c68a6046f87c1989d30685f79d355c45cb827929777abf7821d60f0"
+    },
+    {
+      "path": "test/pdf-selection.test.mjs",
+      "size": 19141,
+      "sha256": "4c458d7252feefd5603119284f086829d5cc01dcbcec1f178cb75a79c4f29569"
+    },
+    {
+      "path": "test/process-probe.test.mjs",
+      "size": 5612,
+      "sha256": "7f46a2b020edaa47889373148f4428187214ac3e2241e5d850dccf8e08927bb2"
+    },
+    {
+      "path": "test/project-gate.test.mjs",
+      "size": 2476,
+      "sha256": "28c1a3cc541bd881e57d0ea91ce1fea925b358c4c49da317275e6ad2ffb967d1"
+    },
+    {
+      "path": "test/project-source.test.mjs",
+      "size": 4428,
+      "sha256": "e52fd6e9180d4cf14b6b464d052494e0da0baac1d5ea3ee5da082769b8463f10"
+    },
+    {
+      "path": "test/range-authority.test.mjs",
+      "size": 18170,
+      "sha256": "42e8117c9cf82e706d494f2ab99f21a64fb4180409897632260d3ba37755dda7"
+    },
+    {
+      "path": "test/reading-workflow.test.mjs",
+      "size": 3636,
+      "sha256": "c69d551dfbbdc80833b2125bd588da12d20cfab07a72a417a28a8a4737511721"
+    },
+    {
+      "path": "test/reference-edits.test.mjs",
+      "size": 15527,
+      "sha256": "72280034aca5d0d3c3f20879da99bad39ef166882c166c4446396718b428de23"
+    },
+    {
+      "path": "test/request-capacity.test.mjs",
+      "size": 5403,
+      "sha256": "f582788d568196bcd4af5b52b3d5755d752524df4e5576683a6d930706780378"
+    },
+    {
+      "path": "test/review-anchor-batches.test.mjs",
+      "size": 9576,
+      "sha256": "08a32a035a8c75c16dbaede846e72510089ffdbd3304d6243f0de93f276de505"
+    },
+    {
+      "path": "test/review-anchor.test.mjs",
+      "size": 26599,
+      "sha256": "93e007cc939a56ee7842328b25b858d4d9fadf73461f8d0b50b03fb19b71a9e9"
+    },
+    {
+      "path": "test/review-batches.test.mjs",
+      "size": 4073,
+      "sha256": "f5833ab0bf112b438cb4e09324ae25da71d11706bdb5b3720006917f06518f77"
+    },
+    {
+      "path": "test/review-completion.test.mjs",
+      "size": 14341,
+      "sha256": "872d3918dc3b619fa8c7776545f82ed093546bbf6e3b821ef00d69bfe8642efb"
+    },
+    {
+      "path": "test/review-cycle.test.mjs",
+      "size": 27281,
+      "sha256": "0ed9ca5d40c351ae39a69e012559f7c626e63a235d2f878c7cc8e006e6780ba4"
+    },
+    {
+      "path": "test/review-display.test.mjs",
+      "size": 2442,
+      "sha256": "98acdc67d59cb917b497ac64e66cff22743213cb146c414f53c35a7605e2b289"
+    },
+    {
+      "path": "test/review-history-api.test.mjs",
+      "size": 13755,
+      "sha256": "e34e36013f05eef7520d4d9a9b6a8da27519c6f715f65c9470ac911d042376a7"
+    },
+    {
+      "path": "test/review-history-policy.test.mjs",
+      "size": 4906,
+      "sha256": "0d84c59e75178faa2a5f81a5c3d00aa47eaeec149530a71c855d80d0c2426bcd"
+    },
+    {
+      "path": "test/review-history.test.mjs",
+      "size": 10881,
+      "sha256": "a9483fefdff370ebf97a23068e8c600d766e8b7393d4a5254a567754927c0625"
+    },
+    {
+      "path": "test/review-import-continuity.test.mjs",
+      "size": 10163,
+      "sha256": "f13a1e5a1a54c73a51e4a8670c8bf1d0c62795dac477852497e0a9399cf3a645"
+    },
+    {
+      "path": "test/review-import-delete.test.mjs",
+      "size": 14766,
+      "sha256": "c994bb8286d06bced6c264dc1833f48edd7313783f437d0be8b5282dd8aa0ef8"
+    },
+    {
+      "path": "test/review-import-validation.test.mjs",
+      "size": 30393,
+      "sha256": "7bc19903414f17947e4a0534d83fc3be88a04cd7460dd79d66c83c82ea213758"
+    },
+    {
+      "path": "test/review-import.test.mjs",
+      "size": 12277,
+      "sha256": "7a9626c99458d6d1b3eabc6646a97c2020986924b97eaaf5056af33cc749b4ce"
+    },
+    {
+      "path": "test/review-notes.test.mjs",
+      "size": 20822,
+      "sha256": "9b4abb6ecd2c1bb7de1f5d273d89583aa1cecda1a51cda529835ee6b57eb77c5"
+    },
+    {
+      "path": "test/review-organization-batches.test.mjs",
+      "size": 7580,
+      "sha256": "38a87df30be980428845470f5471463b543936abb7b3515ad1c563caf667b130"
+    },
+    {
+      "path": "test/review-organization.test.mjs",
+      "size": 21606,
+      "sha256": "d83d4cd9f34158ea2f486db7f0ea17c25769b14126520cddd6703d82f0e9c27e"
+    },
+    {
+      "path": "test/review-paragraph-format.test.mjs",
+      "size": 14631,
+      "sha256": "28c5d3e4ad3295efef2f7e1a480d6a25ace24103248cbd7191266964e0e0e6ed"
+    },
+    {
+      "path": "test/review-reference-preservation.test.mjs",
+      "size": 9051,
+      "sha256": "73b3959e42b40eadd12cc2ba9acc0a3308985121627f391efef7b4a27f7c5472"
+    },
+    {
+      "path": "test/review-retirement.test.mjs",
+      "size": 15548,
+      "sha256": "b03d641bc4bd8e58c056789f4a7e71a62aeee793b24441096539e55190d7d49c"
+    },
+    {
+      "path": "test/review-validation-ui.test.mjs",
+      "size": 2662,
+      "sha256": "4b1b878bda74989d450749f1a0fa0b4fa9f2467a13c38fd47d1209033e877d60"
+    },
+    {
+      "path": "test/review-writing-skills-policy.test.mjs",
+      "size": 5300,
+      "sha256": "24f9010e1ff932ca8164a23178448ee9086c0b09906c535ab498751accf37f8f"
+    },
+    {
+      "path": "test/revision-draft-current.test.mjs",
+      "size": 7813,
+      "sha256": "588ee0eb1c193bef3c12181b251fe8e9e74bd79e24c608f3b9a18f62e966958e"
+    },
+    {
+      "path": "test/selection-result-staging.test.mjs",
+      "size": 2036,
+      "sha256": "646c5d05bc01dd6976ef4a49a80efe58bb3e7c3271553b9f744359f652aa0255"
+    },
+    {
+      "path": "test/selection-scale.test.mjs",
+      "size": 4537,
+      "sha256": "06efb8859bc760d1009da80b6136e5673cc9aade9d7520d82fb339637dc1ab41"
+    },
+    {
+      "path": "test/shortcut-migration.test.mjs",
+      "size": 6988,
+      "sha256": "e3df18014a5d6a36006dec2e9cf8460cd02bacc0dc154b6547e1c93fd026cf1b"
+    },
+    {
+      "path": "test/source-organization-transport.test.mjs",
+      "size": 8209,
+      "sha256": "e5da2182e3e0eefd521296d594376e0e7df42d50a0ba08613311be0f175be2d3"
+    },
+    {
+      "path": "test/source-package.test.mjs",
+      "size": 9945,
+      "sha256": "098ec81729038f59c69dbd9b97e9cf95c542c3e7b70cf0e13047579c48dc87fe"
+    },
+    {
+      "path": "test/static-font-profile.test.mjs",
+      "size": 4384,
+      "sha256": "084665cb64d9d80adbb347de0f905220d7911ef4d3924d8ae4131c6fbaaaa44f"
+    },
+    {
+      "path": "test/sync-desktop.test.mjs",
+      "size": 11353,
+      "sha256": "1a1949dc7dc6fcf2a17c609efea7b114849779dd0a5baacb99768376833c7985"
+    },
+    {
+      "path": "test/sync-workflow.test.mjs",
+      "size": 21494,
+      "sha256": "ba8dd713dd81f889c101c29974f2354164f6993e2748fa7007d0d75c994e3177"
+    },
+    {
+      "path": "test/tex-prose-reader.test.mjs",
+      "size": 7666,
+      "sha256": "bccb39b8dc2ee60bf17fd74aff38aebf162f6f4a0df3c9dc3ad3736375eb4317"
+    },
+    {
+      "path": "test/third-party-notices.test.mjs",
+      "size": 3459,
+      "sha256": "b5787dab2a17ae034b7d51a645a2fbaf422f347b4745f69ee54998841be93ec6"
+    },
+    {
+      "path": "test/translation-protection.test.mjs",
+      "size": 4435,
+      "sha256": "ed116a3c6ed35c5d8bf62fcc722886074b47560ec2c2860ca563a928313462ba"
+    },
+    {
+      "path": "test/translation-quality.test.mjs",
+      "size": 2311,
+      "sha256": "24124969ebc87ef4d86defbc34d00f7edff702e3c8a4f876ba625b7a0a18a15d"
+    },
+    {
+      "path": "test/translation-tasks.test.mjs",
+      "size": 17985,
+      "sha256": "b405f20738ef9b58acb94ce728325d000a297485b8c3c775ee22241481324901"
+    },
+    {
+      "path": "test/ui-sync.test.mjs",
+      "size": 14709,
+      "sha256": "8890374cb30af88218469433df26feee09308a352a909de2f442ffdbaaaf29b4"
+    },
+    {
+      "path": "test/version-pair.test.mjs",
+      "size": 11684,
+      "sha256": "e22ff98aba26778bc88ad134fa70c5b3376bf29fa8449c3cd37bef0a094134cc"
+    },
+    {
+      "path": "test/version-workflow.test.mjs",
+      "size": 7755,
+      "sha256": "6bf87a04d8553f27dd1a5c31983b4b8160b3b8fad44374565bd63f87e1be7a1c"
+    },
+    {
+      "path": "test/watch.test.mjs",
+      "size": 2251,
+      "sha256": "ed10df24eee16216632016885f9d552f0cb6caaab37042f308f712168b51c0f3"
+    },
+    {
+      "path": "test/web-flow.test.mjs",
+      "size": 2186,
+      "sha256": "f28cf032312a119916d16d5bdb58e335ec7e5740d9ab9adc73ca82315cd1ad91"
+    },
+    {
+      "path": "test/web.test.mjs",
+      "size": 4811,
+      "sha256": "52fd3a5a1c5976b64a171041abd83375c56bddc2d2ad8955fceb1d2b66c4120d"
+    },
+    {
+      "path": "test/window-handoff.test.mjs",
+      "size": 9354,
+      "sha256": "a62b0ef06a49b0c30a0d60285bd1162245ebc47f0b608f424b837c00bcdb2462"
+    },
+    {
+      "path": "test/window-placement.test.mjs",
+      "size": 3723,
+      "sha256": "992789a0220f96c26a7afbdd1d42db6cc6030d023e41a0cd1146b27b4a6440b8"
+    },
+    {
+      "path": "test/window-registry.test.mjs",
+      "size": 11948,
+      "sha256": "bc5876b719a9838c3b0dfc51c2240daf35e49bbf4df12f2ed4c99c59635d869f"
+    },
+    {
+      "path": "test/workspace-registry.test.mjs",
+      "size": 16419,
+      "sha256": "cb6d38acf9e7efd96b8eea6452a6777120bfb18ee367a8d84fa491d43bcca53a"
+    },
+    {
+      "path": "test/write-denial-audit.test.mjs",
+      "size": 9724,
+      "sha256": "93e49c24142c365c4e5a134eace51c5eed0d8a141a35a7df007a5cca9a86ac38"
+    },
+    {
+      "path": "test/writeback-state.test.mjs",
+      "size": 7084,
+      "sha256": "5ba5681b9330da855b5acc104a207a154c2f8a0f21bcc34cdd46f11e4945d083"
+    },
+    {
+      "path": "test/writer.test.mjs",
+      "size": 3951,
+      "sha256": "e2e7406749f48d18e457366f99f52f23d32ed9e9225b10980965f03e89f47bca"
+    },
+    {
+      "path": "ui/app.mjs",
+      "size": 245662,
+      "sha256": "1e4ba7901bd4407a532fac34b9dae85433dda316d1599f40dc9edc46fd0bf4dd"
+    },
+    {
+      "path": "ui/background-connection.mjs",
+      "size": 20810,
+      "sha256": "f2cf9612a491f47bad3db14d41f13abb602c30a6491c09b5853ca496636fa59f"
+    },
+    {
+      "path": "ui/bridge.mjs",
+      "size": 9864,
+      "sha256": "9b442b5c3835b8d8c735f27d46aad8c0201a8bdc02b741aa256b7261b51892af"
+    },
+    {
+      "path": "ui/chat.mjs",
+      "size": 53955,
+      "sha256": "b16e2d460d6fd2da88d37292a9a629a630f21195ca1764b60dbf4f2cdcaa4367"
+    },
+    {
+      "path": "ui/connection-copy.mjs",
+      "size": 8448,
+      "sha256": "0ce79ddcac26cc732f596ab06fe192c7e0636b017fd1a3d64a75565aa1bb9c98"
+    },
+    {
+      "path": "ui/desktop-execution.mjs",
+      "size": 2215,
+      "sha256": "a158734bdd5f872381a48f0a6378191cd8e27d41c037bc81850d124fbd4bfa59"
+    },
+    {
+      "path": "ui/desktop-translation.mjs",
+      "size": 16892,
+      "sha256": "4835b7ce1ff22768a2f1db55a3ca1bab39af1e448fab336713d7363cc43e0240"
+    },
+    {
+      "path": "ui/english-writeback.mjs",
+      "size": 7191,
+      "sha256": "67bbb3806db772b6909b52d6a10107ba3b626d7432251037a4f5a32cb46a7eab"
+    },
+    {
+      "path": "ui/existing-chat-binding.mjs",
+      "size": 13242,
+      "sha256": "0f618cc86703abc123f3a9677c099c541887c73d5ae371b9743c208adb949855"
+    },
+    {
+      "path": "ui/index.html",
+      "size": 39607,
+      "sha256": "74e2c73f989d9d9fc3de1e9c2aa3e4bb2773cc798491c54ce7a95c4ff8790064"
+    },
+    {
+      "path": "ui/interface-preferences.mjs",
+      "size": 830,
+      "sha256": "8d0b87283abf52c96bff33b7b31114569d7151ecedf65b2d690e635fb71c6c80"
+    },
+    {
+      "path": "ui/language-packs.mjs",
+      "size": 35864,
+      "sha256": "fa642e6fbb5e7b72bff624822bb1ab5d2f36a0e94720a2c48931c71be125ec01"
+    },
+    {
+      "path": "ui/languages.mjs",
+      "size": 30978,
+      "sha256": "aad78a2eb5d2eea6cd6b08c0c7be91c96b5fd0b46f3cafcd2c78079bb00b578d"
+    },
+    {
+      "path": "ui/local-session.mjs",
+      "size": 1748,
+      "sha256": "b6a4accb17bf20aa8ca3f6a93949bf058764248fc151c9391822a059bbdd2213"
+    },
+    {
+      "path": "ui/markdown-reader.mjs",
+      "size": 22208,
+      "sha256": "7ad64e70ce80f915578c7a725f38e1777c7c6edb045d7e0ff49fd8b1c751784f"
+    },
+    {
+      "path": "ui/native-chat-relay.html",
+      "size": 1574,
+      "sha256": "71d586b09c4d9c248f8260142947880bc6a690b04b02e67aea3821c28b0f5bd8"
+    },
+    {
+      "path": "ui/native-chat-relay.mjs",
+      "size": 7663,
+      "sha256": "75959f41505fc07f392cde66fabc28aa09957783066f02f2058207f827581adc"
+    },
+    {
+      "path": "ui/opinion-reader.mjs",
+      "size": 14216,
+      "sha256": "f8bee1dff1ae358c27378223da4ca2e1a30bf76d5a4bc3f1f11fdfa87026b8bd"
+    },
+    {
+      "path": "ui/paragraph-opinion.mjs",
+      "size": 3817,
+      "sha256": "0aa554974ed7caf428c961913b995b524a0458da6a0253479d76764ab0d9ec54"
+    },
+    {
+      "path": "ui/pdf-review-context.mjs",
+      "size": 3453,
+      "sha256": "bf5910d66d63764164865b8f185f298ba267e01b86ded0c057ce638506da901c"
+    },
+    {
+      "path": "ui/pdf.mjs",
+      "size": 6256,
+      "sha256": "6c6f2ca1c7ec43f36a8e1a1c1396a7d7e8607a6ba5813906a444ccd63b8221f1"
+    },
+    {
+      "path": "ui/project-source.mjs",
+      "size": 9961,
+      "sha256": "657c37052aca74613721105c0478abbff0d3719dbf56b69f7fa57c75fb28e016"
+    },
+    {
+      "path": "ui/project-switcher.mjs",
+      "size": 12678,
+      "sha256": "a9263c7cbc8bbacc355aaa592a7bb1f4f0687bf5f18455be8442660083d02dd2"
+    },
+    {
+      "path": "ui/protected-editor.mjs",
+      "size": 15089,
+      "sha256": "e35c4f19b71e6063b2a414391a8a8374361c5ba9849fbb16c01c9872f7069aa4"
+    },
+    {
+      "path": "ui/review-anchor.mjs",
+      "size": 26278,
+      "sha256": "422afa18d7280c9bb1d57e1def6aa545f88814fdeda5ea8e82bc31da8259c00a"
+    },
+    {
+      "path": "ui/review-display.mjs",
+      "size": 1893,
+      "sha256": "cb9eba0f5bb0b3e7a7019e2e5cc149ea8838c650db0c86e5835d1e131ab5ec75"
+    },
+    {
+      "path": "ui/review-import.mjs",
+      "size": 17293,
+      "sha256": "9e199acc20344dea1d164aa5231495b477d62e8ac18d24ba11f5e5132e2d250b"
+    },
+    {
+      "path": "ui/review-organization.mjs",
+      "size": 27094,
+      "sha256": "dfc165f0a52b715758475ac985ce1bf1e424f5f91a51b7f5f6c833920291ef1e"
+    },
+    {
+      "path": "ui/review-validation.mjs",
+      "size": 4885,
+      "sha256": "62226f7d6e356f8601afe0df043d6e433adffd936988a1fe16e8590e57ae0f71"
+    },
+    {
+      "path": "ui/style.css",
+      "size": 89116,
+      "sha256": "1f17b3d9a1da519c925cc39ac2e86c0733ddd9ec17ab9558da41143328ccceab"
+    },
+    {
+      "path": "ui/sync.mjs",
+      "size": 27804,
+      "sha256": "4a146003ac4163a56763bc622f3516b966e44ed816dcee68f673a141fef45bd3"
+    },
+    {
+      "path": "ui/tex-prose-reader.mjs",
+      "size": 8316,
+      "sha256": "9d2e818fdb473a6f290a45f30fd8d8fa42c9e9a2831fd824822b44f339ad55e3"
+    },
+    {
+      "path": "ui/translation-protection.mjs",
+      "size": 4373,
+      "sha256": "ecfc5b2fb57a6451b6db92c6ea5a3ed9057c95aa147ba5a7e31509a49a05dc32"
+    },
+    {
+      "path": "ui/translation-typography.mjs",
+      "size": 5567,
+      "sha256": "996df17b8bbe6f09f187756eb645923e2cf36fdfa744bd40d57c5850dc99a8dc"
+    },
+    {
+      "path": "ui/version-pair.mjs",
+      "size": 4969,
+      "sha256": "4383aabc6dd4175b945200c18c651e363aede46a2338416849c6fa00683f9c87"
+    },
+    {
+      "path": "ui/workspaces.mjs",
+      "size": 8836,
+      "sha256": "359d925515d42804097419b8fb8423b69914e7667f1eef09a8a5ab05bda7b399"
+    },
+    {
+      "path": "ui/writeback-state.mjs",
+      "size": 7820,
+      "sha256": "cedafb4e7fa951d56b0db83b43fdba793a2b703d547a2f50abc72152e3fd8d19"
+    }
+  ]
+}

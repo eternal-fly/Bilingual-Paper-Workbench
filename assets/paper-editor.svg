@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-label="Bilingual Paper Workbench">
+  <title>Bilingual Paper Workbench</title>
+  <desc>Two paper pages joined by opposing arrows, with a pen nib for reviewed writing.</desc>
+  <rect x="8" y="8" width="240" height="240" rx="53" fill="#20364d" stroke="#587185" stroke-width="2"/>
+  <path d="M52 49h61a10 10 0 0 1 10 10v145H52a10 10 0 0 1-10-10V59a10 10 0 0 1 10-10Z" fill="#fff6e4"/>
+  <path d="M143 49h61a10 10 0 0 1 10 10v135a10 10 0 0 1-10 10h-71V59a10 10 0 0 1 10-10Z" fill="#efbd5e"/>
+  <path d="M64 73h36M155 73h36" fill="none" stroke="#20364d" stroke-opacity=".28" stroke-width="7" stroke-linecap="round"/>
+  <path d="M66 102h97V90l29 21-29 21v-13H66Z" fill="#20364d"/>
+  <path d="M190 144H93v-12l-29 21 29 21v-13h97Z" fill="#20364d"/>
+  <path d="m169 206 8-29 26-16 18 18-16 26-29 8Z" fill="#fff6e4" stroke="#20364d" stroke-width="7" stroke-linejoin="round"/>
+  <path d="m178 204 15-15" fill="none" stroke="#20364d" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="194" cy="188" r="4.5" fill="#20364d"/>
+</svg>

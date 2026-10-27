@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "source": "paper-editor.svg",
+  "sourceSha256": "4fdacdce0339ecf979117693c195d8d0be8d5504d767cf7ca24309b4f1f8a461",
+  "renderer": "@napi-rs/canvas@1.0.13 (existing PDF.js optional dependency)",
+  "colors": {
+    "ink": "#20364d",
+    "paper": "#fff6e4",
+    "translation": "#efbd5e"
+  },
+  "files": {
+    "paper-editor-16.png": {
+      "width": 16,
+      "height": 16,
+      "sha256": "c2df1a0e0652b8945abe0f71fdbe8a3669c95ef4a1ef2f7f5335cca688ba6e86"
+    },
+    "paper-editor-24.png": {
+      "width": 24,
+      "height": 24,
+      "sha256": "42a276d4860335bfb9d987dbfd57a389bf31ae32092f5343b1a7542f65ae0747"
+    },
+    "paper-editor-32.png": {
+      "width": 32,
+      "height": 32,
+      "sha256": "946cf3f2b7b84022d396890895242ef3fb6fd41a7140daeb4616b941a4ecebbc"
+    },
+    "paper-editor-48.png": {
+      "width": 48,
+      "height": 48,
+      "sha256": "004192f1e82ec90aad8fb13b5a5d3bc5b1f707059cb1f5d8cf88590df9653a8c"
+    },
+    "paper-editor-64.png": {
+      "width": 64,
+      "height": 64,
+      "sha256": "754a34faef9a3c3745de438ef63c00357275abe83a8b4fae6d6bb405cf502eef"
+    },
+    "paper-editor-128.png": {
+      "width": 128,
+      "height": 128,
+      "sha256": "e50aaab9cc49db29079ad3a28047d26b43903325b345bf3c1fd7dec6c511be59"
+    },
+    "paper-editor-256.png": {
+      "width": 256,
+      "height": 256,
+      "sha256": "980948b8c747eec7ad764a63bea86f4c445e65b663566898d5184be30366f417"
+    },
+    "paper-editor.ico": {
+      "frames": [
+        16,
+        24,
+        32,
+        48,
+        64,
+        128,
+        256
+      ],
+      "sha256": "02c1620cdd33aadb6ebc503e2efa6f5876fb704f9a3de087fdd30573ac3c3ef2"
+    }
+  }
+}

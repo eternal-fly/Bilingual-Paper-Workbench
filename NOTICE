@@ -1,0 +1,20 @@
+Bilingual Paper Workbench
+Copyright (c) 2026 Luofei
+
+First-party source code, documentation and original icon assets are licensed
+under the MIT License in LICENSE, except where a file carries another notice.
+
+Third-party dependencies retain their own licenses. Building the runtime
+generates dist/THIRD_PARTY_NOTICES.md from the dependency files actually bundled
+by esbuild, together with their available LICENSE/COPYING/NOTICE texts.
+
+KaTeX software is MIT-licensed. Its embedded display fonts are separately
+licensed under the SIL Open Font License 1.1. Retain assets/katex-fonts-OFL.txt,
+including its copyrights and Reserved Font Names, when distributing those fonts.
+PDF.js is licensed under Apache-2.0; preserve its bundled notices.
+
+The source release does not contain Node.js, Codex, a TeX distribution, compiler
+executables/DLLs, a user's installed fonts, manuscripts, chats or local runtime
+configuration. Compiler/font download and preparation scripts do not change
+the licenses of the downloaded components. Redistributing a prepared compiler
+or font installation requires a separate component and license inventory.

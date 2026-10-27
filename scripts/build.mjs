@@ -1,0 +1,43 @@
+import { build } from 'esbuild';
+import { readFile, writeFile, mkdir, copyFile } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { createHash } from 'node:crypto';
+import { loadMarkdownCss, loadMarkdownFontLicense } from './markdown-css.mjs';
+import { collectBundledNotices } from './third-party-notices.mjs';
+const root = fileURLToPath(new URL('../', import.meta.url));
+const metafiles=[];
+async function bundle(options){const result=await build({...options,absWorkingDir:root,metafile:true});metafiles.push(result.metafile);return result;}
+await mkdir(path.join(root, 'dist'), { recursive: true });
+const iconAssets = ['paper-editor.svg', ...[16, 24, 32, 48, 64, 128, 256].map(size => `paper-editor-${size}.png`), 'paper-editor.ico', 'icon-manifest.json'];
+await mkdir(path.join(root, 'dist/assets'), { recursive: true });
+for (const name of iconAssets) await copyFile(path.join(root, 'assets', name), path.join(root, 'dist/assets', name));
+const iconDataUri = 'data:image/svg+xml;base64,' + (await readFile(path.join(root, 'assets/paper-editor.svg'))).toString('base64');
+const workerSource = await readFile(path.join(root, 'node_modules/pdfjs-dist/build/pdf.worker.min.mjs'), 'utf8');
+const browser = await bundle({ entryPoints: [path.join(root, 'ui/app.mjs')], bundle: true, format: 'iife', platform: 'browser', target: 'chrome120', write: false, minify: true, legalComments: 'inline', define: { __PDF_WORKER_SOURCE__: JSON.stringify(workerSource) } });
+let html = await readFile(path.join(root, 'ui/index.html'), 'utf8');
+const css = `${await loadMarkdownCss(root)}\n${await readFile(path.join(root, 'ui/style.css'), 'utf8')}`;
+html = html.replace(/<link[^>]*href=["'](?:\.\/)?style\.css["'][^>]*>/, `<style>${css}</style>`);
+html = html.replace(/<script[^>]*src=["'](?:\.\/)?app\.mjs["'][^>]*><\/script>/, () => `<script>${browser.outputFiles[0].text.replaceAll('</script', '<\\/script')}</script>`);
+html = html.replaceAll('../assets/paper-editor.svg', iconDataUri);
+if (/<(?:script|link)[^>]+(?:src|href)=["'](?!data:)/.test(html)) throw new Error('Unbundled UI asset remains');
+await writeFile(path.join(root, 'dist/workbench.html'), html);
+await writeFile(path.join(root, 'dist/preview.html'), html);
+const relay=await bundle({entryPoints:[path.join(root,'ui/native-chat-relay.mjs')],bundle:true,format:'iife',platform:'browser',target:'chrome120',write:false,minify:true,legalComments:'inline'});
+let relayHtml=await readFile(path.join(root,'ui/native-chat-relay.html'),'utf8');relayHtml=relayHtml.replace(/<script[^>]*src=["'](?:\.\/)?native-chat-relay\.mjs["'][^>]*><\/script>/,()=>`<script>${relay.outputFiles[0].text.replaceAll('</script','<\\/script')}</script>`);if(/<(?:script|link)[^>]+(?:src|href)=["'](?!data:)/.test(relayHtml))throw Error('Unbundled native relay asset remains');await writeFile(path.join(root,'dist/native-relay.html'),relayHtml);
+await bundle({ entryPoints: [path.join(root, 'src/server.mjs')], outfile: path.join(root, 'dist/server.mjs'), bundle: true, format: 'esm', platform: 'node', target: 'node24', legalComments: 'inline', define: { __PAPER_ENTRY_KIND__: JSON.stringify('server') }, banner: { js: "import { createRequire as __createRequire } from 'node:module'; const require = __createRequire(import.meta.url);" } });
+await bundle({ entryPoints: [path.join(root, 'src/local-web.mjs')], outfile: path.join(root, 'dist/local-web.mjs'), bundle: true, format: 'esm', platform: 'node', target: 'node24', legalComments: 'inline', define: { __PAPER_ENTRY_KIND__: JSON.stringify('local-web') } });
+await bundle({entryPoints:[path.join(root,'src/background-workbench.mjs')],outfile:path.join(root,'dist/background-workbench.mjs'),bundle:true,format:'esm',platform:'node',target:'node24',legalComments:'inline',define:{__PAPER_ENTRY_KIND__:JSON.stringify('background-workbench')}});
+await bundle({entryPoints:[path.join(root,'src/assistant-review-worker.mjs')],outfile:path.join(root,'dist/assistant-review-worker.mjs'),bundle:true,format:'esm',platform:'node',target:'node24',legalComments:'inline'});
+await bundle({entryPoints:[path.join(root,'src/desktop-callback.mjs')],outfile:path.join(root,'dist/desktop-callback.mjs'),bundle:true,format:'esm',platform:'node',target:'node24',legalComments:'inline',banner:{js:"import { createRequire as __createRequire } from 'node:module'; const require = __createRequire(import.meta.url);"}});
+await copyFile(path.join(root, 'src/windows-writer.ps1'), path.join(root, 'dist/windows-writer.ps1'));
+const pkg = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
+const notices=await collectBundledNotices({root,metafiles,extraInputs:[path.join(root,'node_modules/pdfjs-dist/build/pdf.worker.min.mjs')],fontNotice:await loadMarkdownFontLicense(root)});
+await writeFile(path.join(root,'dist/THIRD_PARTY_NOTICES.md'),notices.text);
+const hashes = {};
+for (const name of ['workbench.html', 'preview.html','native-relay.html', 'server.mjs', 'local-web.mjs', 'background-workbench.mjs', 'assistant-review-worker.mjs', 'desktop-callback.mjs', 'windows-writer.ps1', 'THIRD_PARTY_NOTICES.md', ...iconAssets.map(name => `assets/${name}`)]) {
+  const bytes = await readFile(path.join(root, 'dist', name));
+  hashes[name] = { size: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') };
+}
+await writeFile(path.join(root, 'dist/build-manifest.json'), JSON.stringify({ schemaVersion: 1, version: pkg.version, node: process.version, dependencies: pkg.dependencies, bundledDependencies:notices.packages, files: hashes }, null, 2));
+console.log(JSON.stringify({ ok: true, files: Object.keys(hashes), version: pkg.version }));

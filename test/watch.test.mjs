@@ -1,0 +1,31 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdir, mkdtemp, writeFile, rm } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { PaperApplication } from '../src/application.mjs';
+
+test('watcher debounces exact project changes, invalidates old review, retains originals and queues compile', async t => {
+  const owned = fileURLToPath(new URL('../work/watch-tests/', import.meta.url)); await mkdir(owned, { recursive: true });
+  const dir = await mkdtemp(path.join(owned, 'case-')); t.after(() => rm(dir, { recursive: true, force: true }));
+  const source = path.join(dir, 'source'); await mkdir(source);
+  const file = path.join(source, 'main.tex'), doc = text => `\\documentclass{article}\n\\begin{document}\n\n${text}\n\n\\end{document}\n`;
+  await writeFile(file, doc('Original claim.'));
+  const app = new PaperApplication({ dataRoot: path.join(dir, 'private') }); await app.openProject({ root: source, mainFile: 'main.tex' });
+  const initial = app.getState(), segment = initial.segments[0];
+  const request = await app.createRequest({ kind: 'revision', segmentIds: [segment.id] });
+  await app.proposeRevision({ requestId: request.requestId, edits: [{ segmentId: segment.id, beforeHash: segment.beforeHash, replacement: 'Proposed claim.' }], reason: 'Synthetic review.' });
+  let builds = 0; app.probe = { available: true, isolated: true }; app.compiler = {};
+  app.compileEnglish = async () => { builds++; return { jobId: 'synthetic-watch-job' }; };
+  app.startWatching({ intervalMs: 20, debounceMs: 25, initialCompile: false }); t.after(() => app.stopWatching());
+  await new Promise(resolve => setTimeout(resolve, 60));
+  await writeFile(file, doc('Changed claim.'));
+  await writeFile(file, doc('Changed author claim.'));
+  const deadline = Date.now() + 5000;
+  while (Date.now() < deadline && builds === 0) await new Promise(resolve => setTimeout(resolve, 25));
+  assert.equal(builds, 1);
+  assert.notEqual(app.getState().project.snapshotId, initial.project.snapshotId);
+  assert.equal(app.getState().proposals[0].reviewState, 'stale');
+  assert.deepEqual(app.getState().originals[segment.id], initial.originals[segment.id]);
+  app.stopWatching();
+});

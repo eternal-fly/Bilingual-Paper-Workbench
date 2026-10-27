@@ -1,0 +1,2 @@
+/** Display history only. Restored rows are never queued for sending again. */
+export function mergeNativeRelayMessages(history,live,projectId){const rows=new Map(),valid=row=>row&&typeof row==='object'&&typeof row.messageId==='string'&&row.messageId.length<=128&&row.projectId===projectId&&typeof row.text==='string';for(const row of Array.isArray(history)?history:[])if(valid(row))rows.set(row.messageId,{...row,historical:true});for(const row of Array.isArray(live)?live:[])if(valid(row))rows.set(row.messageId,{...row});return[...rows.values()].slice(-64);}

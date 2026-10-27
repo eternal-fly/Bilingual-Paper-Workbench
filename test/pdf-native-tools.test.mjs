@@ -1,0 +1,52 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { PaperApplication } from '../src/application.mjs';
+import { createPaperServer } from '../src/server.mjs';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+
+test('native MCP model reads selected PDF and publishes target-language notes in the same chat without a worker', async t => {
+  const parent = fileURLToPath(new URL('../work/pdf-native-tools/', import.meta.url)); await mkdir(parent, { recursive: true });
+  const dir = await mkdtemp(path.join(parent, 'case-')), source = path.join(dir, 'source'); await mkdir(source);
+  await writeFile(path.join(source, 'main.tex'), '\\documentclass{article}\n\\begin{document}\nA precise claim uses $x=1$.\n\nAnother claim.\n\\end{document}');
+  const app = new PaperApplication({ dataRoot: path.join(dir, 'private') }); await app.openProject({ root: source, mainFile: 'main.tex' });
+  const pair = { pairId: 'pair-native', projectId: app.getState().project.id, original: { buildId: 'b1', hash: 'a'.repeat(64), snapshotId: 's0' }, latest: { buildId: 'b2', hash: 'b'.repeat(64), snapshotId: app.getState().project.snapshotId } };
+  app.versionPair = { read: async () => structuredClone(pair), state: () => structuredClone(pair) };
+  const server = createPaperServer({ service: app, uiHtml: '<!doctype html><title>Test</title>' }), client = new Client({ name: 'native-test-chat', version: '1' });
+  const [cs, ss] = InMemoryTransport.createLinkedPair(); await server.connect(ss); await client.connect(cs);
+  t.after(async () => { await client.close(); await server.close(); await app.close(); await rm(dir, { recursive: true, force: true }); });
+  const invoke = async (name, args = {}) => client.callTool({ name, arguments: args });
+  const pending = await invoke('bilingual_paper_get_pdf_context'); assert.equal(pending.structuredContent.error.code, 'PDF_CONTEXT_PENDING');
+  await app.cacheVersionPairContext({ pairContext: { pairId: pair.pairId, original: { hash: pair.original.hash, pageCount: 1, pages: [{ page: 1, text: 'Actual original text' }] }, latest: { hash: pair.latest.hash, pageCount: 1, pages: [{ page: 1, text: 'Actual latest text' }] } } });
+  await app.configureLanguages({ uiLanguage: 'ja', translationLanguage: 'interface' });
+  let selected = await invoke('bilingual_paper_select_pdf', { target: 'latest' }); assert.equal(selected.structuredContent.requestedRole, 'latest');
+  const got = await invoke('bilingual_paper_get_pdf_context'); assert.equal(got.isError, undefined, got._meta?.paperError?.message);
+  const context = got.structuredContent; assert.equal(context.language, 'ja'); assert.deepEqual(context.pdfs.map(p => p.role), ['latest']); assert.equal(context.pdfs[0].pages[0].text, 'Actual latest text');
+  const first = context.paragraphs[0];
+  const submitted = await invoke('bilingual_paper_submit_pdf_review', { requestId: context.requestId, notes: [{ title: '適用範囲', body: '条件を明確にする。', recommendation: '前提を記載する。', suggestedSource: 'State the assumptions.', suggestedTranslation: '前提を記載する。', reasonSource: 'Make the conditions explicit.', reasonTranslation: '条件を明確にする。', quote: '', sourceSegmentIds: [], severity: 'low' }], translations: [{ segmentId: first.segmentId, text: first.text.replace('A precise claim uses', '厳密な主張では') }] });
+  assert.equal(submitted.isError, undefined, submitted._meta?.paperError?.message); assert.equal(submitted.structuredContent.translationsApplied, 1);
+  assert.equal(app.getState().reviewNotes.length, 1); assert.ok(app.getState().translations.ja[first.segmentId].text.includes('$x=1$')); assert.equal(app.chat, null); assert.equal(app.getState().proposals.length, 0);
+  assert.equal((await invoke('bilingual_paper_submit_pdf_review', { requestId: context.requestId, notes: [], translations: [] })).structuredContent.error.code, 'REQUEST_NOT_APPROVED');
+  const raw = await invoke('bilingual_paper_ui', { action: 'configureLanguages', payload: { uiLanguage: 'de' } }); assert.equal(raw.structuredContent.error.code, 'UI_AUTHORIZATION_REQUIRED');
+});
+
+test('native SDK translation-purpose context preserves imported opinions and review generations through atomic return and replay rejection', async t => {
+  const owned = fileURLToPath(new URL('../work/pdf-native-tools/', import.meta.url)); await mkdir(owned, { recursive: true }); const directory = await mkdtemp(path.join(owned, 'translation-')), source = path.join(directory, 'source'); await mkdir(source);
+  await writeFile(path.join(source, 'main.tex'), '\\documentclass{article}\n\\begin{document}\nA protected claim uses $x=1$.\n\\end{document}');
+  const app = new PaperApplication({ dataRoot: path.join(directory, 'private') }); await app.openProject({ root: source, mainFile: 'main.tex' });
+  const pair = { pairId: 'pair-native-translation', projectId: app.getState().project.id, original: { buildId: 'b1', hash: 'a'.repeat(64), snapshotId: 's0' }, latest: { buildId: 'b2', hash: 'b'.repeat(64), snapshotId: app.getState().project.snapshotId } }; app.versionPair = { read: async () => structuredClone(pair), state: () => structuredClone(pair) };
+  await app.cacheVersionPairContext({ pairContext: { pairId: pair.pairId, original: { hash: pair.original.hash, pageCount: 1, pages: [{ page: 1, text: 'Original protected claim' }] }, latest: { hash: pair.latest.hash, pageCount: 1, pages: [{ page: 1, text: 'Latest protected claim' }] } } });
+  await app.importReviewNotes({ filename: 'external-review.txt', format: 'txt', fileHash: 'c'.repeat(64), text: 'Keep the imported concern visible.' });
+  const server = createPaperServer({ service: app, uiHtml: '<!doctype html><title>Translation test</title>' }), client = new Client({ name: 'native-translation-test', version: '1' }), [cs, ss] = InMemoryTransport.createLinkedPair(); await server.connect(ss); await client.connect(cs);
+  t.after(async () => { await client.close(); await server.close(); await app.close(); assert.ok(path.resolve(directory).startsWith(path.resolve(owned) + path.sep)); await rm(directory, { recursive: true, force: true }); });
+  const invoke = (name, input = {}) => client.callTool({ name, arguments: input }), fields = ['reviewNotes', 'reviewBatches', 'reviewHistory', 'reviewHistoryPreferences'], before = app.getState();
+  const got = await invoke('bilingual_paper_get_pdf_context', { purpose: 'translation', includeTranslations: true }); assert.equal(got.isError, undefined, got._meta?.paperError?.message); const context = got.structuredContent; assert.equal(context.purpose, 'translation'); assert.ok(context.instructions.includes('notes=[]'));
+  const payload = { requestId: context.requestId, notes: [], translations: context.paragraphs.map(paragraph => ({ segmentId: paragraph.segmentId, text: paragraph.text.replace('A protected claim uses', '受保护的主张使用') })) };
+  const wrong = await invoke('bilingual_paper_submit_pdf_review', { ...payload, notes: [{ title: 'Unrequested opinion', suggestedSource: 'Keep the claim.', suggestedTranslation: '保留该主张。', reasonSource: 'A reason.', reasonTranslation: '一个理由。', quote: '', sourceSegmentIds: [], severity: 'low' }] }); assert.equal(wrong.structuredContent.error.code, 'TRANSLATION_ONLY_REQUEST'); assert.deepEqual(app.getState(), before);
+  const saved = await invoke('bilingual_paper_submit_pdf_review', payload); assert.equal(saved.isError, undefined, saved._meta?.paperError?.message); assert.equal(saved.structuredContent.purpose, 'translation'); assert.equal(saved.structuredContent.translationsApplied, 1);
+  for (const field of fields) assert.deepEqual(app.getState()[field], before[field]); assert.ok(Object.values(app.getState().translations['zh-CN']).some(draft => draft.text.includes('$x=1$'))); assert.equal(app.chat, null); assert.equal(app.getState().proposals.length, 0);
+  assert.equal((await invoke('bilingual_paper_submit_pdf_review', payload)).structuredContent.error.code, 'REQUEST_NOT_APPROVED');
+});

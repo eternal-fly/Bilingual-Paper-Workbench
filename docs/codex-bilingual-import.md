@@ -1,0 +1,15 @@
+# Explicit bilingual source adapter
+
+`extractBilingualPairs(source,filePath,previousSegments)` recognizes an existing bilingual source convention without expanding arbitrary TeX. It identifies declaration-proven, zero-argument presentation markers whose preserved font-group labels are exactly `EN` and `中`.
+
+The adapter independently reruns the conservative source lexer. It only narrows a parent block that is already safe. A caller-provided `translatable:true` flag cannot enable an unknown environment, dynamic syntax region or ambiguous block. Marker-looking text inside protected math/comments and nested formatting groups cannot become a language boundary.
+
+The supported unit is an English marker, English body, explicit top-level `\par`, Chinese marker and Chinese body inside one safe parent block. Multiple alternating units are accepted only when every boundary is explicit. Repeated labels, unknown/redefined markers, absent delimiters and cross-block associations are skipped.
+
+Returned metadata includes exact UTF-8 English source coordinates, the English hash, and the existing Chinese companion's exact text/coordinates/hash. Marker commands, paragraph delimiters and surrounding environment wrappers remain outside the English editable interval. Existing formula and citation bytes are preserved within the selected English body. BOM, CRLF and multibyte characters retain exact offsets.
+
+The controller should create the editable source segment from the English interval and seed the Chinese draft only when that language/segment has no existing human draft. Use `pair.sourceHash` for the draft's English baseline hash; `pair.existingTranslation.hash` hashes the retained Chinese source bytes. Provenance such as `sourceBilingual` distinguishes a source-provided translation from a newly generated or manually edited draft.
+
+This operation does not write or remove source content, accept a proposal, translate text, or merge historical drafts. The source's Chinese companion stays part of the original file unless the author separately reviews a source patch for it. Controlled source promotion and undo must preserve/reassociate exact segment identities through the transaction layer; a changed pair content hash must not silently discard an existing saved draft.
+
+`extractSegments(source,path,previous,rangeOverrides)` materializes verified English ranges without reparsing the full document for each pair. Each override is `{startByte,endByte,id?}`. The lexer analyzes canonical blocks using the full document's declaration and environment context first, then narrows already-safe parents. Invalid UTF-8 boundaries, overlaps, cross-block ranges, split protected objects and duplicate requested IDs fail closed with `INVALID_RANGE_OVERRIDE`. A prior exact English hash/offset identity wins over an optional requested ID; otherwise the requested ID can retain a single canonical parent identity. Multiple ranges in one parent require distinct IDs. Omitted overrides preserve the original three-argument behavior.

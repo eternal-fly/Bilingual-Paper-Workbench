@@ -1,0 +1,41 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "bilingual-paper-editor",
+  "version": "1.5.1",
+  "description": "Bilingual Paper Workbench: original-format LaTeX PDFs, protected translations and reviews, with model execution in your existing Codex Desktop chat.",
+  "author": {
+    "name": "Luofei"
+  },
+  "keywords": [
+    "latex",
+    "bilingual",
+    "paper",
+    "review"
+  ],
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Bilingual Paper Workbench",
+        "shortDescription": "Read and translate papers with your existing Codex Desktop chat.",
+        "longDescription": "Bilingual Paper Workbench reuses one local three-column paper window. Import LaTeX source and review files, keep the original PDF layout, and edit translations with protected equations and citations. Explicit translation and review requests run in the verified Desktop chat that opened the plugin, retaining its history, model and project directory without a second model writer. Translate the whole paper or chosen paragraph ranges with saved progress, cancellation and explicit resume. Read suggested wording, translations and reasons beside each paragraph. Source revisions and undo require isolated compilation and confirmation. English is the default interface; 46 languages are selectable.",
+        "developerName": "Luofei",
+        "brandColor": "#20364d",
+        "logo": "./dist/assets/paper-editor-256.png",
+        "logoDark": "./dist/assets/paper-editor-256.png",
+        "composerIcon": "./dist/assets/paper-editor-32.png",
+        "category": "Productivity",
+        "capabilities": [
+          "interactive",
+          "read",
+          "write"
+        ],
+        "defaultPrompt": [
+          "FIRST open bilingual_paper_editor with the sourcePath and reviews explicitly supplied by me. Reuse its existing session window and verified originating Desktop chat. Use bilingual_paper_import_files for later imports; do not create another panel, invent a chat ID, or use shell extraction or manual file dialogs.",
+          "Run explicit translation, discussion and review requests in this existing Desktop chat. A whole-paper or paragraph-range translation is one approved task: continue its protected get_request and submit_translation_result batch loop in the same turn until completed, paused or cancelled. Use the packaged callback transport when supplied; do not start another model worker or acquire a second chat writer.",
+          "Review the selected original/latest PDFs and return suggested wording, its target-language translation and reasons through the approved paper tools. Preserve review evidence and current source identities.",
+          "Use approved selection requests for source candidates and compile safely. Applying source changes and undo require my exact UI confirmation. Do not add unrelated model requests."
+        ]
+      }
+    }
+  }
+}
