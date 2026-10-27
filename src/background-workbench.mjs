@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
-import { readFile, writeFile, mkdir, lstat, realpath, rename, unlink } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, lstat, realpath, rename, unlink, open } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 
 const PACKAGE_ROOT = fileURLToPath(new URL('../', import.meta.url));
@@ -21,6 +21,24 @@ async function boundedJson(filename, maximum = 16384) {
   const info = await lstat(filename);
   if (!info.isFile() || info.isSymbolicLink() || info.size > maximum) fail('BACKGROUND_HANDOFF_INVALID', 'The private launch record is not a bounded regular file.');
   return JSON.parse(await readFile(filename, 'utf8'));
+}
+async function installedBytes(filename,maximum,{optional=false}={}){
+  let before;try{before=await lstat(filename);}catch(error){if(optional&&error.code==='ENOENT')return null;fail('BACKGROUND_CONFIG_INVALID','The installed runtime build is unavailable.');}
+  const same=(a,b)=>a.dev===b.dev&&a.ino===b.ino&&a.size===b.size&&a.mtimeMs===b.mtimeMs&&a.ctimeMs===b.ctimeMs;
+  if(!before.isFile()||before.isSymbolicLink()||before.size>maximum||!samePath(await realpath(filename),filename))fail('BACKGROUND_CONFIG_INVALID','The installed runtime build must be a bounded regular file.');
+  let handle;try{
+    handle=await open(filename,'r');if(!same(before,await handle.stat()))fail('BACKGROUND_CONFIG_INVALID','The installed runtime build changed while it was opened.');
+    const chunks=[];let size=0;for(;;){const buffer=Buffer.allocUnsafe(Math.min(256*1024,maximum+1-size)),part=await handle.read(buffer,0,buffer.length,null);if(!part.bytesRead)break;size+=part.bytesRead;if(size>maximum)fail('BACKGROUND_CONFIG_INVALID','The installed runtime build exceeds its byte budget.');chunks.push(buffer.subarray(0,part.bytesRead));}
+    const after=await handle.stat(),named=await lstat(filename);if(size!==before.size||!same(before,after)||!same(before,named)||!named.isFile()||named.isSymbolicLink()||!samePath(await realpath(filename),filename))fail('BACKGROUND_CONFIG_INVALID','The installed runtime build changed during identity verification.');
+    return Buffer.concat(chunks,size);
+  }catch(error){if(error.code==='BACKGROUND_CONFIG_INVALID')throw error;fail('BACKGROUND_CONFIG_INVALID','The installed runtime build could not be verified.');}finally{await handle?.close();}
+}
+async function installedBuildFingerprint(entry,pluginRoot,version){
+  const bytes=await installedBytes(entry,16*1024*1024),entryHash=digest(bytes),manifestBytes=await installedBytes(path.join(pluginRoot,'dist/build-manifest.json'),256*1024,{optional:true});
+  if(!manifestBytes)return digest(JSON.stringify({entryHash}));
+  let manifest;try{manifest=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(manifestBytes));}catch{fail('BACKGROUND_CONFIG_INVALID','The installed build manifest is unreadable.');}
+  const expected=manifest?.files?.['background-workbench.mjs'];if(manifest?.schemaVersion!==1||manifest.version!==version||expected?.size!==bytes.length||expected?.sha256!==entryHash)fail('BACKGROUND_CONFIG_INVALID','The installed background entry does not match its exact versioned build manifest.');
+  return digest(JSON.stringify({entryHash,manifestHash:digest(manifestBytes)}));
 }
 async function directory(root, name) {
   const result = path.join(root, name);
@@ -61,6 +79,7 @@ async function loadProfile({ pluginRoot, dataRoot, record, binding = null, launc
   if (!config || !path.isAbsolute(config.command || '') || !env || !samePath(await realpath(env.PAPER_EDITOR_DATA_ROOT || '').catch(() => ''), dataRoot) || env.PAPER_EDITOR_INSTALL_VERSION !== version) fail('BACKGROUND_CONFIG_INVALID', 'The installed background profile does not match its private data root and version.');
   const command = await realpath(config.command).catch(() => null), entry = path.join(pluginRoot, 'dist/background-workbench.mjs');
   for (const filename of [command, entry]) { const info = filename && await lstat(filename).catch(() => null); if (!info?.isFile() || info.isSymbolicLink()) fail('BACKGROUND_CONFIG_INVALID', 'The installed background runtime is unavailable.'); }
+  const buildFingerprint=await installedBuildFingerprint(entry,pluginRoot,version);
   let projectRoot = null;
   if (!onboarding) {
     projectRoot = await realpath(record.projectRoot); const projectInfo = await lstat(projectRoot);
@@ -71,7 +90,7 @@ async function loadProfile({ pluginRoot, dataRoot, record, binding = null, launc
   const configHash = digest(JSON.stringify({ command, env: configuredEnv }));
   // Desktop and cached plugin copies share the same user-private installation.
   // Their exact task must reach one daemon even when the executable path differs.
-  const key = digest(JSON.stringify({ dataRoot: dataRoot.toLowerCase(), record: onboarding ? { launchId } : { ...record, projectRoot: projectRoot.toLowerCase(), mainFile: record.mainFile.toLowerCase() }, ...(originThreadId ? { originThreadId } : {}), ...(viewerOnly ? { viewerOnly: true } : {}), version })).slice(0, 32);
+  const key = digest(JSON.stringify({ dataRoot: dataRoot.toLowerCase(), record: onboarding ? { launchId } : { ...record, projectRoot: projectRoot.toLowerCase(), mainFile: record.mainFile.toLowerCase() }, ...(originThreadId ? { originThreadId } : {}), ...(viewerOnly ? { viewerOnly: true } : {}), version,buildFingerprint })).slice(0, 32);
   const controlRoot = await directory(dataRoot, 'background'), handoffRoot = await directory(controlRoot, 'handoffs');
   return { pluginRoot, dataRoot, record, binding, launchId: onboarding ? launchId : null, originThreadId, hostProject, viewerOnly, version, configFile, command, entry, env: configuredEnv, configHash, key, controlRoot, handoffRoot, sessionFile: path.join(controlRoot, `${key}.json`), lockFile: path.join(controlRoot, `${key}.lock`) };
 }

@@ -60,7 +60,7 @@ const presentationCommands = new Set(['par', 'noindent', 'normalfont', 'rmfamily
 const fontCommands = new Set(['normalfont', 'rmfamily', 'sffamily', 'ttfamily', 'mdseries', 'bfseries', 'upshape', 'itshape', 'slshape', 'scshape', 'tiny', 'scriptsize', 'footnotesize', 'small', 'normalsize', 'large', 'Large', 'LARGE', 'huge', 'Huge']);
 const namedColor = value => typeof value === 'string' && /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(value);
 
-function purePresentationBody(body) {
+export function purePresentationBody(body) {
   if (body.length > 512) return false;
   const groups = [];
   let labelLength = 0;

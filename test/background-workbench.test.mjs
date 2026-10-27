@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { pathToFileURL } from 'node:url';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import {createHash} from 'node:crypto';
 import { ensureBackgroundWorkbench, readBackgroundSession, runBackgroundWorkbench, openConfiguredWorkbench, signHostProjectRefresh, signProjectWindowHandoff } from '../src/background-workbench.mjs';
 import { createApplication } from '../src/runtime.mjs';
 import { WorkspaceService } from '../src/workspace-service.mjs';
@@ -60,6 +61,28 @@ test('identical installed copies reuse the same private task daemon for Desktop 
   const first = await ensureBackgroundWorkbench({ ...options, spawnAdapter, probeAdapter: async () => true });
   const second = await ensureBackgroundWorkbench({ ...options, pluginRoot: otherRoot, spawnAdapter: () => { throw Error('A second installation must not start a competing paper daemon.'); }, probeAdapter: async () => true });
   assert.equal(second.reused, true); assert.equal(first.sessionFile, second.sessionFile); assert.equal(launches, 1);
+});
+
+test('a changed same-version background build gets a new content owner without closing the old window',async t=>{
+ const options=await fixture(t);let launches=0,closed=0;const spawnAdapter=(_command,args)=>{launches++;queueMicrotask(async()=>{const handle=await runBackgroundWorkbench({descriptorFile:args.at(-1),pluginRoot:options.pluginRoot,createService:async()=>({getState:()=>({project:{mainFile:'main.tex'},workspaceIndex:{currentRecord:options.record}}),openProject:async()=>{},prepareBackgroundBinding:async()=>{},startWatching(){},async close(){closed++;}}),startWeb:async()=>({url:`http://127.0.0.1:12345/#session=${'v'.repeat(43)}`,async close(){}}),registerSignals:false});options.onCleanup(()=>handle.close());});return{pid:process.pid,unref(){},once(){}};};
+ const first=await ensureBackgroundWorkbench({...options,spawnAdapter,probeAdapter:async()=>true}),oldBytes=await readFile(first.sessionFile);await writeFile(path.join(options.pluginRoot,'dist/background-workbench.mjs'),'// synthetic changed same-version entry');const second=await ensureBackgroundWorkbench({...options,spawnAdapter,probeAdapter:async()=>true});
+ assert.equal(second.reused,false);assert.notEqual(second.sessionFile,first.sessionFile);assert.equal(launches,2);assert.equal(closed,0);assert.deepEqual(await readFile(first.sessionFile),oldBytes);
+ const copy=path.join(path.dirname(options.pluginRoot),'same-build-copy');await mkdir(path.join(copy,'dist'),{recursive:true});await writeFile(path.join(copy,'dist/background-workbench.mjs'),await readFile(path.join(options.pluginRoot,'dist/background-workbench.mjs')));await writeFile(path.join(copy,'mcp.json'),await readFile(path.join(options.pluginRoot,'mcp.json')));const reused=await ensureBackgroundWorkbench({...options,pluginRoot:copy,spawnAdapter:()=>{throw Error('Identical runtime content must reuse its task daemon.');},probeAdapter:async()=>true});assert.equal(reused.reused,true);assert.equal(reused.sessionFile,second.sessionFile);assert.equal(closed,0);
+});
+
+test('same-version UI build identity changes daemon key and inconsistent installed manifests never spawn',async t=>{
+ const options=await fixture(t),entry=await readFile(path.join(options.pluginRoot,'dist/background-workbench.mjs')),sha=bytes=>createHash('sha256').update(bytes).digest('hex'),manifest={schemaVersion:1,version:options.version,files:{'background-workbench.mjs':{size:entry.length,sha256:sha(entry)},'workbench.html':{size:3,sha256:sha('old')}}};await writeFile(path.join(options.pluginRoot,'dist/build-manifest.json'),JSON.stringify(manifest));let launches=0;
+ const spawnAdapter=(_command,args)=>{launches++;queueMicrotask(async()=>{const handle=await runBackgroundWorkbench({descriptorFile:args.at(-1),pluginRoot:options.pluginRoot,createService:async()=>({getState:()=>({project:{mainFile:'main.tex'},workspaceIndex:{currentRecord:options.record}}),openProject:async()=>{},prepareBackgroundBinding:async()=>{},startWatching(){},async close(){}}),startWeb:async()=>({url:`http://127.0.0.1:12345/#session=${'u'.repeat(43)}`,async close(){}}),registerSignals:false});options.onCleanup(()=>handle.close());});return{pid:process.pid,unref(){},once(){}};};
+ const first=await ensureBackgroundWorkbench({...options,spawnAdapter,probeAdapter:async()=>true});manifest.files['workbench.html']={size:3,sha256:sha('new')};await writeFile(path.join(options.pluginRoot,'dist/build-manifest.json'),JSON.stringify(manifest));const second=await ensureBackgroundWorkbench({...options,spawnAdapter,probeAdapter:async()=>true});assert.notEqual(first.sessionFile,second.sessionFile);assert.equal(second.reused,false);assert.equal(launches,2);
+ manifest.files['background-workbench.mjs'].sha256=sha('not the installed entry');await writeFile(path.join(options.pluginRoot,'dist/build-manifest.json'),JSON.stringify(manifest));await assert.rejects(ensureBackgroundWorkbench({...options,spawnAdapter:()=>{launches++;throw Error('Do not spawn inconsistent installed bytes.');},probeAdapter:async()=>true}),{code:'BACKGROUND_CONFIG_INVALID'});assert.equal(launches,2);
+});
+
+test('installed build replacement revokes an already signed descriptor before any service is opened',async t=>{
+ const options=await fixture(t);let descriptorFile,opened=0;await assert.rejects(ensureBackgroundWorkbench({...options,timeoutMs:30,spawnAdapter:(_command,args)=>{descriptorFile=args.at(-1);return{pid:process.pid,unref(){},once(){}};},probeAdapter:async()=>false}),{code:'BACKGROUND_NOT_READY'});await writeFile(path.join(options.pluginRoot,'dist/background-workbench.mjs'),'// replacement after descriptor was signed');await assert.rejects(runBackgroundWorkbench({descriptorFile,pluginRoot:options.pluginRoot,createService:async()=>{opened++;},registerSignals:false}),{code:'BACKGROUND_HANDOFF_INVALID'});assert.equal(opened,0);
+});
+
+test('oversized or malformed installed build identity never launches or rewrites an existing session',async t=>{
+ const options=await fixture(t);let launches=0;const spawnAdapter=()=>{launches++;throw Error('Unverified runtime must not launch.');},entry=path.join(options.pluginRoot,'dist/background-workbench.mjs');await writeFile(entry,Buffer.alloc(16*1024*1024+1));await assert.rejects(ensureBackgroundWorkbench({...options,spawnAdapter}),{code:'BACKGROUND_CONFIG_INVALID'});await writeFile(entry,'// restored synthetic entry');await writeFile(path.join(options.pluginRoot,'dist/build-manifest.json'),Buffer.from([0x7b,0x22,0x78,0x22,0x3a,0x22,0xff,0x22,0x7d]));await assert.rejects(ensureBackgroundWorkbench({...options,spawnAdapter}),{code:'BACKGROUND_CONFIG_INVALID'});assert.equal(launches,0);
 });
 
 test('a caller cannot replace both signed launch and origin identities before any chat verification', async t => {

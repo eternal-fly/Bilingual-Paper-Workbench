@@ -1,7 +1,7 @@
 import { deriveEnglishWriteback } from './writeback-state.mjs';
 
 /** Only an explicit author click can obtain and consume source confirmation. */
-export function initializeEnglishWriteback({ api, getState, getLanguage, getInterfaceLanguage = () => 'en', getBuffers = () => [], flushDrafts, refreshState, getBusy = () => false, getBusyReason = () => '', notify, lockEditing = () => {}, onCompile = () => {}, onPrepareRequest = () => {}, onApplied = async () => {} }) {
+export function initializeEnglishWriteback({ api, getState, getLanguage, getInterfaceLanguage = () => 'en', getBuffers = () => [], flushDrafts, refreshState, getBusy = () => false, getBusyReason = () => '', notify, lockEditing = () => {}, onCompile = () => {}, onPrepareRequest = () => {}, onReviewSource = null, onApplied = async () => {} }) {
   const button = document.getElementById('writeback-english'), status = document.getElementById('writeback-status');
   let busy = false, lastSuccess = false, successIdentity = '';
   const copy = (english, chinese) => getInterfaceLanguage().startsWith('zh') ? chinese : english;
@@ -40,6 +40,10 @@ export function initializeEnglishWriteback({ api, getState, getLanguage, getInte
         notify(copy('English candidate compilation queued. Review its PDF, then click Write back English; nothing is applied automatically.', '英文候选已进入编译队列。检查 PDF 后点击“写回英文”；不会自动写回。')); return;
       }
       if (selected.mode !== 'ready' || !getState().capabilities?.directApply) throw Error(copy('The complete current English candidate is not ready for writeback.', '完整的当前英文候选尚未就绪，不能写回。'));
+      if (selected.transaction.requiresHumanSourceReview || selected.proposalIds.some(id => getState().proposals?.find(proposal => proposal.proposalId === id)?.context?.mode === 'source-review')) {
+        if (!onReviewSource) throw Error(copy('Review the complete TeX source candidate in Revisions before confirming writeback.', '请在修订中检查完整 TeX 源码候选并确认写回。'));
+        await onReviewSource(selected.transaction); return;
+      }
       const prepared = await api('prepareAcceptance', { transactionId: selected.transaction.transactionId });
       await refreshState();
       const current = plan();

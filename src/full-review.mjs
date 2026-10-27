@@ -129,7 +129,7 @@ export class ReviewWorkflow {
       await this.app.core._commit(next); this.app.emit('change'); return batch;
     }));
   }
-  async setDecision(input) {
+  async setDecision(input, { beforeWrite = null } = {}) {
     if (!input || typeof input !== 'object' || Array.isArray(input) || Object.keys(input).some(key => !['noteId', 'expectedRevision', 'decision'].includes(key)) || typeof input.noteId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/u.test(input.noteId) || !Number.isSafeInteger(input.expectedRevision) || input.expectedRevision < 1 || input.expectedRevision >= Number.MAX_SAFE_INTEGER || !['pending', 'adopt', 'revise', 'keep'].includes(input.decision)) fail('INVALID_INPUT', 'Choose one exact review note, current revision and review decision.');
     return this.app._projectOperation(() => this.app.core._serial(async () => {
       const next = this.app.core.getState(), note = next.reviewNotes?.find(item => item.noteId === input.noteId);
@@ -146,6 +146,7 @@ export class ReviewWorkflow {
       const externalValidation = note.origin === 'external' ? validateExternalReviewNote(note, current) : null;
       const sourceCurrent = externalValidation ? externalValidation.status === 'current' || externalValidation.status === 'unlocated' && note.sourceSnapshotId === current.project.snapshotId : note.sourceSnapshotId === current.project.snapshotId && Array.isArray(anchors) && anchors.every(id => known.has(id) && note.sourceHashes?.[id] === known.get(id));
       if (['adopt', 'revise'].includes(input.decision) && !sourceCurrent) fail('REVIEW_NOTE_STALE', 'This opinion no longer matches the current source snapshot or anchors. Only pending or keep is available until it is revalidated.');
+      if (beforeWrite) await beforeWrite();
       const sameDecisionScope = JSON.stringify(note.decisionSourceSegmentIds || []) === JSON.stringify(anchors) && Object.keys(note.decisionSourceHashes || {}).length === anchors.length && anchors.every(id => note.decisionSourceHashes?.[id] === known.get(id));
       if ((note.decision || 'pending') === input.decision && (!['adopt', 'revise'].includes(input.decision) || note.decisionSnapshotId === current.project.snapshotId && sameDecisionScope)) return { ...note, decision: input.decision, idempotent: true };
       // This records author intent only. Resolution status is independent; no
@@ -154,11 +155,12 @@ export class ReviewWorkflow {
       await this.app.core._commit(next); this.app.emit('change'); return note;
     }));
   }
-  async resolve({ noteId, expectedRevision, resolved }) {
+  async resolve({ noteId, expectedRevision, resolved }, { beforeWrite = null } = {}) {
     return this.app.core._serial(async () => {
       const state = this.app.core.getState(), note = state.reviewNotes?.find(item => item.noteId === noteId);
       if (!note || note.revision !== expectedRevision) fail('VERSION_CONFLICT', 'The annotation changed.');
       if (typeof resolved !== 'boolean') fail('INVALID_INPUT', 'Choose whether the annotation is resolved.');
+      if (beforeWrite) await beforeWrite();
       Object.assign(note, { status: resolved ? 'resolved' : 'open', revision: note.revision + 1, updatedAt: now() });
       await this.app.core._commit(state); this.app.emit('change'); return note;
     });

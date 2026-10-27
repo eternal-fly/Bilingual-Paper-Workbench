@@ -98,7 +98,7 @@ export async function dispatchBackgroundRequest({ url, action, payload = {}, tim
 
 /** The invoking MCP process may stop without taking down this paper window. */
 export class BackgroundWindowController {
-  constructor({ service, dataRoot, pluginRoot = ROOT, version = process.env.PAPER_EDITOR_INSTALL_VERSION || '1.6.2', instanceId = null, ensure = ensureBackgroundWorkbench, readSession = readBackgroundSession, launchWindow = openNormalEdgeWindow, dispatchRequest = dispatchBackgroundRequest, signProjectRefresh = signHostProjectRefresh }) {
+  constructor({ service, dataRoot, pluginRoot = ROOT, version = process.env.PAPER_EDITOR_INSTALL_VERSION || '1.6.3', instanceId = null, ensure = ensureBackgroundWorkbench, readSession = readBackgroundSession, launchWindow = openNormalEdgeWindow, dispatchRequest = dispatchBackgroundRequest, signProjectRefresh = signHostProjectRefresh }) {
     Object.assign(this, { service, dataRoot, pluginRoot, version, instanceId, ensure, readSession, launchWindow, dispatchRequest, signProjectRefresh }); this.pending = null; this.options = null; this.syncedHostProject = null;
   }
   open({ bootstrapHostProject = true } = {}) { if (this.pending) return this.pending; this.pending = this._open({ bootstrapHostProject }).finally(() => { this.pending = null; }); return this.pending; }

@@ -1,6 +1,8 @@
 import { deriveEnglishView } from './english-view.mjs';
 import { restoreProtected, sha256 } from './latex.mjs';
 import {standaloneFormulaSource} from './formula-edits.mjs';
+import {sourceInvocationFences} from './inline-source-invocations.mjs';
+import {STATIC_FONT_PROFILE_HELPERS as fontProfileHelpers,isStaticFontProfileBody,mentionsStaticFontHelper as helperMention} from './static-font-profile.mjs';
 
 const fail = (code, message) => { throw Object.assign(new Error(message), { code }); };
 const syntax = /[\\$%{}&#^_~\u0000-\u0008\u000b\u000c\u000e-\u001f]/u;
@@ -53,29 +55,7 @@ const shimBodies = new Map([
   ['@sanitize@url', String.raw`\catcode\x60\\12\catcode\x60\$12\catcode\x60\&12\catcode\x60\#12\catcode\x60\^12\catcode\x60\_12\catcode\x60\%12\relax`.replaceAll('\\x60', '`')],
   ['BibitemShut', String.raw`\csnamebibitem#1\endcsname`],
 ]);
-// One literal stock LaTeX size-11 profile. It changes font/display spacing only;
-// no expansion, dimensions, controls or caller-defined helper is inferred.
-const staticFontProfile = String.raw`\@setfontsize\normalsize{10.95}{13.6}
-\abovedisplayskip 11pt plus 3pt minus 6pt
-\abovedisplayshortskip 0pt plus 3pt
-\belowdisplayshortskip 6.5pt plus 3.5pt minus 3pt
-\belowdisplayskip \abovedisplayskip
-\let\@listi\@listI`;
-const fontProfileHelpers = new Set(['@setfontsize', '@listi', '@listI', 'let', 'abovedisplayskip', 'abovedisplayshortskip', 'belowdisplayshortskip', 'belowdisplayskip']);
 const dynamicNameControls = new Set(['@namedef', '@nameuse', '@namelet', 'csdef', 'csgdef', 'csedef', 'csxdef', 'cslet', 'csletcs', 'csundef', 'letcs', 'cspreto', 'csappto', 'csgpreto', 'csgappto', 'csepreto', 'cseappto', 'csxpreto', 'csxappto']);
-function fontProfileSignature(value) {
-  if (typeof value !== 'string' || value.length > 4096) return null;
-  const tokens = []; let at = 0;
-  while (at < value.length) {
-    if (/[ \t\r\n]/u.test(value[at])) { at++; continue; }
-    if (value[at] === '%') { const end = value.indexOf('\n', at); at = end < 0 ? value.length : end + 1; continue; }
-    const rest = value.slice(at), found = /^(?:\\[A-Za-z@]+|\\[^\r\n]|[A-Za-z@]+|[0-9.]+)/u.exec(rest);
-    const token = found?.[0] || value[at]; tokens.push(token); at += token.length;
-  }
-  return JSON.stringify(tokens);
-}
-const staticFontProfileSignature = fontProfileSignature(staticFontProfile);
-const helperMention = value => [...fontProfileHelpers].some(name => value.includes(`\\${name}`) || value === name || value.includes(`cmd/${name}/`));
 function lexicalSafety(source) {
   // TeX expands ^^ notation before tokenizing comments or control sequences.
   if (source.includes('^^')) return false;
@@ -93,7 +73,7 @@ function lexicalSafety(source) {
       const argumentShape = token.groups.map(item => source[item.start]).join('');
       const knownShim = token.name === 'providecommand' && argumentShape === (token.unbracedTarget ? '[{' : '{[{') && parameters.length === 1 && parameters[0].inner === arity && (Array.isArray(allowed) ? allowed.includes(body) : allowed === body);
       const fontBody = token.groups.filter(item => source[item.start] === '{').at(-1)?.inner;
-      const knownFontProfile = token.name === 'renewcommand' && token.target === 'normalsize' && argumentShape === (token.unbracedTarget ? '{' : '{{') && fontProfileSignature(fontBody) === staticFontProfileSignature;
+      const knownFontProfile = token.name === 'renewcommand' && token.target === 'normalsize' && argumentShape === (token.unbracedTarget ? '{' : '{{') && isStaticFontProfileBody(fontBody);
       if ((fixedControls.has(token.target) || formatting.has(token.target) || criticalSyntaxControls.has(token.target)) && !knownShim && !knownFontProfile) return false;
       if (fontProfileHelpers.has(token.target)) return false;
       // This exact token stream contains no lexical operation. Skip it as one
@@ -135,12 +115,14 @@ function environmentEnd(source, first) {
   }
   fail('UNSUPPORTED_TEX', 'Unclosed protected environment.');
 }
-export function protectLiteralRange(source, id) {
+export function protectLiteralRange(source, id, {inlineStructureSafety}={}) {
   const protectedTokens = []; let displayText = '';
+  const profile=inlineStructureSafety,fences=profile?sourceInvocationFences(source,{bindings:profile.literalBindings||{},uncertainControls:profile.uncertainControls||[],reboundControls:profile.reboundControls||[],symbolControls:profile.symbolControls,opaqueSymbolArity:profile.opaqueSymbolArity===true,unboundedBindings:profile.unboundedBindings===true}).spans:[],byStart=new Map(fences.map(span=>[span.start,span]));
   const protect = raw => { const token = { id: `⟦P${protectedTokens.length + 1}_${sha256(id).slice(0, 6)}⟧`, raw }; protectedTokens.push(token); displayText += token.id; };
-  const walk = text => { let depth = 0;
+  const walk = (text,offset=0) => { let depth = 0;
   for (let at = 0; at < text.length;) {
     const start = at, character = text[at];
+    const fence=byStart.get(offset+at);if(fence){const end=fence.end-offset;if(end>text.length)fail('UNSUPPORTED_TEX','An unproved consumer crosses a transparent source group.');protect(text.slice(at,end));at=end;continue;}
     if (character === '%') { const end = text.indexOf('\n', at); at = end < 0 ? text.length : end + 1; protect(text.slice(start, at)); continue; }
     if (character === '$' || character === '\\' && ['(', '['].includes(text[at + 1])) {
       const delimiter = character === '$' ? text[at + 1] === '$' ? '$$' : '$' : text.slice(at, at + 2), ending = delimiter === '\\(' ? '\\)' : delimiter === '\\[' ? '\\]' : delimiter;
@@ -155,7 +137,9 @@ export function protectLiteralRange(source, id) {
       if (formatting.has(token.name)) {
         const required = formatting.get(token.name), groups = token.groups.filter(item => text[item.start] === '{');
         if (groups.length !== required) fail('UNSUPPORTED_TEX', 'A text command has unsupported arguments.');
-        const body = groups.at(-1); protect(text.slice(start, body.start + 1)); walk(body.inner); protect('}'); at = token.end; continue;
+        const body = groups.at(-1),crossing=fences.some(span=>span.start>=offset+body.start+1&&span.start<offset+body.end-1&&span.end>offset+body.end-1);
+        if(crossing){protect(text.slice(start));at=text.length;continue;}
+        protect(text.slice(start, body.start + 1)); walk(body.inner,offset+body.start+1); protect('}'); at = token.end; continue;
       }
       if (token.name && !fixedControls.has(token.name) && !'\\%&#_$^~{} ,;:!\'"`=-/'.includes(token.name)) fail('UNSUPPORTED_TEX', 'An unknown dynamic control cannot acquire literal authority.');
       at = token.end; protect(text.slice(start, at)); continue;
@@ -173,12 +157,14 @@ export function prepareRangeFile(source, filePath, view = null) {
   const projection = view || deriveEnglishView(source, filePath);
   return { source, filePath, bytes: Buffer.from(source), fileHash: sha256(source), projection, lexicalSafe: projection.supported && lexicalSafety(source) };
 }
-export function authorizeReadingRange(prepared, anchor, snapshotId) {
-  if (!prepared.lexicalSafe || !anchor || !Number.isSafeInteger(anchor.startByte) || !Number.isSafeInteger(anchor.endByte)) return null;
+export function authorizeReadingRange(prepared, anchor, snapshotId, {inlineStructureSafety}={}) {
+  const profile=inlineStructureSafety,profileIdentity=profile?.schemaVersion===1&&profile.snapshotId===snapshotId&&/^[a-f0-9]{64}$/u.test(profile.fingerprint||''),profileCurrent=profileIdentity&&profile.literalSyntaxStable===true;
+  if(profileIdentity&&profile.unboundedBindings)return null;
+  if ((!prepared.lexicalSafe&&!profileCurrent) || !prepared.projection.supported || !anchor || !Number.isSafeInteger(anchor.startByte) || !Number.isSafeInteger(anchor.endByte)) return null;
   const range = prepared.projection.paragraphs.find(item => item.startByte === anchor.startByte && item.endByte === anchor.endByte && item.sourceHash === anchor.sourceHash);
   if (!range || range.sourceCandidateEligible === false && !(range.kind==='math'&&standaloneFormulaSource(range.source)) || anchor.path !== prepared.filePath || !anchor.id || prepared.bytes.subarray(anchor.startByte, anchor.endByte).toString('utf8') !== range.source) return null;
   try {
-    const protectedRange = protectLiteralRange(range.source, anchor.id);
+    const protectedRange = protectLiteralRange(range.source, anchor.id,{inlineStructureSafety:profileCurrent?profile:undefined});
     const sourceAuthority = { kind: 'literal-reading-v1', snapshotId, path: anchor.path, startByte: anchor.startByte, endByte: anchor.endByte, sourceHash: anchor.sourceHash, fileHash: prepared.fileHash, skeletonHash: protectedRange.skeletonHash };
     return { ...range, ...protectedRange, id: anchor.id, path: anchor.path, beforeHash: anchor.sourceHash, sourceHash: anchor.sourceHash, translatable: true, sourceAuthority };
   } catch { return null; }

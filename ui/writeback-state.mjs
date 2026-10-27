@@ -41,7 +41,7 @@ export function deriveEnglishWriteback(state, language, buffers = []) {
     if (appliedDraft(state, language, id, sources)) continue;
     const source = sources.get(id), alignment = (state.alignments || []).find(item => item.language === language && item.translationUnitIds?.includes(id));
     const aligned = !alignment || !alignment.stale && alignment.status !== 'stale' && alignment.sourceSegmentIds?.length === 1 && alignment.sourceSegmentIds[0] === id && alignment.translationUnitIds?.length === 1;
-    if (!source || !aligned || draft.unitKind === 'split' || source.writableSource === false || source.translatable === false || draft.sourceHash && draft.sourceHash !== sourceHash(source)) blockedIds.push(id);
+    if (!source || !aligned || draft.unitKind === 'split' || source.writableSource === false && !source.sourceReviewAvailable || source.translatable === false || draft.sourceHash && draft.sourceHash !== sourceHash(source)) blockedIds.push(id);
     rows.push({ id, revision: draft.revision || 0, text: draft.text || '', hash: sourceHash(source), draftSourceHash: draft.sourceHash || null });
   }
   const unsaved = buffers.filter(buffer => (!buffer.language || buffer.language === language) && buffer.state !== 'saved');

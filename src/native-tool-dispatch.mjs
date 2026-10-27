@@ -8,6 +8,7 @@ export const BACKGROUND_MODEL_TOOLS = new Set([
   'bilingual_paper_get_request', 'bilingual_paper_propose_revision',
   'bilingual_paper_read_project','bilingual_paper_read_paragraphs','bilingual_paper_prepare_request','bilingual_paper_prepare_translation_task',
   'bilingual_paper_read_editor_drafts','bilingual_paper_save_editor_draft','bilingual_paper_reconcile_translation_draft',
+  'bilingual_paper_workbench','bilingual_paper_edit_translation',
   'bilingual_paper_get_display_preferences','bilingual_paper_configure_display_preferences',
   'bilingual_paper_control_translation_task','bilingual_paper_configure_languages',
   'bilingual_paper_submit_translation_result', 'bilingual_paper_submit_chat_reply', 'bilingual_paper_compile',
@@ -48,7 +49,7 @@ async function invoke(service, input) {
     if (current) { sessions.delete(service); await current.client.close(); await current.server.close(); }
     const { createPaperServer } = await import('./server.mjs');
     const server = createPaperServer({ service, instanceId: input.bindingId, nativeThreadId: input.originThreadId || null, uiHtml: '<!doctype html>' });
-    const client = new Client({ name: 'paper-background-model-channel', version: '1.6.2' });
+    const client = new Client({ name: 'paper-background-model-channel', version: '1.6.3' });
     try {
       const [cs, ss] = InMemoryTransport.createLinkedPair(); await server.connect(ss); await client.connect(cs);
       current = { bindingId: input.bindingId, originThreadId: input.originThreadId || null, server, client }; sessions.set(service, current);

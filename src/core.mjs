@@ -6,7 +6,8 @@ import { commands, extractSegments, restoreProtected, sha256 } from './latex.mjs
 import { extractBilingualPairs } from './bilingual-import.mjs';
 import { prepareRangeFile, authorizeReadingRange, maskRawReplacement, literalLexicalSafety } from './range-authority.mjs';
 import {reconcileFormulaDraft,captureFormulaRequest,formulaSourceForRequest,formulaDraftFromState,carryFormulaDraft,requestDraft,validateDraftSourceReplacement} from './formula-edits.mjs';
-import {inlineStructureSafetyForFiles} from './inline-structures.mjs';
+import {inlineStructureSafetyForFiles,INLINE_STRUCTURE_POLICY_VERSION} from './inline-structures.mjs';
+import {sourceReviewSource,sourceReviewManifest,captureSourceReviewSegment,assertSourceReviewRequest,validateSourceReviewReplacement,sourceReviewCandidate,sourceReviewInstructions} from './source-review.mjs';
 
 const MAX_FILE = 4 * 1024 * 1024;
 const MAX_TREE = 32 * 1024 * 1024;
@@ -89,7 +90,32 @@ export class PaperService {
     this._files = new Map();
     this._queue = Promise.resolve();
   }
-  getState() { return copy(this._state); }
+  getState() { this._refreshInlineStructureSafety(); return copy(this._state); }
+  _refreshInlineStructureSafety() {
+    const project=this._state.project,files=this._files;
+    if(!project||!this._root||!this._store||!Array.isArray(project.files)||!project.files.length)return false;
+    const identity=sha256(JSON.stringify([INLINE_STRUCTURE_POLICY_VERSION,project.id,project.snapshotId,project.files]));
+    const cached=this._inlineSafetyCache;
+    const cacheCurrent=cached?.identity===identity&&cached.files===files&&cached.entries.length===files.size&&cached.entries.every(([name,file,bytes,text,hash,size])=>files.get(name)===file&&file.bytes===bytes&&file.text===text&&file.hash===hash&&file.bytes?.length===size);
+    let profile;
+    if(cacheCurrent)profile=cached.profile;
+    else {
+      const sourceSnapshot=`snap-${sha256(JSON.stringify({mainFile:project.mainFile,files:project.files}))}`;
+      if(sourceSnapshot!==project.snapshotId||files.size!==project.files.length||new Set(project.files.map(file=>file.path)).size!==project.files.length)return false;
+      const entries=[];
+      for(const expected of project.files){
+        const file=files.get(expected.path);
+        if(!file||file.path!==expected.path||!Buffer.isBuffer(file.bytes)||file.hash!==expected.hash||file.bytes.length!==expected.size||sha256(file.bytes)!==expected.hash||file.text!==undefined&&!Buffer.from(file.text,'utf8').equals(file.bytes))return false;
+        entries.push([expected.path,file,file.bytes,file.text,file.hash,file.bytes.length]);
+      }
+      profile=inlineStructureSafetyForFiles(files,project,{lexicalSafety:literalLexicalSafety});
+      this._inlineSafetyCache={identity,files,entries,profile};
+    }
+    const effective=sha256(JSON.stringify(profile));
+    if(this._inlineSafetyEffective!==effective){this._inlineSafetyEffective=effective;this._inlineSafetyRevision=(this._inlineSafetyRevision||0)+1;this._literalSafety=null;this._rangeFiles?.clear();}
+    if(JSON.stringify(project.inlineStructureSafety)!==JSON.stringify(profile))project.inlineStructureSafety=copy(profile);
+    return true;
+  }
   getProjectRoot() { return this._root; }
   _serial(work, { reload = true } = {}) {
     const result = this._queue.then(async () => {
@@ -107,7 +133,7 @@ export class PaperService {
           catch { fail('RECOVERY_REQUIRED', 'Durable project state is missing or unreadable; preserve the current buffer and inspect the private data.'); }
           if (current.schemaVersion !== 1 || current.project?.id !== this._state.project.id) fail('RECOVERY_REQUIRED', 'Durable project state has an unexpected identity or schema.');
           if (current.project.snapshotId !== this._state.project.snapshotId) fail('VERSION_CONFLICT', 'Another session refreshed the source snapshot. Refresh this panel before editing.');
-          this._state = current;
+          this._state = current; this._refreshInlineStructureSafety();
         }
         return await work();
       } finally {
@@ -304,15 +330,20 @@ export class PaperService {
     await this._commit(next); return copy(result);
   }); }
   _literalProjectSafe() {
+    if(!this._refreshInlineStructureSafety())return false;
     const snapshotId = this._state.project?.snapshotId;
-    if (this._literalSafety?.snapshotId === snapshotId) return this._literalSafety.safe;
+    const analysisFingerprint=this._state.project?.inlineStructureSafety?.analysisFingerprint;
+    if (this._literalSafety?.snapshotId === snapshotId&&this._literalSafety.analysisFingerprint===analysisFingerprint) return this._literalSafety.safe;
     let safe = !this._state.project?.diagnostics?.some(item => item.code === 'UNSUPPORTED_TEX');
+    const profile=this._state.project?.inlineStructureSafety;
+    const exactProfile=profile?.schemaVersion===1&&profile.projectId===this._state.project?.id&&profile.snapshotId===snapshotId&&profile.fingerprint===sha256(JSON.stringify([this._state.project.id,snapshotId,this._state.project.files]));
+    if(exactProfile&&profile.unboundedBindings)safe=false;
     try {
       for (const file of this._files.values()) if (file.text !== undefined || /\.(?:bbl|ltx|def|cfg)$/i.test(file.path)) {
-        if (!literalLexicalSafety(file.text ?? decode(file.bytes))) { safe = false; break; }
+        if (!literalLexicalSafety(file.text ?? decode(file.bytes))&&!(exactProfile&&profile.literalSyntaxStable===true)) { safe = false; break; }
       }
     } catch { safe = false; }
-    this._literalSafety = { snapshotId, safe }; return safe;
+    this._literalSafety = { snapshotId, analysisFingerprint, safe }; return safe;
   }
   _readingSource(id) {
     if (!this._literalProjectSafe()) return null;
@@ -324,39 +355,52 @@ export class PaperService {
       try { prepared = prepareRangeFile(file.text, file.path); } catch { return null; }
       this._rangeFiles.set(file.path, prepared);
     }
-    return authorizeReadingRange(prepared, anchor, this._state.project.snapshotId);
+    return authorizeReadingRange(prepared, anchor, this._state.project.snapshotId,{inlineStructureSafety:this._state.project.inlineStructureSafety});
+  }
+  sourceReviewAvailable(id) {
+    if(!this._refreshInlineStructureSafety())return false;
+    try{
+      const identity=this._inlineSafetyCache;
+      if(this._sourceReviewManifestCache?.identity!==identity)this._sourceReviewManifestCache={identity,hash:sourceReviewManifest(this._state,this._files)};
+      sourceReviewSource(this._state,this._files,id,null,{verifiedManifestHash:this._sourceReviewManifestCache.hash});return true;
+    }catch{return false;}
   }
   _revisionSource(id, authority = null) {
+    if(authority?.kind==='source-review-range-v1')return sourceReviewSource(this._state,this._files,id,authority);
     if (!authority) return this._state.segments.find(item => item.id === id);
     const segment = this._readingSource(id);
     if (!segment || JSON.stringify(segment.sourceAuthority) !== JSON.stringify(authority)) fail('VERSION_CONFLICT', 'The independently verified source range changed.');
     return segment;
   }
   createRequest(input,{beforeCreate,beforeCommit}={}) { return this._serial(async () => {
-    strict(input, ['segmentIds', 'language', 'kind', 'prompt', 'bindingId'], ['segmentIds', 'kind']); this._requireProject();
+    strict(input, ['segmentIds', 'language', 'kind', 'prompt', 'bindingId','mode'], ['segmentIds', 'kind']); this._requireProject();
     await this._assertSourceCurrent();
     if(beforeCreate)await beforeCreate();
     const { segmentIds, kind, prompt = '', bindingId = null } = input, language = languageTag(input.language ?? this._state.project.targetLanguage);
+    const mode=input.mode??'protected';if(!['protected','source-review'].includes(mode)||mode==='source-review'&&kind!=='revision')fail('INVALID_INPUT','Source-review mode is available only for an explicit revision request.');
     if (!['translation', 'revision', 'discussion'].includes(kind) || !Array.isArray(segmentIds) || segmentIds.length < 1 || new Set(segmentIds).size !== segmentIds.length) fail('INVALID_INPUT', 'Select unique current segments and a supported request kind.');
     text(prompt, 'prompt', MODEL_CONTEXT_BYTES, true);
     if (bindingId !== null) text(bindingId, 'bindingId', 256);
-    const segments = segmentIds.map(id => this._state.segments.find(s => s.id === id));
+    const rawManifestHash=mode==='source-review'?sourceReviewManifest(this._state,this._files):null;
+    const segments = mode==='source-review'?segmentIds.map(id=>sourceReviewSource(this._state,this._files,id,null,{verifiedManifestHash:rawManifestHash})):segmentIds.map(id => this._state.segments.find(s => s.id === id));
     if (segments.some(s => !s)) fail('SEGMENT_NOT_FOUND', 'A selected segment no longer exists.');
     if (segments.some(s => !s.translatable) && kind !== 'discussion') fail('UNSUPPORTED_TEX', 'An opaque or structural block cannot be translated or revised automatically.');
     if (segments.reduce((n, s) => n + Buffer.byteLength(s.source), 0) > REGISTERED_REQUEST_BYTES) fail('REQUEST_TOO_LARGE', 'The source selection exceeds the registered request storage byte budget.');
     const next = this.getState();
     const generation = Math.max(0, ...next.requests.filter(r => r.kind === kind && r.language === language).map(r => r.generation ?? 0)) + 1;
     const request = { schemaVersion: 1, requestId: `req-${randomUUID()}`, kind, segmentIds: [...segmentIds], language, prompt, bindingId,
+      ...(mode==='source-review'?{mode,sourceReview:{schemaVersion:1,manifestHash:rawManifestHash,requiresHumanSourceReview:true,instructions:sourceReviewInstructions}}:{}),
       snapshotId: next.project.snapshotId, projectId: next.project.id, generation, status: 'pending', createdAt: now(),
       draftRevisions: Object.fromEntries(segmentIds.map(id => [id, next.translations[language]?.[id]?.revision ?? 0])),
       segments: segments.map(s => ({ id: s.id, segmentId: s.id, path: s.path, beforeHash: s.beforeHash, sourceHash: s.beforeHash, text: s.displayText, protectedTokens: s.protectedTokens,
-        translationDraft: requestDraft(next.translations[language]?.[s.id]) })) };
+        translationDraft: requestDraft(mode==='source-review'?formulaDraftFromState(next,language,s.id):next.translations[language]?.[s.id]) })) };
+    if(mode==='source-review')request.draftRevisions=Object.fromEntries(segmentIds.map(id=>[id,formulaDraftFromState(next,language,id)?.revision||0]));
     request.translationUnitRevisions = {};
     for (const selected of request.segments) {
       const alignment = (next.alignments || []).find(item => item.language === language && item.sourceSegmentIds.includes(selected.id));
       const units = alignment?.translationUnitIds || [selected.id];
-      const drafts = units.map(id => next.translations[language]?.[id]).filter(Boolean);
-      for (const id of units) request.translationUnitRevisions[id] = next.translations[language]?.[id]?.revision || 0;
+      const drafts = units.map(id => mode==='source-review'?formulaDraftFromState(next,language,id):next.translations[language]?.[id]).filter(Boolean);
+      for (const id of units) request.translationUnitRevisions[id] = (mode==='source-review'?formulaDraftFromState(next,language,id):next.translations[language]?.[id])?.revision || 0;
       if (drafts.length) selected.translationDraft = { text: drafts.map(item => item.text).join('\n\n'), revision: Math.max(...drafts.map(item => item.revision)), sourceHash: selected.sourceHash, translationUnitIds: units };
       if (units.length > 1) request.requiresTranslationMerge = true;
     }
@@ -364,8 +408,10 @@ export class PaperService {
       selected.translationDraft=requestDraft(selected.translationDraft);
       if(kind!=='revision')return selected;
       const source=segments.find(s=>s.id===selected.id),draft=formulaDraftFromState(next,language,selected.id);
+      if(mode==='source-review')return captureSourceReviewSegment(selected,source,draft);
       return captureFormulaRequest(selected,source,draft,next.project,language);
     });
+    if(mode==='source-review')assertSourceReviewRequest(request,next,this._files);
     if(Buffer.byteLength(JSON.stringify(request))>REGISTERED_REQUEST_BYTES)fail('REQUEST_TOO_LARGE','The complete protected request exceeds the registered request storage byte budget.');
     if(beforeCommit)await beforeCommit(request);
     next.requests.push(request);
@@ -421,24 +467,25 @@ export class PaperService {
     if (request.snapshotId !== this._state.project.snapshotId || request.status !== 'pending') fail('VERSION_CONFLICT', 'The request refers to an outdated source snapshot.');
     this._assertRevisionDraftCurrent(request);
     await this._assertSourceCurrent();
+    const rawReview=request.mode==='source-review'?assertSourceReviewRequest(request,this._state,this._files):null;
     const seen = new Set(), edits = [];
     for (const edit of input.edits) {
       strict(edit, ['segmentId', 'beforeHash', 'replacement']);
       if (seen.has(edit.segmentId) || !request.segmentIds.includes(edit.segmentId)) fail('PERMISSION_DENIED', 'An edit is outside the selected request scope.');
       seen.add(edit.segmentId);
       const selected = request.segments.find(item => item.id === edit.segmentId);
-      const segment = this._revisionSource(edit.segmentId, selected?.sourceAuthority);
+      const segment = rawReview?rawReview.sources.get(edit.segmentId):this._revisionSource(edit.segmentId, selected?.sourceAuthority);
       if (!segment || edit.beforeHash !== segment.beforeHash) fail('VERSION_CONFLICT', 'The source segment changed.');
       if (!segment.translatable) fail('UNSUPPORTED_TEX', 'Opaque blocks cannot receive generated replacements.');
-      const effective = formulaSourceForRequest(segment, selected, request, this._state);
-      const replacement = restoreProtected(effective, edit.replacement);
-      validateDraftSourceReplacement(segment,selected,replacement);
+      const effective = request.mode==='source-review'?segment:formulaSourceForRequest(segment, selected, request, this._state);
+      const replacement = request.mode==='source-review'?validateSourceReviewReplacement(segment,edit.replacement,this._files):restoreProtected(effective, edit.replacement);
+      if(request.mode!=='source-review')validateDraftSourceReplacement(segment,selected,replacement);
       const newline = this._files.get(segment.path).text.includes('\r\n') ? '\r\n' : '\n';
       edits.push({ kind: 'replace', segmentId: segment.id, path: segment.path, startByte: segment.startByte, endByte: segment.endByte,
         beforeHash: segment.beforeHash, before: segment.source, replacement: replacement.replace(/\r?\n/g, newline), protectedTokenIds: segment.protectedTokens.map(t => t.id), ...(segment.sourceAuthority ? { sourceAuthority: segment.sourceAuthority } : {}) });
     }
     const proposal = { schemaVersion: 1, proposalId: `proposal-${randomUUID()}`, projectId: this._state.project.id, baseSnapshotId: request.snapshotId,
-      context: { requestId: request.requestId, threadBindingId: request.bindingId, translationRevision: Math.max(0, ...Object.values(request.draftRevisions)), alignmentRevision: 0, ...(request.segments.some(segment=>segment.draftReview?.mode==='adaptive-human-draft')?{sourceReviewSegmentIds:request.segments.filter(segment=>segment.draftReview?.mode==='adaptive-human-draft').map(segment=>segment.id)}:{}) },
+      context: { requestId: request.requestId, threadBindingId: request.bindingId, translationRevision: Math.max(0, ...Object.values(request.draftRevisions)), alignmentRevision: 0, ...(request.mode==='source-review'?{mode:'source-review',requiresHumanSourceReview:true}:{}), ...(request.segments.some(segment=>segment.draftReview)?{sourceReviewSegmentIds:request.segments.filter(segment=>segment.draftReview).map(segment=>segment.id)}:{}) },
       author: 'ai', reviewState: 'pending', applicationState: 'notApplied', reason: input.reason, edits, createdAt: now() };
     const next = this.getState(); next.proposals.push(proposal);
     const record = next.requests.find(r => r.requestId === request.requestId);
@@ -492,9 +539,15 @@ export class PaperService {
       if (proposal.context?.undoOf) continue; // Exact inverse ranges are verified against transaction before-images by the application.
       const request = this._state.requests.find(item => item.requestId === proposal.context?.requestId);
       this._assertRevisionDraftCurrent(request);
+      let rawReview=null;if(request?.mode==='source-review'){if(proposal.context?.mode!=='source-review')fail('VERSION_CONFLICT','The proposal no longer declares its registered source-review mode.');rawReview=assertSourceReviewRequest(request,this._state,this._files);}
       for (const edit of proposal.edits) {
         const selected = request?.segments.find(item => item.id === edit.segmentId);
-        const original=this._revisionSource(edit.segmentId,selected?.sourceAuthority||edit.sourceAuthority);
+        const original=rawReview?rawReview.sources.get(edit.segmentId):this._revisionSource(edit.segmentId,selected?.sourceAuthority||edit.sourceAuthority);
+        if(request?.mode==='source-review'){
+          if(!selected||!original||!request.segmentIds.includes(edit.segmentId)||JSON.stringify(edit.sourceAuthority)!==JSON.stringify(selected.sourceAuthority)||edit.path!==original.path||edit.startByte!==original.startByte||edit.endByte!==original.endByte||edit.beforeHash!==original.beforeHash||edit.before!==original.source)fail('VERSION_CONFLICT','The raw candidate differs from its registered exact source-review interval.');
+          validateSourceReviewReplacement(original,edit.replacement,this._files);continue;
+        }
+        if(selected?.sourceAuthority?.kind==='source-review-range-v1'||edit.sourceAuthority?.kind==='source-review-range-v1'||proposal.context?.mode==='source-review')fail('VERSION_CONFLICT','Raw source-review authority cannot be used by a protected request.');
         const effective=original&&request?formulaSourceForRequest(original,selected,request,this._state):original;
         if(original&&selected)validateDraftSourceReplacement(original,selected,edit.replacement);
         const authority = selected?.sourceAuthority || edit.sourceAuthority;
@@ -509,7 +562,7 @@ export class PaperService {
     const files = [];
     for (const [filename, fileEdits] of byFile) {
       fileEdits.sort((a, b) => a.startByte - b.startByte);
-      for (let i = 1; i < fileEdits.length; i++) if (fileEdits[i].startByte < fileEdits[i - 1].endByte) fail('OVERLAPPING_EDITS', 'Two selected proposals overlap; review them separately.');
+      for (let i = 1; i < fileEdits.length; i++) if (fileEdits[i].startByte < fileEdits[i - 1].endByte || fileEdits[i].startByte===fileEdits[i].endByte&&fileEdits[i-1].startByte===fileEdits[i-1].endByte&&fileEdits[i].startByte===fileEdits[i-1].startByte) fail('OVERLAPPING_EDITS', 'Two selected proposals overlap; review them separately.');
       const original = this._files.get(filename);
       let bytes = Buffer.from(original.bytes);
       for (const edit of fileEdits.toReversed()) {
@@ -519,8 +572,10 @@ export class PaperService {
       files.push({ path: filename, content: decode(bytes), hash: sha256(bytes), beforeHash: original.hash });
     }
     files.sort((a, b) => a.path.localeCompare(b.path));
-    const candidateHash = sha256(JSON.stringify({ baseSnapshotId: this._state.project.snapshotId, proposalIds: [...proposalIds].sort(), files: files.map(({ path, hash }) => ({ path, hash })) }));
+    const sourceReview=sourceReviewCandidate(proposals);
+    const candidateHash = sha256(JSON.stringify({ baseSnapshotId: this._state.project.snapshotId, proposalIds: [...proposalIds].sort(), files: files.map(({ path, hash }) => ({ path, hash })),...(sourceReview?{sourceReview}:{}) }));
     return { transactionId: `candidate-${candidateHash.slice(0, 24)}`, baseSnapshotId: this._state.project.snapshotId, candidateHash, proposalIds: [...proposalIds], files,
+      ...(sourceReview?{requiresHumanSourceReview:true,sourceReview}:{}),
       state: 'previewOnly', compile: { status: 'unavailable', code: 'CAPABILITY_UNAVAILABLE', message: 'No verified isolated compiler is configured. This candidate has not been compiled.' }, directApply: false };
   }
   previewTransaction({ proposalIds }) { return this._serial(async () => {

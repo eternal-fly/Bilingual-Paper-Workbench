@@ -1,6 +1,6 @@
 # Bilingual Paper Workbench — User Manual
 
-**Version 1.6.2 · Windows · English edition**
+**Version 1.6.3 · Windows · English edition**
 
 Bilingual Paper Workbench connects an English LaTeX paper, an editable translation and paragraph-linked review notes in one workspace. Your existing Codex Desktop chat performs translation and review; the workbench provides the reading, editing and confirmation interface. English is the default interface language. The translation language is a separate choice.
 
@@ -35,7 +35,21 @@ There is no fixed paragraph or opinion count limit on the complete selection. Wo
 
 You can also ask Codex in the same paper chat: “Translate this entire open paper into French,” or “Translate paragraphs 3–7.” Codex reads the current paper and processes its protected batches within that existing turn. This direct route needs no Computer Use, window clicking or additional queued message. Ask it to cancel or resume the remaining scope when needed; completed translations remain saved.
 
+Translation and English synchronization use one best natural wording while retaining the complete meaning. They do not authorize summarizing, deleting qualifications, adding claims or automatically adopting review advice. For English writeback, the latest saved author draft is the intended content; the old English is comparison context. Explicit author deletions and validated formula/reference edits remain respected. Suggestions stay separate until requested. Read the compiled candidate before confirmation: these model instructions guide fidelity, but do not mechanically prove semantic equivalence.
+
+### Work directly from the bound chat
+
+Ask the paper's bound Codex chat to inspect the project source, edit a saved translation paragraph, change a formula or existing reference, organize imported reviews, or record pending/adopt/revise/keep decisions. The native interface performs these operations on the current paper. It does not require screen control or a second model conversation. Draft edits retain the chat actor and exact revision; unsaved or composing text in the reading window is preserved until saved.
+
+Supported spacing, escaped symbols and static formatting can be edited inside ordinary paragraph text. Their presence does not by itself make the complete paragraph read-only. When a custom command can consume unknown later input, its exact affected range is retained for source review. Editing a draft or preparing a proposal does not accept English source changes: compile and inspect the complete current candidate, then confirm **Write back English**.
+
+If an unfamiliar TeX structure cannot be represented by protected editing, the request preview offers **Review TeX structure changes**. It is selected automatically for source-review-available paragraphs that need this route; you can also select it explicitly. Update the preview after changing the mode. Codex receives the exact original TeX range and your saved draft, and can return a complete raw TeX candidate rather than being restricted to the old placeholder inventory. Custom macros and environments can be compiled without a separate layout whitelist. Inputs remain limited to the captured project; direct executable or external-file capabilities are not granted.
+
+The bound chat can prepare this mode, return a proposal, compile it, read its build log and repair a failed candidate through MCP in the same chat. It cannot accept its own source changes. Raw TeX candidates open the complete diff and require your checked source-review confirmation before a writeback token is issued. Draft/source/candidate changes invalidate that confirmation. A confirmed source write is recorded separately from unresolved translation intent: raw drafts remain saved for further editing rather than being falsely marked fully applied. Server-proven source intervals preserve their paragraph identity over repeated raw edits and reviewed undo, including when the reading parser does not recognize the new structure.
+
 ### Read the request status
+
+The background and native interface synchronize persisted request and execution-ticket records before authorization, including when reconnecting the same chat. A valid request created after the background started can be read without recreating it or resending the message. A later cancellation, changed source or mismatched identity remains a real refusal. If durable data cannot be read consistently, preserve your draft and follow the reported recovery diagnostic; do not edit internal ticket files to bypass it.
 
 **Prepare English changes** saves your current edits and opens a request preview. This local preparation does not send another model message, compile a candidate or write source. Earlier acknowledged messages awaiting a return do not silently disable it. If a real paper operation or source write is active, the interface explains why the next execution step must wait.
 
@@ -107,7 +121,7 @@ For English source authority, labels, references, citations and equation tags in
 
 An incomplete expression, such as `$x^`, now saves as exact author text with a **Source review required** notice. It can reopen safely and remains available to Codex; it does not grant that malformed math permission to change English source. Complete or adapt it before the corresponding source edit. Actual storage, permission, version or connection failures remain **Save failed** and retain retry/export controls.
 
-Uniquely mapped changes to existing formulas can become English revision intent. If your saved human paragraph adds or reorders complete formulas, **Suggest source revision** captures the paragraph's exact new mathematical inventory instead of guessing old-to-new formula matches. Review the **Original formulas** and **Requested formulas** lists. The model must use that complete inventory, preserve citations and labels, and return a pending English candidate. Added formulas still require a successful candidate compile and your final confirmation. Incomplete, unsafe or structurally ambiguous TeX remains unavailable for source changes; AI-generated drafts cannot grant themselves this authority.
+Uniquely mapped changes to existing formulas can become English revision intent. If your saved author-directed paragraph adds or reorders complete formulas, **Suggest source revision** captures the paragraph's exact new mathematical inventory instead of guessing old-to-new formula matches. Review the **Original formulas** and **Requested formulas** lists. The model must use that complete inventory, preserve citations and labels, and return a pending English candidate. Added formulas still require a successful candidate compile and your final confirmation. Incomplete, unsafe or structurally ambiguous TeX remains unavailable for source changes. Ordinary translation/review output cannot grant itself edit authority; explicit bound-chat edits use the dedicated native editor with version checks and actor attribution.
 
 ## Edit citation and cross-reference keys
 

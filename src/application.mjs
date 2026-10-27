@@ -8,6 +8,7 @@ import { paperRequestPrompt, paperRequestSchema } from './codex-bridge.mjs';
 import { restoreProtected } from './latex.mjs';
 import { ReadingWorkspace } from './reading-workflow.mjs';
 import { rebaseConfirmedTranslationDrafts, reconcileLegacyConfirmedDraft } from './draft-source-rebase.mjs';
+import {assertSourceReviewRequest,validateSourceReviewReplacement} from './source-review.mjs';
 import { listProjectSources, readProjectSource } from './project-source.mjs';
 import { ReviewOrganizationWorkflow } from './review-organization.mjs';
 import { deriveReviewImportValidation, revalidateReviewImport, reopenReviewImportNote } from './review-import-validation.mjs';
@@ -30,6 +31,7 @@ import { reviewHistoryPreferences } from './review-history-policy.mjs';
 import {createFormulaDraft,createInlineFormulaDraft,reconcileFormulaDraft,formulaSourceForRequest,validateDraftSourceReplacement} from './formula-edits.mjs';
 import {maskRawReplacement} from './range-authority.mjs';
 import {referenceTargetRegistry,topLevelReferences} from './reference-edits.mjs';
+import { readWorkflowSnapshot, assertWorkflowVersion, workflowValueHash, serializeWorkflow } from './workflow-store.mjs';
 
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const clone = value => structuredClone(value);
@@ -137,6 +139,7 @@ export class PaperApplication extends EventEmitter {
   }
   async refreshExternalJobStatus() {
     const unchanged = { changed: false, updatedJobIds: [] }, flow = this.flow, store = this.core._store;
+    const memoryHash = flow && workflowValueHash(flow), wasClean = Boolean(flow && this._flowCleanHash === memoryHash);
     const projectId = this.core.getState().project?.id;
     const active = job => ['running', 'queued', 'cancelling', 'compiling'].includes(job?.status);
     const foreign = job => active(job) && typeof job.jobId === 'string' && typeof job.kind === 'string' && job.kind.length <= 128 && Number.isSafeInteger(job.ownerPid) && job.ownerPid > 0 && job.ownerPid !== process.pid && !this.jobs.has(job.jobId) && (job.ownerControllerId == null || typeof job.ownerControllerId === 'string');
@@ -156,6 +159,7 @@ export class PaperApplication extends EventEmitter {
     // The file is metadata from another controller. It cannot replace this
     // controller's builds, transactions, live jobs or current project binding.
     if (this.flow !== flow || this.core._store !== store || this.core.getState().project?.id !== projectId || persisted?.schemaVersion !== 1 || persisted.projectId !== projectId || !Array.isArray(persisted.jobs) || persisted.jobs.length > 10000 || new Set(persisted.jobs.map(job => job?.jobId)).size !== persisted.jobs.length) return unchanged;
+    const remainsClean = wasClean && workflowValueHash(flow) === memoryHash;
     const records = new Map(persisted.jobs.map(job => [job?.jobId, job])), updatedJobIds = [];
     const identity = ['jobId', 'ownerPid', 'ownerControllerId', 'kind', 'type', 'snapshotId', 'batchId', 'requestId', 'transactionId', 'threadId', 'turnId', 'createdAt'];
     for (let i = 0; i < flow.jobs.length && updatedJobIds.length < 256; i++) {
@@ -163,19 +167,82 @@ export class PaperApplication extends EventEmitter {
       if (!foreign(current) || !next || !['completed', 'failed', 'cancelled', 'interrupted', 'stale'].includes(next.status) || identity.some(key => next[key] !== current[key]) || Buffer.byteLength(JSON.stringify(next)) > 1024 * 1024) continue;
       flow.jobs[i] = clone(next); updatedJobIds.push(current.jobId);
     }
-    if (updatedJobIds.length) this.emit('change');
+    if (updatedJobIds.length) { if (remainsClean) this._flowCleanHash = workflowValueHash(this.flow); this.emit('change'); }
     return { changed: updatedJobIds.length > 0, updatedJobIds };
   }
   async _loadFlow() {
     if (!this.core._store) { this.flow = null; return; }
-    try { this.flow = JSON.parse(await readFile(path.join(this.core._store, 'workflow.json'), 'utf8')); }
-    catch (error) { if (error.code !== 'ENOENT') fail('RECOVERY_REQUIRED', 'Workflow state is unreadable; preserve it for recovery.'); this.flow = freshFlow(this.core.getState().project.id); }
-    if (this.flow.schemaVersion !== 1 || this.flow.projectId !== this.core.getState().project.id) fail('RECOVERY_REQUIRED', 'Workflow identity does not match the selected paper.');
+    let snapshot;
+    try { snapshot = await readWorkflowSnapshot(this.core._store, { allowMissing: this._flowStore !== this.core._store || this._flowVersion?.exists !== true }); }
+    catch (error) { if (error.code === 'ENOENT') fail('RECOVERY_REQUIRED', 'The existing private workflow disappeared; retained local metadata was preserved.'); throw error; }
+    const next = snapshot.value || freshFlow(this.core.getState().project.id);
+    if (next.schemaVersion !== 1 || next.projectId !== this.core.getState().project.id) fail('RECOVERY_REQUIRED', 'Workflow identity does not match the selected paper.');
+    this.flow = next; this._flowVersion = snapshot.version; this._flowStore = this.core._store; this._flowCleanHash = workflowValueHash(next); this._failedDesktopMetadata = null;
     this.engine = ['xelatex', 'pdflatex'].includes(this.flow.engine) ? this.flow.engine : this.defaultEngine;
   }
-  async _persistFlow() { await atomicJson(path.join(this.core._store, 'workflow.json'), this.flow); this.emit('change'); }
-  async _flowAction(work) {
-    return this.core._serial(async () => { await this._loadFlow(); const value = await work(); await this._persistFlow(); return value; });
+  async _persistFlow() {
+    const store = this.core._store;
+    if (this._flowStore !== store) fail('WORKFLOW_VERSION_CONFLICT', 'The selected private workflow changed before saving.');
+    serializeWorkflow(this.flow);
+    await assertWorkflowVersion(store, this._flowVersion);
+    const valueHash = workflowValueHash(this.flow); await atomicJson(path.join(store, 'workflow.json'), this.flow);
+    const snapshot = await readWorkflowSnapshot(store);
+    if (workflowValueHash(snapshot.value) !== valueHash) fail('WORKFLOW_VERSION_CONFLICT', 'The private workflow changed during saving; preserve it for recovery.');
+    this._flowVersion = snapshot.version; this._flowCleanHash = valueHash; this._failedDesktopMetadata = null; this.emit('change');
+  }
+  async _recoverDesktopMetadata() {
+    const pending = this._failedDesktopMetadata;
+    if (!pending) return false;
+    const current = () => this.flow === pending.flow && this.core._store === pending.store && this.core._state.project?.id === pending.projectId && this.core._state.project?.snapshotId === pending.snapshotId && this.core._state.eventSeq === pending.eventSeq && workflowValueHash(this.flow) === pending.failedHash;
+    if (!current()) return false;
+    await assertWorkflowVersion(pending.store, pending.version);
+    if (!current()) return false;
+    this.flow = clone(pending.before); this._flowVersion = clone(pending.version); this._flowCleanHash = workflowValueHash(this.flow); this._failedDesktopMetadata = null;
+    return true;
+  }
+  refreshDesktopContext({ expectedProjectId, expectedSnapshotId, threadId }, { locked = false, assertCurrent = null } = {}) {
+    const priorEventSeq = this.core._state.eventSeq, priorWorkflowHash = this._flowVersion?.hash || null;
+    const work = async () => {
+      const store = this.core._store, project = this.core.getState().project;
+      if (!store || project?.id !== expectedProjectId || project.snapshotId !== expectedSnapshotId) fail('DESKTOP_EXECUTION_STALE', 'The selected paper changed before refreshing its Desktop authorization.');
+      await assertCurrent?.(); await this.core._assertSourceCurrent();
+      await this._recoverDesktopMetadata().catch(() => false);
+      if (this.flow && this._flowCleanHash !== workflowValueHash(this.flow)) fail('WORKFLOW_DIRTY', 'Unsaved workflow changes were preserved. Finish the current operation before refreshing Desktop authorization.');
+      const snapshot = await readWorkflowSnapshot(store), next = snapshot.value;
+      if (next?.schemaVersion !== 1 || next.projectId !== expectedProjectId || !['builds', 'transactions', 'jobs', 'acceptances'].every(key => Array.isArray(next[key]))) fail('RECOVERY_REQUIRED', 'The durable workflow does not match the selected paper.');
+      const binding = [next.nativeChatBinding, next.backgroundChatReference].find(row => row?.projectId === expectedProjectId && row.threadId);
+      if (binding?.threadId !== threadId) fail('DESKTOP_EXECUTION_STALE', 'The durable paper chat binding changed; an old chat cannot receive this request.');
+      const requests = this.core.getState().requests || [], messages = next.desktopMessages || [];
+      const unique = (rows, key) => Array.isArray(rows) && rows.every(row => row && typeof row[key] === 'string') && new Set(rows.map(row => row[key])).size === rows.length;
+      if (!unique(requests, 'requestId') || !unique(messages, 'messageId') || new Set(messages.filter(row => row.requestId).map(row => row.requestId)).size !== messages.filter(row => row.requestId).length || !unique(next.jobs, 'jobId')) fail('RECOVERY_REQUIRED', 'Conflicting durable Desktop identities require recovery.');
+      await this.core._assertSourceCurrent(); await assertCurrent?.();
+      const current = this.core.getState().project;
+      if (this.core._store !== store || current?.id !== expectedProjectId || current.snapshotId !== expectedSnapshotId) fail('DESKTOP_EXECUTION_STALE', 'The paper changed while Desktop authorization was refreshed.');
+      this.flow = next; this._flowStore = store; this._flowVersion = snapshot.version; this._flowCleanHash = workflowValueHash(next); this._failedDesktopMetadata = null;
+      this.engine = ['xelatex', 'pdflatex'].includes(next.engine) ? next.engine : this.defaultEngine;
+      const changed = priorEventSeq !== this.core._state.eventSeq || priorWorkflowHash !== snapshot.version.hash;
+      if (changed) this.emit('change');
+      return { workflowHash: snapshot.version.hash, projectId: expectedProjectId, snapshotId: expectedSnapshotId, changed };
+    };
+    return locked ? work() : this.core._serial(work);
+  }
+  async _flowAction(work, { desktopMetadataOnly = false } = {}) {
+    return this.core._serial(async () => {
+      await this._loadFlow();
+      const critical = flow => !Array.isArray(flow?.transactions) || flow.transactions.some(transaction => ['committing', 'recovering', 'recoveryRequired'].includes(transaction.state));
+      const before = desktopMetadataOnly && !critical(this.flow) ? { before: clone(this.flow), flow: this.flow, version: clone(this._flowVersion), store: this.core._store, projectId: this.core._state.project?.id, snapshotId: this.core._state.project?.snapshotId, eventSeq: this.core._state.eventSeq } : null;
+      try { const value = await work(); await this._persistFlow(); return value; }
+      catch (error) {
+        // This opt-in is exclusive to owned Desktop receipt/metadata changes.
+        // Source journals, core commits, unknown durable replacements and any
+        // later human/local mutation are never discarded as failed metadata.
+        if (before && this.flow === before.flow && this.core._state.eventSeq === before.eventSeq && !critical(this.flow)) {
+          this._failedDesktopMetadata = { ...before, failedHash: workflowValueHash(this.flow) };
+          await this._recoverDesktopMetadata().catch(() => false);
+        }
+        throw error;
+      }
+    });
   }
   async openProject(input) {
     const projectId=this.core.getState().project?.id;
@@ -281,8 +348,11 @@ export class PaperApplication extends EventEmitter {
   async editTranslationFormula(input){return this._projectOperation(()=>this.core._serial(async()=>{
     const keys=['segmentId','language','expectedRevision','expectedProjectId','expectedSnapshotId','start','end','before','replacement'];if(!input||Object.keys(input).some(k=>!keys.includes(k))||keys.some(k=>!Object.hasOwn(input,k))||!Number.isSafeInteger(input.expectedRevision)||input.expectedRevision<0)fail('INVALID_INPUT','Use an exact current formula selection and draft revision.');languageTag(input.language);await this.core._assertSourceCurrent();const state=this.core.getState();if(state.project?.id!==input.expectedProjectId||state.project?.snapshotId!==input.expectedSnapshotId)fail('VERSION_CONFLICT','The selected paper or source changed.');const merged=this.reading.state(state),current=merged.translations[input.language]?.[input.segmentId];if(!current||current.revision!==input.expectedRevision)fail('VERSION_CONFLICT','The translation changed. Save the current text before editing its formula.');const source=this.reading.paragraph(input.segmentId)||state.segments.find(s=>s.id===input.segmentId)||this.reading.paragraph(current.sourceSegmentIds?.[0]);if(!source)fail('SEGMENT_NOT_FOUND','The current source paragraph is unavailable.');const newline=this.core._files.get(source.path)?.text?.includes('\r\n')?'\r\n':'\n';const formulaInput=typeof input.replacement==='string'?{...input,replacement:input.replacement.replace(/\r?\n/g,newline)}:input;const result={...createFormulaDraft(source,current,formulaInput,state.project),appliedReplacement:formulaInput.replacement};const key=this.reading.hasDerived(input.segmentId)||state.readingDrafts?.[input.language]?.[input.segmentId]?'readingDrafts':'translations';state[key]||={};state[key][input.language]||={};state[key][input.language][input.segmentId]=result.draft;await this.core._commit(state);this.emit('change');return result;
   }));}
-  async saveTranslationDraftWithFormulaEdits(input,{beforeWrite=null}={}){return this._projectOperation(()=>this.core._serial(async()=>{
-    const keys=['segmentId','language','text','expectedRevision','expectedProjectId','expectedSnapshotId'];if(!input||Object.keys(input).some(k=>!keys.includes(k))||keys.some(k=>!Object.hasOwn(input,k))||typeof input.segmentId!=='string'||typeof input.text!=='string'||Buffer.byteLength(input.text)>128*1024||!Number.isSafeInteger(input.expectedRevision)||input.expectedRevision<0)fail('INVALID_INPUT','Use the complete translation text and its current paper and revision.');languageTag(input.language);const state=this.core.getState();if(state.project?.id!==input.expectedProjectId||state.project?.snapshotId!==input.expectedSnapshotId)fail('VERSION_CONFLICT','The selected paper or source changed.');const merged=this.reading.state(state),existing=merged.translations[input.language]?.[input.segmentId];if((existing?.revision||0)!==input.expectedRevision)fail('VERSION_CONFLICT','The translation changed. Keep the current editor text and reload its latest revision.');const source=this.reading.paragraph(input.segmentId)||state.segments.find(s=>s.id===input.segmentId)||this.reading.paragraph(existing?.sourceSegmentIds?.[0]);if(!source)fail('SEGMENT_NOT_FOUND','The current source paragraph is unavailable.');const current=existing||{segmentId:input.segmentId,language:input.language,text:'',revision:0,sourceHash:source.sourceHash||source.beforeHash},newline=this.core._files.get(source.path)?.text?.includes('\r\n')?'\r\n':'\n';const referenceRegistry=referenceTargetRegistry(this.core._files,state.project),result=createInlineFormulaDraft(source,current,input.text,state.project,{newline,referenceRegistry,language:input.language});const key=this.reading.hasDerived(input.segmentId)||state.readingDrafts?.[input.language]?.[input.segmentId]?'readingDrafts':'translations';state[key]||={};state[key][input.language]||={};state[key][input.language][input.segmentId]=result.draft;if(beforeWrite)await beforeWrite();await this.core._commit(state);this.emit('change');return result;
+  async saveTranslationDraftWithFormulaEdits(input,{beforeWrite=null,editActor=null}={}){
+    if(editActor!==null&&(!editActor||typeof editActor!=='object'||Array.isArray(editActor)||Object.keys(editActor).some(key=>!['kind','threadId','reason'].includes(key))||editActor.kind!=='bound-chat'||typeof editActor.threadId!=='string'||!/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/u.test(editActor.threadId)||typeof editActor.reason!=='string'||!editActor.reason.trim()||Buffer.byteLength(editActor.reason)>8000||/[\x00-\x08\x0b\x0c\x0e-\x1f]/u.test(editActor.reason)))fail('INVALID_INPUT','Use trusted bound-chat attribution with an exact chat identity and edit reason.');
+    const actor=editActor?{kind:'bound-chat',threadId:editActor.threadId,reason:editActor.reason}:null;
+    return this._projectOperation(()=>this.core._serial(async()=>{
+    const keys=['segmentId','language','text','expectedRevision','expectedProjectId','expectedSnapshotId'];if(!input||Object.keys(input).some(k=>!keys.includes(k))||keys.some(k=>!Object.hasOwn(input,k))||typeof input.segmentId!=='string'||typeof input.text!=='string'||Buffer.byteLength(input.text)>128*1024||!Number.isSafeInteger(input.expectedRevision)||input.expectedRevision<0)fail('INVALID_INPUT','Use the complete translation text and its current paper and revision.');languageTag(input.language);const state=this.core.getState();if(state.project?.id!==input.expectedProjectId||state.project?.snapshotId!==input.expectedSnapshotId)fail('VERSION_CONFLICT','The selected paper or source changed.');const merged=this.reading.state(state),existing=merged.translations[input.language]?.[input.segmentId];if((existing?.revision||0)!==input.expectedRevision)fail('VERSION_CONFLICT','The translation changed. Keep the current editor text and reload its latest revision.');const source=this.reading.paragraph(input.segmentId)||state.segments.find(s=>s.id===input.segmentId)||this.reading.paragraph(existing?.sourceSegmentIds?.[0]);if(!source)fail('SEGMENT_NOT_FOUND','The current source paragraph is unavailable.');const current=existing||{segmentId:input.segmentId,language:input.language,text:'',revision:0,sourceHash:source.sourceHash||source.beforeHash},newline=this.core._files.get(source.path)?.text?.includes('\r\n')?'\r\n':'\n';const referenceRegistry=referenceTargetRegistry(this.core._files,state.project),result=createInlineFormulaDraft(source,current,input.text,state.project,{newline,referenceRegistry,language:input.language});if(actor)result.draft.editActor=actor;else delete result.draft.editActor;const key=this.reading.hasDerived(input.segmentId)||state.readingDrafts?.[input.language]?.[input.segmentId]?'readingDrafts':'translations';state[key]||={};state[key][input.language]||={};state[key][input.language][input.segmentId]=result.draft;if(beforeWrite)await beforeWrite();await this.core._commit(state);this.emit('change');return result;
   }));}
   async reconcileTranslationDraft(input, { beforeWrite = null } = {}) {
     const keys = ['segmentId', 'language', 'expectedRevision', 'expectedProjectId', 'expectedSnapshotId'];
@@ -343,6 +413,8 @@ export class PaperApplication extends EventEmitter {
     input = { ...input, language: input.language || this.pdfSelection.languages().effectiveTargetLanguage };
     const desktopThreadId = this.desktopExecutionEnabled ? this.desktopThreadId?.() : null;
     if (desktopThreadId) input.bindingId = `desktop:${desktopThreadId}`;
+    if (input.mode === 'source-review') return this.core.createRequest(input);
+    if (input.mode === 'protected') { input = { ...input }; delete input.mode; }
     const requestState = this.core.getState();
     if (input.segmentIds?.some(id => this.reading.hasDerived(id)||requestState.readingDrafts?.[input.language]?.[id])) return this.reading.createRequest(input);
     const threadId = this.chat?.getState?.().threadId;
@@ -494,14 +566,22 @@ export class PaperApplication extends EventEmitter {
       if (!previous || previous.reviewState !== 'pending' || previous.applicationState !== 'notApplied') fail('VERSION_CONFLICT', 'The proposal changed or was already reviewed.');
       if (previous.context?.undoOf) fail('INVALID_INPUT', 'An exact inverse proposal cannot be edited; create a separate source revision instead.');
       if (!Array.isArray(edits) || edits.length !== previous.edits.length || reason !== undefined && (typeof reason !== 'string' || reason.length > 8000)) fail('INVALID_INPUT', 'Provide the exact bounded proposal edit set.');
+      const request=state.requests.find(r=>r.requestId===previous.context?.requestId),rawReview=request?.mode==='source-review'?assertSourceReviewRequest(request,state,this.core._files):null;
+      if(rawReview)this.core._assertRevisionDraftCurrent(request);
       const seen = new Set();
       const revised = edits.map(edit => {
         if (!edit || Object.keys(edit).some(key => !['segmentId', 'replacement'].includes(key)) || typeof edit.replacement !== 'string' || Buffer.byteLength(edit.replacement) > 128 * 1024 || seen.has(edit.segmentId)) fail('INVALID_INPUT', 'The candidate edit is invalid.');
         seen.add(edit.segmentId);
         const original = previous.edits.find(item => item.segmentId === edit.segmentId);
-        const segment = this.core._revisionSource(edit.segmentId, original?.sourceAuthority);
+        const segment = rawReview?rawReview.sources.get(edit.segmentId):this.core._revisionSource(edit.segmentId, original?.sourceAuthority);
         if (!original || !segment?.translatable || original.beforeHash !== segment.beforeHash) fail('VERSION_CONFLICT', 'This source interval cannot be edited from the old candidate.');
-        const request=state.requests.find(r=>r.requestId===previous.context?.requestId),selected=request?.segments.find(s=>s.id===segment.id),effective=request?formulaSourceForRequest(segment,selected,request,state):segment;
+        const selected=request?.segments.find(s=>s.id===segment.id);
+        if(request?.mode==='source-review'){
+          if(previous.context?.mode!=='source-review'||JSON.stringify(original.sourceAuthority)!==JSON.stringify(selected?.sourceAuthority))fail('VERSION_CONFLICT','The candidate no longer matches its registered source-review mode.');
+          const replacement=validateSourceReviewReplacement(segment,edit.replacement,this.core._files),newline=this.core._files.get(segment.path).text.includes('\r\n')?'\r\n':'\n';
+          return{...original,replacement:replacement.replace(/\r?\n/g,newline)};
+        }
+        const effective=request?formulaSourceForRequest(segment,selected,request,state):segment;
         const protectedText=maskRawReplacement(effective,edit.replacement);
         const replacement = restoreProtected(effective, protectedText);
         validateDraftSourceReplacement(segment,selected,replacement);
@@ -580,7 +660,7 @@ export class PaperApplication extends EventEmitter {
     await this._flowAction(() => {
       if (this.flow.transactions.some(item => ['committing', 'recovering', 'recoveryRequired'].includes(item.state))) fail('PARTIAL_COMMIT_RECOVERY_REQUIRED', 'Resolve the interrupted source transaction before preparing another.');
       this.flow.transactions.push({ transactionId, state: 'compiling', projectId: captured.snapshot.projectId, baseSnapshotId: captured.snapshot.snapshotId, candidateHash: captured.candidate.candidateHash,
-        proposalIds: [...proposalIds], candidate: captured.candidate, readSet: captured.readSet, originals: captured.originals, beforeSegments: captured.beforeSegments, beforeReadingAnchors: captured.beforeReadingAnchors, createdAt: stamp(), progress: [] });
+        proposalIds: [...proposalIds], candidate: captured.candidate, readSet: captured.readSet, originals: captured.originals, beforeSegments: captured.beforeSegments, beforeReadingAnchors: captured.beforeReadingAnchors, createdAt: stamp(), progress: [],...(captured.candidate.requiresHumanSourceReview?{requiresHumanSourceReview:true,sourceReview:captured.candidate.sourceReview}:{}) });
     });
     const job = await this._queueBuild(captured, 'candidate', transactionId);
     return { transactionId, candidateHash: captured.candidate.candidateHash, state: 'compiling', ...job };
@@ -618,19 +698,21 @@ export class PaperApplication extends EventEmitter {
   }
   async waitJob({ jobId }) { const job = this.jobs.get(jobId); if (!job) fail('JOB_NOT_FOUND', 'No live job matches this ID.'); return job.promise; }
   async cancelJob({ jobId }) { const job = this.jobs.get(jobId); if (!job || job.finished) fail('JOB_NOT_RUNNING', 'The job is not running.'); if (job.finalizing) fail('JOB_FINALIZING', 'The completed model result is already being saved; resolve its notes after saving.'); job.controller?.abort(); if (job.kind === 'codex') await this.chat.interrupt(); return { jobId, status: 'cancelling' }; }
-  async prepareAcceptance({ transactionId }) {
+  async prepareAcceptance({ transactionId, sourceReviewConfirmed = false }) {
     this._assertAvailable();
     return this._flowAction(async () => {
       await this.core._assertSourceCurrent();
       const transaction = this.flow.transactions.find(item => item.transactionId === transactionId);
       const build = this.flow.builds.find(item => item.buildId === transaction?.buildId);
       if (!transaction || transaction.state !== 'ready' || !build || build.status !== 'success' || build.isolation?.verified !== true || transaction.candidateHash !== build.candidateHash || transaction.baseSnapshotId !== this.core.getState().project.snapshotId) fail('ACCEPTANCE_NOT_READY', 'Review and compile the exact current candidate before accepting.');
-      if(this.core._candidate(transaction.proposalIds).candidateHash!==transaction.candidateHash)fail('CANDIDATE_HASH_MISMATCH','The current source candidate changed after compilation.');
+      const reconstructed=this.core._candidate(transaction.proposalIds);
+      if(reconstructed.candidateHash!==transaction.candidateHash)fail('CANDIDATE_HASH_MISMATCH','The current source candidate changed after compilation.');
+      if(reconstructed.requiresHumanSourceReview&&sourceReviewConfirmed!==true)fail('SOURCE_REVIEW_CONFIRMATION_REQUIRED','Review and explicitly confirm the complete raw TeX source diff for this exact isolated candidate.');
       await this._verifyBuildArtifact(build);
       const token = randomBytes(32).toString('base64url'), expiresAt = new Date(Date.now() + 5 * 60000).toISOString();
       this.flow.acceptances = this.flow.acceptances.filter(item => item.transactionId !== transactionId);
-      this.flow.acceptances.push({ transactionId, tokenHash: hash(token), controllerId: this.controllerId, candidateHash: transaction.candidateHash, buildId: build.buildId, expiresAt, consumed: false });
-      return { transactionId, confirmationToken: token, candidateHash: transaction.candidateHash, buildId: build.buildId, expiresAt };
+      this.flow.acceptances.push({ transactionId, tokenHash: hash(token), controllerId: this.controllerId, candidateHash: transaction.candidateHash, buildId: build.buildId, expiresAt, consumed: false,...(reconstructed.requiresHumanSourceReview?{sourceReviewConfirmed:true}:{}) });
+      return { transactionId, confirmationToken: token, candidateHash: transaction.candidateHash, buildId: build.buildId, expiresAt,...(reconstructed.requiresHumanSourceReview?{requiresHumanSourceReview:true,sourceReview:reconstructed.sourceReview}:{}) };
     });
   }
   async applyTransaction({ transactionId, confirmationToken, idempotencyKey }) {
@@ -647,6 +729,7 @@ export class PaperApplication extends EventEmitter {
       await this.core._assertSourceCurrent();
       if (transaction.baseSnapshotId !== this.core.getState().project.snapshotId) fail('VERSION_CONFLICT', 'The source changed after candidate review.');
       const reconstructed = this.core._candidate(transaction.proposalIds);
+      if(reconstructed.requiresHumanSourceReview&&acceptance.sourceReviewConfirmed!==true)fail('CONFIRMATION_INVALID','This raw TeX source candidate requires its own exact human source-review acknowledgment.');
       this._verifyCandidate(transaction, build);
       if (reconstructed.candidateHash !== transaction.candidateHash || JSON.stringify(reconstructed.files.map(item => ({ path: item.path, hash: item.hash }))) !== JSON.stringify(transaction.candidate.files.map(item => ({ path: item.path, hash: item.hash })))) fail('CANDIDATE_HASH_MISMATCH', 'Proposal contents changed after compilation.');
       acceptance.consumed = true;
@@ -698,8 +781,9 @@ export class PaperApplication extends EventEmitter {
       const edits = before.proposals.filter(item => transaction.proposalIds.includes(item.proposalId)).flatMap(item => item.edits);
       history = history.map(segment => {
         const relevant = edits.filter(edit => edit.path === segment.path);
-        const shift = relevant.filter(edit => edit.endByte <= segment.startByte).reduce((total, edit) => total + Buffer.byteLength(edit.replacement) - (edit.endByte - edit.startByte), 0);
-        const overlap = relevant.find(edit => edit.startByte < segment.endByte && edit.endByte > segment.startByte);
+        const own = relevant.find(edit=>edit.segmentId===segment.id&&edit.startByte===segment.startByte&&edit.endByte===segment.endByte);
+        const shift = relevant.filter(edit => edit!==own&&edit.endByte <= segment.startByte).reduce((total, edit) => total + Buffer.byteLength(edit.replacement) - (edit.endByte - edit.startByte), 0);
+        const overlap = own||relevant.find(edit => edit.startByte < segment.endByte && edit.endByte > segment.startByte);
         if (overlap && (overlap.startByte !== segment.startByte || overlap.endByte !== segment.endByte)) return segment;
         const reading = readingHistory.some(item => item.id === segment.id && item.path === segment.path && item.startByte === segment.startByte && item.endByte === segment.endByte);
         const replacement = overlap && reading ? overlap.replacement.trim() : overlap?.replacement;
@@ -708,14 +792,17 @@ export class PaperApplication extends EventEmitter {
       });
       readingHistory = readingHistory.map(paragraph => {
         const relevant = edits.filter(edit => edit.path === paragraph.path);
-        const shift = relevant.filter(edit => edit.endByte <= paragraph.startByte).reduce((total, edit) => total + Buffer.byteLength(edit.replacement) - (edit.endByte - edit.startByte), 0);
-        const overlap = relevant.find(edit => edit.startByte < paragraph.endByte && edit.endByte > paragraph.startByte);
+        const own=relevant.find(edit=>edit.segmentId===paragraph.id&&edit.startByte===paragraph.startByte&&edit.endByte===paragraph.endByte);
+        const shift = relevant.filter(edit => edit!==own&&edit.endByte <= paragraph.startByte).reduce((total, edit) => total + Buffer.byteLength(edit.replacement) - (edit.endByte - edit.startByte), 0);
+        const overlap = own||relevant.find(edit => edit.startByte < paragraph.endByte && edit.endByte > paragraph.startByte);
         if (overlap && (overlap.startByte !== paragraph.startByte || overlap.endByte !== paragraph.endByte)) return paragraph;
         const replacement = overlap?.replacement.trim();
         const leading = overlap ? Buffer.byteLength(overlap.replacement.slice(0, overlap.replacement.length - overlap.replacement.trimStart().length)) : 0;
         return { ...paragraph, startByte: paragraph.startByte + shift + leading, endByte: overlap ? paragraph.startByte + shift + leading + Buffer.byteLength(replacement) : paragraph.endByte + shift, sourceHash: overlap ? hash(Buffer.from(replacement)) : paragraph.sourceHash };
       });
     }
+    const retainedRawIds=new Set([...(before.sourceReviewAnchors||[]).map(row=>row.id),...before.proposals.filter(row=>transaction.proposalIds.includes(row.proposalId)&&row.context?.mode==='source-review').flatMap(row=>row.edits.map(edit=>edit.segmentId))]);
+    if(retainedRawIds.size){const changed=new Map(transaction.candidate.files.map(row=>[row.path,row])),files=before.project.files.map(row=>changed.has(row.path)?{...row,hash:changed.get(row.path).hash,size:Buffer.byteLength(changed.get(row.path).content)}:row),snapshotId=`snap-${hash(JSON.stringify({mainFile:before.project.mainFile,files}))}`;next.sourceReviewAnchors=readingHistory.filter(row=>retainedRawIds.has(row.id)).map(row=>({...row,projectId:before.project.id,snapshotId,sourceReviewTransactionId:transaction.transactionId}));}
     await this.core._commit(next);
     await this.core._openProject({ root: this.core.getProjectRoot(), mainFile: before.project.mainFile, sourceLanguage: before.project.sourceLanguage, targetLanguage: before.project.targetLanguage }, { segmentHistory: history });
     await this.reading.syncLocked(readingHistory); this._watchCompilePending = true;
@@ -901,7 +988,7 @@ export class PaperApplication extends EventEmitter {
     if (!transaction?.candidate?.files || !build || build.status !== 'success' || build.isolation?.verified !== true || build.candidateHash !== transaction.candidateHash) fail('CANDIDATE_HASH_MISMATCH', 'The compiled candidate identity is unavailable.');
     const files = transaction.candidate.files;
     for (const file of files) if (hash(Buffer.from(file.content)) !== file.hash || !transaction.readSet.some(item => item.path === file.path && item.hash === file.beforeHash)) fail('CANDIDATE_HASH_MISMATCH', 'Stored candidate bytes changed after review.');
-    const aggregate = hash(JSON.stringify({ baseSnapshotId: transaction.baseSnapshotId, proposalIds: [...transaction.proposalIds].sort(), files: files.map(({ path, hash }) => ({ path, hash })).sort((a, b) => a.path.localeCompare(b.path)) }));
+    const aggregate = hash(JSON.stringify({ baseSnapshotId: transaction.baseSnapshotId, proposalIds: [...transaction.proposalIds].sort(), files: files.map(({ path, hash }) => ({ path, hash })).sort((a, b) => a.path.localeCompare(b.path)),...(transaction.candidate.requiresHumanSourceReview?{sourceReview:transaction.candidate.sourceReview}:{}) }));
     const replacements = new Map(files.map(file => [file.path, file.hash]));
     const compiled = inputManifestIdentity({ engine: build.engine, mainFile: this.core.getState().project.mainFile, files: transaction.readSet.map(item => ({ path: item.path, hash: replacements.get(item.path) || item.hash })) });
     if (aggregate !== transaction.candidateHash || compiled !== build.inputHash) fail('CANDIDATE_HASH_MISMATCH', 'The stored candidate no longer matches its immutable compiled snapshot.');

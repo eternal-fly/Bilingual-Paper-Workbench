@@ -4,6 +4,7 @@ import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PaperApplication } from '../src/application.mjs';
+import { AUTHOR_FIDELITY_POLICY } from '../src/author-fidelity-policy.mjs';
 
 function selectedPayload(text) {
   const marker='\n\nUntrusted manuscript context:\n';
@@ -61,6 +62,7 @@ test('Chinese-to-English sync carries the complete glossary and current draft in
   const queued = await app.syncParagraph({ sourceSegmentIds: [paragraph.id], direction: 'toEnglish', language: 'zh-CN', expectedDraftRevisions: { [paragraph.id]: 1 }, previousEnglish: { [paragraph.id]: 'An earlier English expression.' } });
   assert.equal(queued.direction, 'toEnglish'); await app.waitJob({ jobId: queued.jobId });
   const payload = selectedPayload(chat.inputs[0].text), context = JSON.parse(payload.prompt.split('\n').at(-1));
+  assert(chat.inputs[0].text.includes(AUTHOR_FIDELITY_POLICY)); assert.equal(payload.kind,'revision'); assert.equal(payload.segments.length,1); assert.equal(payload.segments[0].segmentId,paragraph.id);
   assert.deepEqual(context.glossary, glossary); assert.equal(context.previousEnglish[paragraph.id], 'An earlier English expression.');
   assert.equal(payload.segments[0].translationDraft.text, '人工修改后的完整中文意图。');
   const state = app.getState(); assert.equal(state.proposals.length, 1); assert.equal(state.proposals[0].reviewState, 'pending'); assert.equal(state.proposals[0].applicationState, 'notApplied');

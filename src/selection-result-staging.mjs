@@ -1,11 +1,12 @@
 import { createHash } from 'node:crypto';
 import { restoreProtected } from './latex.mjs';
 import { REGISTERED_REQUEST_BYTES, jsonBytes } from './request-budgets.mjs';
+import {assertSourceReviewRequest,validateSourceReviewReplacement} from './source-review.mjs';
 
 const sha = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const fail = (code, message) => { throw Object.assign(Error(message), { code }); };
 export const hasResultStage = input => ['batchOffset', 'resultCount', 'finalize'].some(key => Object.hasOwn(input, key));
-const identity = request => sha([request.projectId, request.snapshotId, request.kind, request.bindingId, request.language, request.segmentIds, request.draftRevisions, request.translationUnitRevisions, request.segments]);
+const identity = request => sha([request.projectId, request.snapshotId, request.kind, request.bindingId, request.language, request.segmentIds, request.draftRevisions, request.translationUnitRevisions, request.segments, ...(request.mode === 'source-review' ? [{mode:request.mode,sourceReview:request.sourceReview}] : [])]);
 const receipt = (request, staging) => ({ requestId: request.requestId, status: 'staged', received: staging.received, resultCount: staging.resultCount, nextOffset: staging.received, sourceChanged: false, draftsChanged: false, instruction: 'Continue returning the remaining exact result records with batchOffset=nextOffset; set finalize=true on the last part. No partial result has been published.' });
 
 export const RESULT_PROTOCOL = Object.freeze({ mode: 'atomic-or-staged', transportByteBudget: 8 * 1024 * 1024, fields: ['batchOffset', 'resultCount', 'finalize'], instructions: 'For a result larger than one transport message, return sequential complete-record parts with batchOffset=0 initially, fixed resultCount, and finalize=false. Use each receipt nextOffset. Set finalize=true on the final part. Only the complete assembled result is published; exact retries are idempotent. Revision parts keep the same reason.' });
@@ -43,11 +44,14 @@ export async function stageSelectionResult(app, approved, input, { beforeWrite }
     if (!key || !Number.isSafeInteger(input.batchOffset) || input.batchOffset < 0 || !Number.isSafeInteger(input.resultCount) || input.resultCount < 1 || typeof input.finalize !== 'boolean' || !Array.isArray(input[key]) || !input[key].length || input.resultCount > request.segmentIds.length || request.kind === 'translation' && input.resultCount !== request.segmentIds.length) fail('INVALID_INPUT', 'Return an exact result part with batchOffset, complete resultCount and finalize flag.');
     const current = app.reading?.state?.(raw) || raw;
     for (const revisions of [request.draftRevisions, request.translationUnitRevisions]) for (const [id, revision] of Object.entries(revisions || {})) if ((current.translations?.[request.language]?.[id]?.revision || 0) !== revision && !request.resultHash) fail('RESULT_STALE', 'The saved draft changed during result staging. No partial result was published.');
+    const rawReview = request.mode === 'source-review' ? assertSourceReviewRequest(request,raw,app.core._files) : null;
     const ids = new Set(), selectedSegments = new Map(request.segments.map(segment => [segment.segmentId || segment.id, segment]));
     for (const item of input[key]) {
       const selected = selectedSegments.get(item.segmentId);
       if (!selected || ids.has(item.segmentId) || request.kind === 'revision' && item.beforeHash !== selected.beforeHash) fail('SELECTION_SCOPE_MISMATCH', 'Every staged record must belong once to the exact approved source scope.');
-      ids.add(item.segmentId); restoreProtected(selected, request.kind === 'revision' ? item.replacement : item.text);
+      ids.add(item.segmentId);
+      if (rawReview) validateSourceReviewReplacement(rawReview.sources.get(item.segmentId),item.replacement,app.core._files);
+      else restoreProtected(selected, request.kind === 'revision' ? item.replacement : item.text);
     }
     const part = stageResultRecords(request.resultStaging, { batchOffset: input.batchOffset, resultCount: input.resultCount, finalize: input.finalize, records: input[key] }, { identity: identity(request), recordKey: 'segmentId', reason: request.kind === 'revision' ? input.reason : null });
     if (part.published) return { published: true, result: part.result };

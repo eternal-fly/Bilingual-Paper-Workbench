@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { EventEmitter } from 'node:events';
 import { mkdir, mkdtemp, writeFile, readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -8,6 +9,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { PaperApplication } from '../src/application.mjs';
+import { DesktopExecution } from '../src/desktop-execution.mjs';
 import { dispatchUi } from '../src/local-web.mjs';
 import { registerReviewOrganizationTools } from '../src/review-organization-tools.mjs';
 import { registerReviewAnchorTools } from '../src/review-anchor-tools.mjs';
@@ -19,10 +21,14 @@ async function fixture(t) {
   const directory = await mkdtemp(path.join(owned, 'case-')), source = path.join(directory, 'source'); await mkdir(source);
   const filename = path.join(source, 'main.tex'), content = '\\documentclass{article}\n\\begin{document}\n\n' + paragraphs.join('\n\n') + '\n\n\\end{document}\n'; await writeFile(filename, content);
   const app = new PaperApplication({ dataRoot: path.join(directory, 'private') }); await app.openProject({ root: source, mainFile: 'main.tex' });
-  let ready = true; app.desktopExecution = { state: () => ({ mode: 'desktop-queue', threadId, available: ready, reason: 'The verified Desktop is unavailable.' }) };
+  let ready = true, enqueues = 0;
+  await app._flowAction(() => { app.flow.backgroundChatReference = { projectId: app.core.getState().project.id, threadId, model: 'synthetic-no-model', effort: 'high', source: 'originating-host-chat' }; });
+  const owner = new EventEmitter(); owner.active = app;
+  const execution = app.desktopExecution = new DesktopExecution(owner, { createProducer: async () => ({ state: () => ({ desktopQueueVerified: ready }), close: async () => {}, enqueue: async () => { enqueues++; throw Error('No model delivery is permitted in this fixture.'); } }) });
+  await execution.bind({ app, project: app.core.getState().project, selection: { threadId, model: 'synthetic-no-model', effort: 'high' } });
   const imported = await app.importReviewNotes({ filename: 'synthetic-review.json', format: 'json', fileHash: digest('synthetic immutable review'), text: JSON.stringify({ notes: [{ title: 'First concern', body: 'Clarify the first stated preparation assumption.' }, { title: 'Second concern', body: 'Clarify the independently stated sampling procedure.' }] }) });
   const input = { batchId: imported.batch.batchId, expectedRevision: 1, expectedFileHash: imported.batch.fileHash };
-  t.after(async () => { await app.close(); assert.ok(directory.startsWith(owned + path.sep)); await rm(directory, { recursive: true, force: true }); });
+  t.after(async () => { await execution.close(); await app.close(); assert.equal(enqueues, 0); assert.ok(directory.startsWith(owned + path.sep)); await rm(directory, { recursive: true, force: true }); });
   return { app, input, imported, filename, content, setReady: value => { ready = value; } };
 }
 async function tools(t, f, nativeThreadId = threadId, instanceId = 'fresh-mcp-instance') {

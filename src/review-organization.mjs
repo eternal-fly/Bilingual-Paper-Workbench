@@ -59,11 +59,11 @@ export class ReviewOrganizationWorkflow {
     if (raw.project?.id !== request.projectId || raw.project.snapshotId !== request.snapshotId || fingerprint(raw, state, request.batchId, request.language, request.noteIds) !== request.fingerprint) { this.requests.delete(request.requestId); fail('RESULT_STALE', 'Selected imported opinions, source, decisions, draft, alignment, language or glossary changed. Prepare a new organization request.'); }
     return found;
   }
-  async prepare(input, { bindingId = null } = {}) {
+  async prepare(input, { bindingId = null, beforeAccess = null } = {}) {
     strict(input, ['batchId', 'expectedRevision', 'expectedFileHash', 'noteIds', 'language', 'instruction']); const trustedBinding = binding(bindingId);
     if (!id(input.batchId) || !Number.isSafeInteger(input.expectedRevision) || input.expectedRevision < 1 || !/^[a-f0-9]{64}$/iu.test(input.expectedFileHash || '') || input.noteIds !== undefined && (!Array.isArray(input.noteIds) || !input.noteIds.length || new Set(input.noteIds).size !== input.noteIds.length || input.noteIds.some(value => !id(value))) || !text(input.instruction, 8000, { optional: true, empty: true })) fail('INVALID_INPUT', 'Choose one exact imported file, revision, digest and optional opinion subset.');
     return this.app._projectOperation(() => this.app.core._serial(async () => {
-      await this.app.core._assertSourceCurrent(); const raw = this.app.core.getState(), state = this.app.getState(), { batch, notes } = activeBatch(raw, input.batchId), revision = batch.revision ?? 1;
+      await this.app.core._assertSourceCurrent(); if (beforeAccess) await beforeAccess(); const raw = this.app.core.getState(), state = this.app.getState(), { batch, notes } = activeBatch(raw, input.batchId), revision = batch.revision ?? 1;
       if (revision !== input.expectedRevision || batch.fileHash.toLowerCase() !== input.expectedFileHash.toLowerCase()) fail('VERSION_CONFLICT', 'The imported file identity or activation revision changed. Refresh its list.');
       const validations = new Map((state.reviewImportValidation?.batches.find(item => item.batchId === batch.batchId)?.notes || []).map(note => [note.noteId, note]));
       const selectedIds = input.noteIds || notes.filter(note => !validations.get(note.noteId)?.completed).map(note => note.noteId), byId = new Map(notes.map(note => [note.noteId, note])); if (selectedIds.some(noteId => !byId.has(noteId))) fail('INVALID_INPUT', 'An opinion is outside this exact imported file.');
@@ -90,9 +90,9 @@ export class ReviewOrganizationWorkflow {
       this.requests.set(requestId, { requestId, projectId: raw.project.id, snapshotId: raw.project.snapshotId, batchId: batch.batchId, language: target, noteIds: [...selectedIds], bindingId: trustedBinding, expires, fingerprint: fingerprint(raw, state, batch.batchId, target, selectedIds), plan, packet: plan.packet() }); this._prune(); return plan.packet();
     }));
   }
-  async context(input, { bindingId = null } = {}) {
+  async context(input, { bindingId = null, beforeAccess = null } = {}) {
     strict(input, ['requestId', 'offset']); const trustedBinding = binding(bindingId);
-    return this.app._projectOperation(() => this.app.core._serial(async () => { const request = this._pending(input.requestId, trustedBinding); await this.app.core._assertSourceCurrent(); this._assertFresh(request, this.app.core.getState(), this.app.getState()); if (request.expires < Date.now() + TTL / 2) request.expires = Date.now() + TTL; return { ...request.plan.packet({ offset: input.offset || 0, markRead: true }), expiresAt: new Date(request.expires).toISOString() }; }));
+    return this.app._projectOperation(() => this.app.core._serial(async () => { const request = this._pending(input.requestId, trustedBinding); await this.app.core._assertSourceCurrent(); if (beforeAccess) await beforeAccess(); this._assertFresh(request, this.app.core.getState(), this.app.getState()); if (request.expires < Date.now() + TTL / 2) request.expires = Date.now() + TTL; return { ...request.plan.packet({ offset: input.offset || 0, markRead: true }), expiresAt: new Date(request.expires).toISOString() }; }));
   }
   _validateResult(input, request, state) {
     const invalid = message => fail('INVALID_REVIEW_ORGANIZATION', message);
@@ -115,16 +115,17 @@ export class ReviewOrganizationWorkflow {
       return { item, normalized: normalized[index] };
     });
   }
-  async submit(input, { bindingId = null } = {}) {
+  async submit(input, { bindingId = null, beforeAccess = null } = {}) {
     strict(input, ['requestId', 'notes', 'batchOffset', 'resultCount', 'finalize'], 'INVALID_REVIEW_ORGANIZATION'); const trustedBinding = binding(bindingId);
     return this.app._projectOperation(() => this.app.core._serial(async () => {
+      if (beforeAccess) await beforeAccess();
       const completed = this.completed.get(input.requestId);
       if (completed && completed.expires > Date.now()) {
-        await this.app.core._assertSourceCurrent(); const current = this.app.core.getState().project;
+        await this.app.core._assertSourceCurrent(); if (beforeAccess) await beforeAccess(); const current = this.app.core.getState().project;
         if (completed.request.bindingId !== trustedBinding || completed.request.projectId !== current?.id || completed.request.snapshotId !== current.snapshotId) fail('REQUEST_NOT_APPROVED', 'This completed organization receipt belongs to another source or chat.');
         const transport = completed.request.plan.acceptTransport(input); if (transport.receipt || completed.request.plan.validateOutput(transport.payload, { assembled: transport.assembled }).duplicate) return { ...completed.result, idempotent: true };
       }
-      const request = this._pending(input.requestId, trustedBinding); await this.app.core._assertSourceCurrent(); const raw = this.app.core.getState(), state = this.app.getState(); this._assertFresh(request, raw, state);
+      const request = this._pending(input.requestId, trustedBinding); await this.app.core._assertSourceCurrent(); if (beforeAccess) await beforeAccess(); const raw = this.app.core.getState(), state = this.app.getState(); this._assertFresh(request, raw, state);
       let progress;
       try {
         const transport = request.plan.acceptTransport(input);
@@ -152,7 +153,7 @@ export class ReviewOrganizationWorkflow {
         overlays.set(item.noteId, { schemaVersion: 1, processor: 'codex', origin: 'external-review-organization', requestId: request.requestId, sourceBatchId: request.batchId, sourceNoteId: item.noteId, sourceNoteRevision: original.revision, sourceSnapshotId: request.snapshotId, language: request.language, organizedAt: at, contextValidation: { status: checked.status, sourceSnapshotId: request.snapshotId, associationChanged: false }, title: item.title || original.title, ...(item.category ? { category: item.category } : {}), ...(item.summary ? { summary: item.summary } : {}), ...Object.fromEntries(FIELDS.map(key => [key, item[key]])), body: item.reasonTranslation, recommendation: item.suggestedTranslation, scope: currentSource && currentTranslation ? 'paragraph' : 'note', ...(currentSource ? { currentSource } : {}), ...(currentTranslation ? { currentTranslation } : {}), quote: item.quote || '', proposedSourceSegmentIds: item.sourceSegmentIds || [], verifiedSourceSegmentIds: verifiedIds, sourceHashes: normalized.sourceHashes, anchorConfidence: normalized.anchorConfidence, ...(normalized.candidates ? { candidates: normalized.candidates } : {}), ...(original.sourceSegmentIds?.length && verifiedIds.some(segmentId => !original.sourceSegmentIds.includes(segmentId)) ? { anchorConflict: true } : {}), ...(item.group ? { group: item.group } : {}), ...(item.duplicateOf ? { duplicateOf: item.duplicateOf } : {}) });
       }
       for (const key of ['reviewNotes', 'reviewHistory']) if (raw[key]) raw[key] = raw[key].map(note => overlays.has(note.noteId) ? { ...note, revision: note.revision + 1, organizedPresentation: overlays.get(note.noteId) } : note);
-      await this.app.core._commit(raw); this.requests.delete(request.requestId); this.app.emit('change');
+      if (beforeAccess) await beforeAccess(); await this.app.core._commit(raw); this.requests.delete(request.requestId); this.app.emit('change');
       const result = { ...progress, requestId: request.requestId, batchId: request.batchId, organizedCount: overlays.size, noteIds: request.noteIds, sourceWriteback: 'human_ui_only', draftsChanged: false, sourceChanged: false, reviewGenerationChanged: false };
       if (request.plan.batches.length > 1 || request.plan.transportStates.size) this.completed.set(request.requestId, { request, result, expires: Date.now() + TTL });
       return result;

@@ -21,16 +21,20 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const releaseVersion = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')).version;
 const runtimeRoot = process.env.PAPER_EDITOR_TEST_RUNTIME;
 assert(runtimeRoot && path.isAbsolute(runtimeRoot), 'Set PAPER_EDITOR_TEST_RUNTIME to a prepared isolated compiler runtime.');
-const parent = path.join(root, 'work/a161'); await mkdir(parent, { recursive: true });
+const parent = path.join(root, `work/a${releaseVersion.replaceAll('.', '')}`); await mkdir(parent, { recursive: true });
 const run = await mkdtemp(path.join(parent, 'roundtrip-')), sourceRoot = path.join(run, 'source'), dataRoot = path.join(run, 'state'), contextDir = path.join(run, 'context');
 await mkdir(sourceRoot); await mkdir(contextDir);
 const hash = value => createHash('sha256').update(value).digest('hex');
 const thread = 'synthetic-multiple-edit-chat', instanceId = 'synthetic-multiple-edit-session';
 const failedActions = [];
+const protectedSaveRetries = [];
 const checks = [], artifacts = [], check = (name, details = {}) => { checks.push({ name, ...details }); console.log(JSON.stringify({ check: name, ...details })); };
 const original = String.raw`\documentclass[11pt]{article}
-\usepackage{amsmath}
+\usepackage{amsmath,amssymb}
+\usepackage{lmodern}
 \renewcommand{\figurename}{Illustration}
+\newcommand{\ClosedZero}{STATIC}
+\newcommand{\ClosedOne}[1]{#1}
 \title{A Small Synthetic Revision Study}
 \author{Example Research Group}
 \date{}
@@ -59,6 +63,21 @@ The demonstration has no experimental data and makes no accuracy guarantee. A re
 
 An inline example uses Section~1 and \textbf{clear scope}, with a literal 10\% value. A removable sentence links Part~2 to Section~3 and Appendix~A.
 
+\section{Special structures}
+
+Special spacing keeps normal words, Section~4, control\ space, thin\,space and wide\quad space.
+
+Escaped symbols remain literal \{braces\}, 25\%, \#tag, \& pair, \$price and under\_score.
+
+Nested formatting keeps \textbf{outer \emph{inner} words} alongside \ClosedZero{} and \ClosedOne{fixed operand}.
+
+Mathematical notation keeps $u+v=w$, $\frac{1}{2}\vec{x}\in\mathbb{R}^{n}$, and \cite{Alpha}; compare \eqref{eq:align-first}.
+
+\begin{align}
+r+s&=t,\label{eq:align-first}\\
+p+q&=v.\label{eq:align-second}
+\end{align}
+
 \bibliographystyle{plain}
 \bibliography{references}
 \end{document}
@@ -73,6 +92,13 @@ const reviewDocument = { notes: [
 ] };
 const reviewText = JSON.stringify(reviewDocument, null, 2);
 await writeFile(path.join(run, 'review-comments.json'), reviewText, { flag: 'wx' });
+const specialTranslationPairs = [
+  ['Special structures', '特殊结构'], ['Special spacing keeps', '特殊空白保留'], ['normal words', '普通词语'],
+  ['control', '控制'], ['thin', '窄'], ['wide', '宽'], ['space', '空格'],
+  ['Escaped symbols remain literal', '转义符保留字面形式'], ['braces', '花括号'], ['tag', '标签'], ['pair', '配对'], ['price', '价格'], ['under', '下方'], ['score', '划线'],
+  ['Nested formatting keeps', '嵌套排版保留'], ['outer', '外层'], ['inner', '内层'], ['words', '文字'], ['alongside', '以及'],
+  ['Mathematical notation keeps', '数学记号保留'], ['; compare ', '；对照 '],
+];
 function translateFixture(text) {
   const pairs = [
     ['A Small Synthetic Revision Study', '小型合成修订研究'], ['Introduction', '引言'], ['Method', '方法'], ['Limitations', '局限性'], ['Inline formatting', '行内排版'],
@@ -85,6 +111,7 @@ function translateFixture(text) {
     ['An inline example uses Section', '一个行内示例使用第'], ['1 and ', '1节和'], ['clear scope', '清晰的范围'], [', with a literal 10', '，其中包含字面值10'], [' value.', '。'], ['A removable sentence links Part', '可删除句子连接第'], [' to Section', '到第'], [' and Appendix', '和附录'],
   ];
   for (const [before, after] of pairs) text = text.replaceAll(before, after);
+  for (const [before, after] of specialTranslationPairs) text = text.replaceAll(before, after);
   return text.replace(/\.$/u, '。');
 }
 function readableDraft(paragraph, state) {
@@ -107,7 +134,7 @@ async function start() {
   web = await startLocalWeb({ service: app, updateChecker: new ReleaseUpdateChecker({ readCache: async () => ({ schemaVersion: 1, autoCheck: false }), writeCache: async () => {}, fetchImpl: async () => { throw Error('The synthetic test must not require a public network request.'); } }) });
 }
 async function stop() { await client?.close(); await server?.close(); await web?.close(); await app?.close(); }
-async function native(name, args = {}) { const result = await client.callTool({ name, arguments: args }, undefined, { timeout: 180000 }); assert.notEqual(result.isError, true, JSON.stringify(result.structuredContent?.error || result.content)); for (const block of result.content || []) if (block.type === 'text') { try { const packet = JSON.parse(block.text); if (packet && typeof packet === 'object') return packet; } catch {} } return result.structuredContent; }
+async function native(name, args = {}) { const result = await client.callTool({ name, arguments: args }, undefined, { timeout: 180000 }); if(result.isError){const problem=result.structuredContent?.error||{};throw Object.assign(Error(JSON.stringify(problem.code?problem:result.content)),{code:problem.code||'NATIVE_TOOL_FAILED'});} for (const block of result.content || []) if (block.type === 'text') { try { const packet = JSON.parse(block.text); if (packet && typeof packet === 'object') return packet; } catch {} } return result.structuredContent; }
 async function ui(action, payload = {}) { const result = await fetch(web.origin + '/api', { method: 'POST', headers: { Origin: web.origin, Authorization: `Bearer ${web.token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ action, payload }) }).then(r => r.json()); assert.equal(result.ok, true, JSON.stringify(result.error)); return result.result; }
 const row = prefix => app.getState().readingParagraphs.find(p => p.source.startsWith(prefix));
 const note = id => app.getState().reviewNotes.find(n => n.noteId === id);
@@ -166,6 +193,22 @@ try {
   await page.waitForFunction(width => Math.abs(document.querySelector('#pdf-container canvas')?.getBoundingClientRect().width - width) < 3, fittedWidth);
   assert.equal(hash(await readFile(path.join(sourceRoot, 'main.tex'))), sourceBeforeZoom); assert.equal((await app.readVersionPair()).latest.hash, pdfBeforeZoom);
   check('View-only PDF zoom visibly enlarges the actual compiled page and fit width restores it without changing source or PDF bytes');
+  async function saveExactCapture(capture, sourceId, expectedText, label) {
+    const beforeSource = hash(await readFile(path.join(sourceRoot, 'main.tex'))), beforeScope = scope(); let lastError;
+    for(let attempt=0;attempt<3;attempt++){
+      const captured=capture.drafts.find(item=>item.segmentId===sourceId);assert(captured);assert.equal(captured.text,expectedText);assert.equal(captured.composing,false);
+      try{return await native('bilingual_paper_save_editor_draft',{...beforeScope,captureId:capture.captureId,segmentId:sourceId,language:'zh-CN',baseDraftRevision:captured.baseDraftRevision,textHash:captured.textHash});}
+      catch(error){
+        if(error.code!=='EDITOR_BUFFER_CHANGED')throw error;lastError=error;
+        assert.deepEqual(scope(),beforeScope);assert.equal(hash(await readFile(path.join(sourceRoot,'main.tex'))),beforeSource);
+        capture=await native('bilingual_paper_read_editor_drafts',{...beforeScope,segmentIds:[sourceId],language:'zh-CN'});const fresh=capture.drafts[0];assert.equal(fresh.text,expectedText);assert.equal(fresh.composing,false);
+        protectedSaveRetries.push({label,attempt:attempt+1,reason:error.code,freshRevision:fresh.baseDraftRevision});
+        const saved=app.getState().translations['zh-CN'][sourceId];
+        if(fresh.saveState==='saved'&&saved?.text===expectedText&&saved.revision===fresh.baseDraftRevision)return{saved:true,alreadySavedExactBuffer:true};
+      }
+    }
+    throw lastError;
+  }
   async function editAndApply(sourceId, scalar, verb, label) {
     const host = page.locator(`[data-unit-id="${sourceId}"]`), editor = host.locator('.translation-input'); if (!await editor.isVisible()) await host.locator('.translation-reading').click(); await editor.waitFor({ state: 'visible' });
     const current = await editor.evaluate(el => el.value);
@@ -190,8 +233,7 @@ try {
       completeCapture = await native('bilingual_paper_read_editor_drafts', { ...scope(), segmentIds: [sourceId], language: 'zh-CN' });
       assert.equal(completeCapture.drafts[0].text, updated); assert.equal(completeCapture.drafts[0].saveState, 'saveFailed');
     } finally { await chmod(stateFile, 0o600); }
-    const human = completeCapture.drafts[0];
-    await native('bilingual_paper_save_editor_draft', { ...scope(), captureId: completeCapture.captureId, segmentId: sourceId, language: 'zh-CN', baseDraftRevision: human.baseDraftRevision, textHash: human.textHash });
+    await saveExactCapture(completeCapture,sourceId,updated,label);
     await page.waitForFunction(id => { const node = document.querySelector(`[data-unit-id="${id}"] .save-marker`); return node && /Saved|已保存/u.test(node.textContent); }, sourceId);
     await page.waitForFunction(() => { const node = document.querySelector('#notice'); return !node || node.hidden || !/EPERM|EACCES|rename.*state\.json/u.test(node.textContent); });
     await host.locator('.translation-edit-done').click();
@@ -250,7 +292,7 @@ try {
   await page.waitForFunction(id=>/Saved|已保存/u.test(document.querySelector(`[data-unit-id="${id}"] .save-marker`)?.textContent||''),inline.id);
   const rawCapture = await native('bilingual_paper_read_editor_drafts',{...scope(),segmentIds:[inline.id],language:'zh-CN'}), capturedRaw = rawCapture.drafts[0];
   assert.equal(capturedRaw.text,rawInline);
-  await native('bilingual_paper_save_editor_draft',{...scope(),captureId:rawCapture.captureId,segmentId:inline.id,language:'zh-CN',baseDraftRevision:capturedRaw.baseDraftRevision,textHash:capturedRaw.textHash});
+  await saveExactCapture(rawCapture,inline.id,rawInline,'adaptive-raw-draft');
   assert.equal(app.getState().translations['zh-CN'][inline.id].text,rawInline);assert.equal(app.getState().translations['zh-CN'][inline.id].sourceReviewRequired,true);
   await inlineHost.locator('.translation-edit-done').click();
   async function compileAndConfirm(request,replacement,label){
@@ -270,6 +312,50 @@ try {
   await compileAndConfirm(repaired,repaired.segments[0].text.replace('A bounded source adaptation retains unfinished author formatting.','The repaired author paragraph is ready for final review.'),'adaptive-repaired-writeback');
   assert(!app.getState().translations['zh-CN'][inline.id].sourceReviewRequired);assert(app.getState().translations['zh-CN'][inline.id].sourceWritebackReceipt);assert.equal(deriveEnglishWriteback(app.getState(),'zh-CN').mode,'empty');
   check('Incomplete structural text saves through native capture; partial compiled adaptation preserves pending intent, and repair permits an exact final writeback');
+  const specialRounds = [];
+  async function nativeSpecialWrite(prefix, transform, verify, label) {
+    const paragraph = row(prefix); assert(paragraph, `The self-authored special paragraph is missing: ${prefix}`);
+    const saved = app.getState().translations['zh-CN'][paragraph.id], priorSource = hash(await readFile(path.join(sourceRoot, 'main.tex'))), priorPdf = (await app.readVersionPair()).latest.hash;
+    const raw = readableDraft(paragraph, app.getState()), editedText = transform(raw) + ` 原生特殊修订第${specialRounds.length + 1}轮。`;
+    assert.notEqual(editedText, raw); await page.waitForFunction(() => !document.querySelector('.save-marker.saving,.save-marker.saveFailed'));
+    const edited = await native('bilingual_paper_edit_translation', { ...scope(), segmentId: paragraph.id, language: 'zh-CN', text: editedText, expectedRevision: saved.revision, expectedTextHash: hash(saved.text), reason: `Synthetic acceptance ${label}: change only the named inline objects and retain the exact closed calls and display labels.` });
+    assert.equal(edited.saved, true); assert.equal(edited.sourceChanged, false); assert.equal(edited.draft.text, editedText); assert.equal(edited.draft.editActor.kind, 'bound-chat'); assert.equal(edited.draft.editActor.threadId, thread);
+    assert.equal(edited.sourceCandidateAvailable, true, JSON.stringify(edited.diagnostics)); assert.equal(edited.sourceReviewRequired, false);
+    assert.equal(hash(await readFile(path.join(sourceRoot, 'main.tex'))), priorSource);
+    const request = await native('bilingual_paper_prepare_request', { ...scope(), kind: 'revision', segmentIds: [paragraph.id], language: 'zh-CN', prompt: 'Apply this exact saved special-structure author edit. Preserve unchanged custom invocations and mathematical display labels.' }), selected = request.segments[0];
+    assert(!selected.draftReview, JSON.stringify(selected.draftReview));
+    let english = selected.text;
+    for (const [before, after] of [...specialTranslationPairs].reverse()) english = english.replaceAll(after, before);
+    english = english.replace(/ 原生特殊修订第(\d+)轮。/gu, ' The author requests native special revision $1.').replaceAll('。', '.') + ` This native draft edit is special round ${specialRounds.length + 1}.`;
+    const proposed = await native('bilingual_paper_propose_revision', { requestId: request.requestId, reason: `Apply the exact saved native author intent for ${label}.`, edits: [{ segmentId: paragraph.id, beforeHash: selected.beforeHash, replacement: english }] });
+    const compiled = await native('bilingual_paper_compile', { kind: 'candidate', proposalIds: [proposed.proposalId] }); assert.equal(compiled.status, 'success'); assert.equal(compiled.isolated, true);
+    const transaction = app.flow.transactions.find(item => item.transactionId === compiled.transactionId), candidate = transaction.candidate.files.find(file => file.path === 'main.tex').content;
+    verify(candidate); assert(candidate.includes(String.raw`\label{eq:align-first}`) && candidate.includes(String.raw`\label{eq:align-second}`));
+    assert(candidate.includes(String.raw`\ClosedOne{fixed operand}`) && candidate.includes(String.raw`\ClosedZero{}`));
+    const grant = await ui('prepareAcceptance', { transactionId: compiled.transactionId }), applied = await ui('applyTransaction', { transactionId: compiled.transactionId, confirmationToken: grant.confirmationToken, idempotencyKey: label });
+    assert.equal(applied.state, 'applied'); if (applied.englishPdfJobId) await app.waitJob({ jobId: applied.englishPdfJobId });
+    const pair = await snapshot(label), currentSource = await readFile(path.join(sourceRoot, 'main.tex'), 'utf8'); verify(currentSource);
+    assert.notEqual(hash(currentSource), priorSource); assert.notEqual(pair.latest.hash, priorPdf);
+    const current = app.getState().translations['zh-CN'][paragraph.id]; assert.equal(current.text, editedText); assert(current.sourceWritebackReceipt); assert.equal(deriveEnglishWriteback(app.getState(), 'zh-CN').mode, 'empty');
+    await page.waitForFunction(snapshotId => document.querySelector('#snapshot-label')?.title === snapshotId, scope().expectedSnapshotId);
+    const proof = { label, sourceId: paragraph.id, draftRevision: current.revision, sourceHash: hash(currentSource), pdfHash: pair.latest.hash, actor: current.editActor };
+    specialRounds.push(proof); check('Native protected-object edit compiles and promotes the exact English candidate', proof);
+  }
+  await nativeSpecialWrite('Special spacing keeps', text => {
+    assert(text.includes('Section~4') && text.includes(String.raw`控制\ `));
+    return text.replace('Section~4', 'Section 4').replace(String.raw`控制\ `, '控制 ');
+  }, source => { assert(source.includes(String.raw`Section 4, control space, thin\,space and wide\quad space`)); }, 'native-special-spacing');
+  await nativeSpecialWrite('Escaped symbols remain literal', text => {
+    assert(text.includes(String.raw`25\%`)); return text.replace(String.raw`25\%`, '25 percent');
+  }, source => { assert(source.includes(String.raw`\{braces\}, 25 percent, \#tag, \& pair, \$price and under\_score`)); }, 'native-special-escapes');
+  await nativeSpecialWrite('Nested formatting keeps', text => {
+    assert(text.includes(String.raw`\textbf{`)); return text.replace(String.raw`\textbf{`, String.raw`\textit{`);
+  }, source => { assert(source.includes(String.raw`\textit{outer \emph{inner} words}`)); }, 'native-special-formatting');
+  await nativeSpecialWrite('Mathematical notation keeps', text => {
+    assert(text.includes('$u+v=w$') && text.includes(String.raw`\cite{Alpha}`) && text.includes(String.raw`\eqref{eq:align-first}`));
+    return text.replace('$u+v=w$', '$u+v=z$').replace(String.raw`\cite{Alpha}`, String.raw`\cite{Beta}`).replace(String.raw`\eqref{eq:align-first}`, String.raw`\eqref{eq:align-second}`);
+  }, source => { assert(source.includes('$u+v=z$') && source.includes(String.raw`$\frac{1}{2}\vec{x}\in\mathbb{R}^{n}$`) && source.includes(String.raw`\cite{Beta}; compare \eqref{eq:align-second}`)); }, 'native-special-math-and-references');
+  assert.equal(specialRounds.length, 4); assert.equal(app.getState().reviewNotes.length, 4); assert.equal(app.getState().transactions.filter(item => item.state === 'applied').length, 13);
   const finalState = app.getState(), finalSource = await readFile(path.join(sourceRoot, 'main.tex')), finalDrafts = structuredClone(finalState.translations), finalNotes = structuredClone(finalState.reviewNotes), finalPdfHash = (await app.readVersionPair()).latest.hash;
   assert(finalSource.includes(Buffer.from('$x=5$')) && finalSource.includes(Buffer.from('$y=9$')) && finalSource.includes(Buffer.from(String.raw`\label{eq:first}`)));
   assert(finalSource.includes(Buffer.from(String.raw`Section 1 and clear scope, with a literal 10 percent.`)));
@@ -285,7 +371,7 @@ try {
   assert.deepEqual(await readFile(path.join(sourceRoot, 'main.tex')), finalSource); assert.deepEqual(app.getState().translations, finalDrafts); assert.deepEqual(app.getState().reviewNotes, finalNotes); assert.equal((await app.readVersionPair()).latest.hash, finalPdfHash); assert.equal((await app.readVersionPair()).original.hash, originalPdfHash);
   const authorFiles = (await readdir(contextDir)).filter(name => name.endsWith('.pdf')); assert.deepEqual(authorFiles.sort(), ['latest-english.pdf', 'original.pdf']);
   check('Reopening preserves final source, translations, decisions, frozen original and exactly two author PDFs');
-  const receipt = { success: true, version: releaseVersion, syntheticOnly: true, originalManuscriptAccessed: false, modelTurns: 0, nativeMcpOperations: true, screenScraping: false, actualIsolatedCompiler: true, sourceWriteback: 'authenticated_ui_only', translated, checks, artifacts, sourceRoot, finalSourceHash: hash(finalSource), finalPdfHash, originalPdfHash, inlineStructureWritebacks: 2, adaptiveWritebacks: 2, reviewDecisions: finalNotes.map(n => ({ title: n.title, decision: n.decision || 'pending' })), firstTransactionId: first.transactionId };
+  const receipt = { success: true, version: releaseVersion, syntheticOnly: true, originalManuscriptAccessed: false, modelTurns: 0, nativeMcpOperations: true, screenScraping: false, actualIsolatedCompiler: true, sourceWriteback: 'authenticated_ui_only', translated, checks, artifacts, sourceRoot, finalSourceHash: hash(finalSource), finalPdfHash, originalPdfHash, inlineStructureWritebacks: 2, adaptiveWritebacks: 2, specialStructureWritebacks: specialRounds, protectedSaveRetries, writebackCount: 12, undoCount: 1, reviewDecisions: finalNotes.map(n => ({ title: n.title, decision: n.decision || 'pending' })), firstTransactionId: first.transactionId };
   await writeFile(path.join(run, 'acceptance.json'), JSON.stringify(receipt, null, 2)); await writeFile(path.join(parent, 'latest-run.json'), JSON.stringify({ run, success: true }, null, 2));
   console.log(JSON.stringify({ success: true, checks: checks.length, run }));
 } catch (error) {

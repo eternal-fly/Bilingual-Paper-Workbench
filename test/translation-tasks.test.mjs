@@ -151,8 +151,9 @@ test('delivery failures are visible and resume sends one new generation without 
 });
 
 test('an oversized single paragraph fails before delivery instead of omitting or truncating it', async t => {
-  const f = await fixture(t, 1, { padding: 150000 });
-  await assert.rejects(f.start(), error => ['ATOMIC_ITEM_TOO_LARGE', 'UNSUPPORTED_TEX'].includes(error.code)); assert.equal(f.deliveries.length, 0); assert.equal(f.tasks.state().tasks.length, 0);
+  const f = await fixture(t, 1, { padding: 150000 }),before=f.app.getState();
+  await assert.rejects(f.start(), error => ['REQUEST_TOO_LARGE', 'ATOMIC_ITEM_TOO_LARGE', 'UNSUPPORTED_TEX'].includes(error.code)); assert.equal(f.deliveries.length, 0); assert.equal(f.tasks.state().tasks.length, 0);
+  const after=f.app.getState();assert.deepEqual(after.requests,before.requests);assert.deepEqual(after.translations,before.translations);assert.equal(await readFile(f.filename,'utf8'),f.before);
 });
 
 test('concurrent exact retries across task controllers have one atomic draft write', async t => {

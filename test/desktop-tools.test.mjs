@@ -13,6 +13,7 @@ import { DesktopTranslationTasks } from '../src/translation-tasks.mjs';
 import { createPaperServer } from '../src/server.mjs';
 import { callBackgroundModelTool } from '../src/native-tool-dispatch.mjs';
 import { MODEL_CONTEXT_BYTES } from '../src/request-budgets.mjs';
+import { AUTHOR_FIDELITY_POLICY } from '../src/author-fidelity-policy.mjs';
 const root = fileURLToPath(new URL('../', import.meta.url)), threadId = 'exact-desktop-chat';
 const hash = text => createHash('sha256').update(text).digest('hex');
 async function connect(t, options) { const server = createPaperServer({ uiHtml: '<!doctype html>', relayHtml: '<!doctype html>', ...options }), client = new Client({ name: 'desktop-tools-test', version: '1' }), [cs, ss] = InMemoryTransport.createLinkedPair(); await server.connect(ss); await client.connect(cs); t.after(async () => { await client.close(); await server.close(); }); return client; }
@@ -38,6 +39,7 @@ test('existing native get/submit tools complete a selected 17-paragraph protecte
   for (;;) {
     const response = await f.client.callTool({ name: 'bilingual_paper_get_request', arguments: { requestId: started.taskId } }); assert.equal(response.isError, undefined, response._meta?.paperError?.message); assert.equal(response._meta?.paperUiToken, undefined); const packet = JSON.parse(response.content[0].text);
     assert.ok(Buffer.byteLength(response.content[0].text) <= MODEL_CONTEXT_BYTES); if (!packet.batch) { assert.equal(packet.status, 'completed'); assert.equal(packet.completed, ids.length); assert.equal(packet.remaining, 0); break; } assert.deepEqual(response.structuredContent.batch, packet.batch); assert.ok(response.structuredContent.batch.segments[0].protectedTokens.length >= 2);
+    assert(packet.instruction.includes(AUTHOR_FIDELITY_POLICY)); assert(f.deliveries[0].text.includes(AUTHOR_FIDELITY_POLICY));
     processed += packet.batch.segmentIds.length; processedIds.push(...packet.batch.segmentIds); batches++;
     const payload = { requestId: packet.batch.requestId, translations: translated(packet) }; firstReturn ||= payload;
     const returned = await f.client.callTool({ name: 'bilingual_paper_submit_translation_result', arguments: payload }); assert.equal(returned.isError, undefined, returned._meta?.paperError?.message); if (processed < 17) assert.equal(returned.structuredContent.nextTaskRequestId, started.taskId);
@@ -51,6 +53,7 @@ test('native caller identity cannot be supplied by model arguments and a differe
   const denied = await other.callTool({ name: 'bilingual_paper_get_request', arguments: { requestId: started.taskId } }); assert.equal(denied.isError, true); assert.match(denied.structuredContent.error.code, /ORIGIN|THREAD/);
   const spoofed = await f.client.callTool({ name: 'bilingual_paper_get_request', arguments: { requestId: started.taskId, originThreadId: threadId } }); assert.equal(spoofed.isError, true);
   const packet = JSON.parse((await f.client.callTool({ name: 'bilingual_paper_get_request', arguments: { requestId: started.taskId } })).content[0].text);
+  assert(packet.instruction.includes(AUTHOR_FIDELITY_POLICY)); assert(f.deliveries[0].text.includes(AUTHOR_FIDELITY_POLICY));
   const wrong = await other.callTool({ name: 'bilingual_paper_submit_translation_result', arguments: { requestId: packet.batch.requestId, translations: translated(packet) } }); assert.equal(wrong.isError, true); assert.equal(Object.keys(f.app.getState().translations['zh-CN'] || {}).length, 0);
   const broken = translated(packet); broken[0].text = 'Missing formulas'; const protectedResult = await f.client.callTool({ name: 'bilingual_paper_submit_translation_result', arguments: { requestId: packet.batch.requestId, translations: broken } }); assert.equal(protectedResult.structuredContent.error.code, 'PROTECTED_TOKEN_CHANGED');
 });
@@ -59,6 +62,7 @@ test('regular Desktop revision and message replies return through existing nativ
   const f = await fixture(t, 1), segment = f.app.getState().readingParagraphs[0];
   const request = await f.app.createRequest({ kind: 'revision', language: 'zh-CN', segmentIds: [segment.id], bindingId: `desktop:${threadId}`, prompt: 'Clarify this claim.' }); const queued = await f.execution.runRequest(f.app, { requestId: request.requestId });
   const packet = await f.client.callTool({ name: 'bilingual_paper_get_request', arguments: { requestId: request.requestId } }); assert.equal(packet.isError, undefined, packet._meta?.paperError?.message);
+  assert(packet.structuredContent.instruction.includes(AUTHOR_FIDELITY_POLICY)); assert(f.deliveries[0].text.includes(AUTHOR_FIDELITY_POLICY));
   const selected = JSON.parse(packet.content[0].text).segments[0], proposed = await f.client.callTool({ name: 'bilingual_paper_propose_revision', arguments: { requestId: request.requestId, edits: [{ segmentId: selected.id, beforeHash: selected.beforeHash, replacement: selected.text.replace('Paragraph', 'Revised paragraph') }], reason: 'Clarify the selected claim.' } }); assert.equal(proposed.isError, undefined, proposed._meta?.paperError?.message); assert.equal(proposed._meta?.paperState, undefined); assert.equal((await f.app.waitJob({ jobId: queued.jobId })).status, 'completed');
   const message = await f.execution.sendMessage({ text: 'Explain this equation.', idempotencyKey: 'discussion-1' }); const reply = await f.client.callTool({ name: 'bilingual_paper_submit_chat_reply', arguments: { messageId: message.messageId, text: 'The protected equation stays unchanged.' } }); assert.equal(reply.isError, undefined, reply._meta?.paperError?.message); assert.equal(f.execution.state().messages.at(-1).reply, 'The protected equation stays unchanged.');
 });

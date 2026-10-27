@@ -1,4 +1,4 @@
-# Bilingual Paper Workbench 1.6.2
+# Bilingual Paper Workbench 1.6.3
 
 A local Windows plugin for reading, translating and revising LaTeX papers with Codex. Three aligned columns show the English PDF, an editable translation in reading view, and paragraph-linked notes. Import the original LaTeX project to preserve its document class, columns, figures and bibliography when compiling English revisions.
 
@@ -97,6 +97,20 @@ Review imports allow **64 MiB per file**, **32 MiB of extracted text/annotations
 PDF review supplies text and paragraph evidence, not visual inspection of binary figures. SyncTeX offers coarse navigation. Compilation and feedback do not prove scientific correctness. The compiler enforces CPU, memory, wall-time and process limits with sampled output monitoring rather than a hard volume quota. Private state relies on user filesystem access controls; encryption at rest and a VM boundary are not claimed.
 
 See [Data and Source Boundaries](docs/core-boundaries.md), [Compiler Security](docs/compiler-security.md) and [Font Support](docs/fonts-support.md).
+
+## Version 1.6.3: coherent authorization and bound-chat editing
+
+The bound chat can inspect declared project source, current reviews and pending candidates; prepare review matching/organization; record review decisions; and edit translation text and supported inline TeX through native tools. Draft edits use exact revisions and prior-text hashes, record the trusted chat actor, and preserve unsaved editor input. Formula, reference, spacing and formatting intent can enter pending English candidates. Source acceptance remains a separate author confirmation after isolated compilation.
+
+Inline protection is applied to provable objects rather than freezing surrounding prose merely because the project contains an unrelated macro definition. Unknown input-consuming TeX retains an explicit protected boundary; it is not executed or guessed safe.
+
+For unfamiliar structures, **TeX source review** offers complete raw candidates over exact current source ranges, rather than a layout whitelist. The bound chat can prepare, propose, compile, inspect logs and repair through MCP. Raw candidates need a checked human review of the full TeX diff before writeback; project inputs and compiler isolation stay bounded. Paragraph identity survives repeat edits and reviewed undo. Unresolved draft intent remains saved separately from confirmed source application.
+
+Translation and synchronization choose one best natural expression while preserving the complete meaning and latest author draft. They do not authorize unsolicited deletions, scientific changes or adoption of review advice. Shared fidelity instructions cover both first requests and later native reads; the compiled candidate still requires author review.
+
+Native request reads and result returns refresh the exact current durable request and Desktop execution ticket, including when an identical binding is reused. A background cache loaded before another process registered a request no longer hides that request or its ticket. Result commits recheck current authorization so a later cancellation or revocation cannot be bypassed by a previously valid read.
+
+Refresh preserves exact paper, snapshot, chat and fingerprint checks. Conflicting, dirty or unreadable workflow state is reported explicitly and is not overwritten. It neither resends a request nor approves source changes. See the [verification record](docs/verification.md) for the separate-process regression and release gates.
 
 ## Version 1.6.2: preparation availability and delivery status
 

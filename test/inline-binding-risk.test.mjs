@@ -5,6 +5,8 @@ import {literalLexicalSafety} from '../src/range-authority.mjs';
 test('ordinary sequential presentation controls do not impersonate formatter redefinition constructors',()=>{const files=new Map([['main.tex',{path:'main.tex',text:String.raw`\newcommand{\eng}{\noindent{\normalfont\sffamily\scriptsize\color{Muted}EN}\enspace\ignorespaces}
 \newcommand{\bilingualheading}[2]{\par\textbf{#1 / #2}\par}
 \def\Ns{N^*}\begin{document}\par\smallskip\textbf{ordinary words}\end{document}`}]]);assert.deepEqual(inlineBindingRisk(files,{}, {lexicalSafety:literalLexicalSafety}),{opaqueSymbolArity:false,reboundControls:[]});});
+
+test('adjacent spacing and escaped punctuation are consumers rather than rebinding constructors',()=>{const text=String.raw`Sec.~3.1 \{x\}, 10\%, \,\! \%\#\&\_ \textsf{words} $x=1\,\!$`;assert.deepEqual(inlineBindingRisk(new Map([['main.tex',{path:'main.tex',text}]]),{}),{opaqueSymbolArity:false,reboundControls:[]});});
 test('already verified literal bibliography shims do not manufacture dynamic argument risk',()=>{const files=new Map([['main.tex',{path:'main.tex',text:String.raw`\def\Ns{N^*}
 \providecommand \BibitemShut [1]{\csname bibitem#1\endcsname}` }]]);const risk=inlineBindingRisk(files,{}, {lexicalSafety:literalLexicalSafety});assert.equal(risk.opaqueSymbolArity,false);assert.deepEqual(risk.reboundControls,[]);const unsafe=new Map([['main.tex',{path:'main.tex',text:String.raw`\catcode65=13 \DeclareRobustCommand{\%}{\input{secret}}`}]]);assert(inlineBindingRisk(unsafe,{}, {lexicalSafety:literalLexicalSafety}).opaqueSymbolArity);});
 const risk=(text,path='main.tex')=>inlineBindingRisk(new Map([[path,{path,text}]]),{});
@@ -15,3 +17,19 @@ test('unrelated literal math definitions comments and verbatim do not manufactur
 test('captured reachable definition files are read without traversing binary resources',()=>{const r=inlineBindingRisk(new Map([['main.tex',{path:'main.tex',text:'A paragraph.'}],['custom.def',{path:'custom.def',bytes:Buffer.from(String.raw`\def~#1{#1}`)}],['figure.pdf',{path:'figure.pdf',bytes:Buffer.from(String.raw`\let\x\y`)}]]),{});assert.equal(r.opaqueSymbolArity,true);assert.equal(risk('A paragraph.','figure.pdf').opaqueSymbolArity,false);});
 test('unreadable captured syntax fails closed without reading any external file',()=>{const r=inlineBindingRisk(new Map([['custom.sty',{path:'custom.sty',bytes:Buffer.from([255])}]]),{});assert.equal(r.opaqueSymbolArity,true);assert(r.reboundControls.includes('textbf'));});
 test('box primitives and destructive internal helpers fence formatter operands without fencing unrelated literal user math',()=>{for(const text of[String.raw`\def\hbox#1{\input{#1}}`,String.raw`\renewcommand{\vbox}[1]{#1}`,String.raw`\def\some@internal#1{\input{#1}}`,String.raw`\renewcommand{\some@internal}[1]{#1}`])assert(risk(text).reboundControls.includes('mbox'),text);assert.deepEqual(risk(String.raw`\def\Ns{N^*} \newcommand{\Ns@helper}{N^*}`),{opaqueSymbolArity:false,reboundControls:[]});});
+
+test('literal bibliography and theorem-style aliases remain scoped to their exact destinations',()=>{
+ for(const text of [String.raw`\let\pre@bibdata\@empty`,String.raw`\let\th@prlstatement\th@plain`,String.raw`\let\pre@bibdata = \@empty \let\th@prlstatement\th@plain`,String.raw`\let\bibliographyCache\@empty \let\pre@bibdata\bibliographyCache`,String.raw`\let\theoremStyle\th@plain \let\th@prlstatement\theoremStyle`,String.raw`\let\pre@bibdata % preserve the complete literal source token`+'\n'+String.raw`= \@empty`])assert.deepEqual(risk(text),{opaqueSymbolArity:false,reboundControls:[]},text);
+});
+test('stock alias names do not hide constructor chains or changed dependency meanings',()=>{
+ for(const text of [String.raw`\let\pre@bibdata\def`,String.raw`\let\constructor\def \let\pre@bibdata\constructor`,String.raw`\let\pre@bibdata\@empty \let\@empty\def`,String.raw`\def\@empty#1{#1}\let\pre@bibdata\@empty`,String.raw`\let\th@prlstatement\th@plain \def\th@plain#1{\input{#1}}`,String.raw`\let\unproved\missing \let\pre@bibdata\unproved`,String.raw`\let\a\b \let\b\a \let\pre@bibdata\a`,String.raw`\let\pre@bibdata\@empty \catcode65=13`,String.raw`\newcommand{\changeBindings}{\let\constructor\def}\let\pre@bibdata\@empty`])assert.equal(risk(text).unboundedBindings,true,text);
+});
+test('literal aliases to protected destinations retain their precise object guard',()=>{
+ const formatter=risk(String.raw`\let\textbf\@empty`);assert.equal(formatter.unboundedBindings,undefined);assert.deepEqual(formatter.reboundControls,['textbf']);
+ const symbol=risk(String.raw`\let\%\@empty`);assert.equal(symbol.unboundedBindings,undefined);assert.equal(symbol.opaqueSymbolArity,true);assert(symbol.symbolControls.includes('%'));
+});
+test('literal alias dependency validation spans all captured syntax files in either iteration order',()=>{
+ const alias={path:'main.tex',text:String.raw`\let\pre@bibdata\bibliographyCache`},dependency={path:'custom.sty',text:String.raw`\let\bibliographyCache\@empty`};
+ for(const files of [new Map([['main.tex',alias],['custom.sty',dependency]]),new Map([['custom.sty',dependency],['main.tex',alias]])])assert.deepEqual(inlineBindingRisk(files,{}),{opaqueSymbolArity:false,reboundControls:[]});
+ for(const files of [new Map([['main.tex',alias],['custom.sty',{path:'custom.sty',text:String.raw`\let\bibliographyCache\def`}]]),new Map([['main.tex',alias],['custom.sty',{path:'custom.sty',text:String.raw`\def\bibliographyCache#1{#1}`}]] )])assert.equal(inlineBindingRisk(files,{}).unboundedBindings,true);
+});

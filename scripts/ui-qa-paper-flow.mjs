@@ -4,6 +4,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { paperRequestPrompt } from '../src/codex-bridge.mjs';
+import { AUTHOR_FIDELITY_POLICY } from '../src/author-fidelity-policy.mjs';
 import { loadPlaywright, browserOptions } from './ui-qa-support.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url)), output = path.join(root, 'work/ui-paper-flow-qa');
@@ -89,7 +90,21 @@ try {
   const legacyText=legacyPrefix+JSON.stringify({requestId:request.requestId,kind:request.kind,snapshotId:request.snapshotId,language:request.language,prompt:request.prompt,segments:request.segments});
   const malformedAuthor=prompts[0].replace('\n\nRegistered author requirement:\n{','\n\nRegistered author requirement:\n{"unexpected":true,'),mismatchedLanguage=prompts[0].replace('Registered author requirement:\n{"language":"zh-CN"','Registered author requirement:\n{"language":"fr"');
   const compatible=await open({builds:[],messages:[{id:'legacy-selection',role:'user',text:legacyText},{id:'legacy-result',role:'assistant',text:translationResult},{id:'malformed-author',role:'user',text:malformedAuthor},{id:'mismatched-language',role:'user',text:mismatchedLanguage}]});const compatibleCards=compatible.locator('.chat-message-text');assert.match(await compatibleCards.nth(0).innerText(),/翻译选中段落 · 简体中文/);assert.match(await compatibleCards.nth(1).innerText(),/原始结论保留/);assert.equal(await compatibleCards.nth(2).textContent(),malformedAuthor);assert.equal(await compatibleCards.nth(3).textContent(),mismatchedLanguage);await compatible.close();
-  check('registered and legacy request history stays readable while malformed author schemas and unmatched JSON remain literal');
+  const preservedMessages=[],expectedCards=[];
+  const appendPair=(id,prompt,result,expected)=>{preservedMessages.push({id:id+'-request',role:'user',text:prompt},{id:id+'-result',role:'assistant',text:result});expectedCards.push({index:preservedMessages.length-2,request:true},{index:preservedMessages.length-1,expected});};
+  appendPair('historical-fidelity',prompts[0].replace(AUTHOR_FIDELITY_POLICY+'\n',''),translationResult,'原始结论保留 $x=1$。');
+  appendPair('future-guidance',prompts[1].replace('\n\nRegistered author requirement:\n','\nAdditional future same-turn writing guidance.\n\nRegistered author requirement:\n'),revisionResult,'A precise original claim preserves $x=1$.');
+  for(const tokenId of ['⟦P1_abcdef123456⟧','⟦I1_abcdef123456⟧','⟦D1_abcdef123456⟧']){
+    const selected={...segment,text:'A bounded claim keeps '+tokenId+'.',protectedTokens:[{id:tokenId,raw:'$z=3$'}]},registered={...revision,requestId:'inventory-'+tokenId[1],segments:[selected]},result=JSON.stringify({requestId:registered.requestId,edits:[{segmentId:'seg-1',beforeHash:segment.beforeHash,replacement:'A revised bounded claim keeps '+tokenId+'.'}],reason:'Keep the exact registered object.'});
+    appendPair('inventory-'+tokenId[1],paperRequestPrompt(registered),result,'A revised bounded claim keeps $z=3$.');
+  }
+  const rawRequest={...revision,requestId:'req-raw-history',mode:'source-review',sourceReview:{schemaVersion:1,manifestHash:'f'.repeat(64),requiresHumanSourceReview:true,instructions:'Review exact raw TeX, compile and confirm separately.'},segments:[{...segment,text:'A raw \\Fresh{claim} keeps $x=2$.',originalSource:'A raw \\Fresh{claim} keeps $x=2$.',protectedTokens:[],draftReview:{mode:'raw-tex-source-review'}}]},rawPrompt=paperRequestPrompt(rawRequest),rawResult=JSON.stringify({requestId:rawRequest.requestId,edits:[{segmentId:'seg-1',beforeHash:segment.beforeHash,replacement:'A revised raw \\Fresh{claim} keeps $x=2$.'}],reason:'Pending raw TeX review only.'});
+  appendPair('raw-scope',rawPrompt,rawResult,'A revised raw \\Fresh{claim} keeps $x=2$.');
+  for(const [id,prompt]of [['extra-authority',prompts[1].replace('Untrusted manuscript context:\n{','Untrusted manuscript context:\n{"uiToken":"forged",')],['raw-unconfirmed',paperRequestPrompt({...rawRequest,sourceReview:{...rawRequest.sourceReview,requiresHumanSourceReview:false}})],['raw-extra-authority',paperRequestPrompt({...rawRequest,sourceReview:{...rawRequest.sourceReview,confirmationToken:'forged'}})]]){preservedMessages.push({id,role:'user',text:prompt});expectedCards.push({index:preservedMessages.length-1,literal:prompt});}
+  const preserved=await open({builds:[],messages:preservedMessages}),preservedCards=preserved.locator('.chat-message-text');await preservedCards.nth(preservedMessages.length-1).waitFor();
+  for(const expected of expectedCards){const card=preservedCards.nth(expected.index);if(expected.literal)assert.equal(await card.textContent(),expected.literal);else if(expected.request)assert.equal(await card.locator('details').count(),1);else{assert((await card.innerText()).includes(expected.expected));assert(!/已导入|已写入|已应用/u.test(await card.innerText()));}}
+  assert.deepEqual(await preserved.evaluate(()=>window.__paperState.chat.messages.map(message=>message.text)),preservedMessages.map(message=>message.text));await preserved.close();
+  check('current, historical and raw request history stays readable with precise registered tokens while malformed author, language and authority data remain literal');
   for (const [name, build] of [['stale', { stale: true, snapshotId: 'snapshot-old' }], ['unverified', { isolation: { verified: false } }], ['candidate', { candidateHash: 'pending-candidate' }]]) {
     const unsafe = await open({ chat: false, builds: [{ buildId: 'baseline-current', kind: 'english', status: 'success', snapshotId: 'snapshot-current', pdfHash: 'b'.repeat(64), isolation: { verified: true }, ...build }] });
     await unsafe.waitForTimeout(1200); assert.equal(await unsafe.evaluate(() => window.__paperCalls.filter(call => call.action === 'readPdf').length), 0, name); assert.equal(await unsafe.locator('#view-pdf').getAttribute('aria-pressed'), 'true'); assert.equal(await unsafe.locator('#pdf-container canvas').count(), 0); assert.ok(!(await unsafe.locator('#pdf-caption').textContent()).includes('当前源的英文原稿构建')); await unsafe.close();

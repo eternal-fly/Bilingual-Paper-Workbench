@@ -10,6 +10,7 @@ import {reconcileFormulaDraft,captureFormulaRequest,formulaDraftFromState,carryF
 const fail = (code, message) => { throw Object.assign(new Error(message), { code }); };
 const languageTag = value => { if (typeof value !== 'string' || !/^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$/.test(value) || Object.hasOwn(Object.prototype, value)) fail('INVALID_INPUT', 'Invalid language.'); return value; };
 const now = () => new Date().toISOString();
+const readingCacheKey=state=>{const project=state.project,profile=project?.inlineStructureSafety;return JSON.stringify([project?.id||null,project?.snapshotId||null,state.readingAnchorRevision||0,profile?.policyVersion??'legacy',profile?.analysisFingerprint||profile?.fingerprint||'unverified']);};
 function protectedReading(source, id, filename) {
   const parts = extractSegments(source, filename), bytes = Buffer.from(source), tokens = [];
   let cursor = 0, displayText = '';
@@ -29,9 +30,13 @@ function protectedReading(source, id, filename) {
 export class ReadingWorkspace {
   constructor(app) { this.app = app; this.cache = null; }
   derive(state = this.app.core.getState(), history = state.readingAnchors || []) {
-    const key = `${state.project?.snapshotId}:${state.readingAnchorRevision || 0}`;
+    const key = readingCacheKey(state);
     if (this.cache?.key === key && history === state.readingAnchors) return this.cache;
     const projections = [], paragraphs = [], used = new Set();
+    // Only ranges retained from an exact confirmed source-review transaction
+    // can survive independently of the optional semantic reading decoder.
+    const retained=[];
+    for(const anchor of state.sourceReviewAnchors||[]){const file=this.app.core._files.get(anchor.path);if(anchor.projectId!==state.project.id||anchor.snapshotId!==state.project.snapshotId||!file||!Number.isSafeInteger(anchor.startByte)||!Number.isSafeInteger(anchor.endByte)||anchor.startByte<0||anchor.endByte<anchor.startByte||anchor.endByte>file.bytes.length)continue;try{const source=new TextDecoder('utf-8',{fatal:true}).decode(file.bytes.subarray(anchor.startByte,anchor.endByte));if(sha256(source)!==anchor.sourceHash)continue;retained.push({...anchor,source});}catch{}}
     for (const file of this.app.core._files.values()) {
       if (!file.path.toLowerCase().endsWith('.tex')) continue;
       let view;
@@ -43,24 +48,28 @@ export class ReadingWorkspace {
       for (const raw of view.paragraphs || []) {
         const source = raw.source ?? raw.english;
         if (typeof source !== 'string' || !Number.isSafeInteger(raw.startByte) || !Number.isSafeInteger(raw.endByte)) continue;
+        const retainedRange=retained.find(anchor=>anchor.path===file.path&&anchor.startByte<raw.endByte&&anchor.endByte>raw.startByte);
+        if(retainedRange&&(retainedRange.startByte!==raw.startByte||retainedRange.endByte!==raw.endByte||retainedRange.source!==source))continue;
         const sourceHash = sha256(source), exact = state.segments.find(item => item.path === file.path && item.startByte === raw.startByte && item.endByte === raw.endByte && item.beforeHash === sourceHash);
         const previous = history.find(item => !used.has(item.id) && item.path === file.path && item.startByte === raw.startByte && item.endByte === raw.endByte && item.sourceHash === sourceHash);
         // An independently readable opaque canonical block needs a separate
         // reading namespace; the canonical request route must remain opaque.
         const ordinaryCanonical = raw.confidence === 'literalEnglishStructure' && exact && !exact.translatable;
-        const id = previous?.id || (!ordinaryCanonical ? exact?.id : null) || `read-${randomUUID()}`; used.add(id);
-        const authority = prepared && this.app.core._literalProjectSafe() && authorizeReadingRange(prepared, { id, path: file.path, startByte: raw.startByte, endByte: raw.endByte, sourceHash }, state.project.snapshotId);
+        const id = retainedRange?.id || previous?.id || (!ordinaryCanonical ? exact?.id : null) || `read-${randomUUID()}`; used.add(id);
+        const authority = prepared && this.app.core._literalProjectSafe() && authorizeReadingRange(prepared, { id, path: file.path, startByte: raw.startByte, endByte: raw.endByte, sourceHash }, state.project.snapshotId, { inlineStructureSafety: state.project.inlineStructureSafety });
         const masked = authority ? { displayText: authority.displayText, protectedTokens: authority.protectedTokens, sourceAuthority: authority.sourceAuthority, requestable: true } : raw.confidence === 'literalEnglishStructure' ? protectEnglishReading(source, id) : protectedReading(source, id, file.path);
         const sourceDiagnostics = raw.confidence === 'literalEnglishStructure' && !authority && (!exact?.translatable || raw.sourceCandidateEligible === false) ? [{ code: 'ENGLISH_SOURCE_READING_ONLY', severity: 'warning', message: raw.sourceCandidateEligible === false ? 'This mathematical, opaque or structurally uncertain interval is preserved for reading/translation only.' : 'Literal source-write authority could not be proved; existing TeX objects remain protected for translation and discussion.' }] : [];
         paragraphs.push({ ...raw, id, path: file.path, source, sourceHash, beforeHash: sourceHash, sourceSegmentIds: [id],
           canonicalSegmentIds: state.segments.filter(item => item.path === file.path && item.startByte < raw.endByte && item.endByte > raw.startByte).map(item => item.id),
           section: raw.section || exact?.section || state.segments.find(item => item.path === file.path && item.startByte <= raw.startByte && item.endByte >= raw.endByte)?.section || '正文',
-          translation: raw.translation ?? raw.existingTranslation?.text ?? '', translatable: true, writableSource: Boolean(authority || raw.sourceCandidateEligible !== false && exact?.translatable), ...masked,
+          translation: raw.translation ?? raw.existingTranslation?.text ?? '', translatable: true, writableSource: Boolean(authority || state.project.inlineStructureSafety?.unboundedBindings !== true && raw.sourceCandidateEligible !== false && exact?.translatable),sourceReviewAvailable:this.app.core.sourceReviewAvailable?.(id)===true, ...masked,
           ...(sourceDiagnostics.length ? { sourceDiagnostics } : {}),
         originalLine: raw.originalLine || file.bytes.subarray(0, raw.startByte).toString('utf8').split('\n').length });
       }
     }
-    if (!paragraphs.length) for (const segment of state.segments.filter(item => item.translatable)) paragraphs.push({ ...segment, sourceHash: segment.beforeHash, sourceSegmentIds: [segment.id], canonicalSegmentIds: [segment.id], writableSource: true, requestable: true, translation: state.translations[state.project?.targetLanguage]?.[segment.id]?.text || '', originalLine: this.app.core._files.get(segment.path).bytes.subarray(0, segment.startByte).toString('utf8').split('\n').length });
+    for(const anchor of retained){if(used.has(anchor.id))continue;const file=this.app.core._files.get(anchor.path),masked=protectedReading(anchor.source,anchor.id,anchor.path);used.add(anchor.id);paragraphs.push({...anchor,beforeHash:anchor.sourceHash,sourceSegmentIds:[anchor.id],canonicalSegmentIds:state.segments.filter(row=>row.path===anchor.path&&row.startByte<anchor.endByte&&row.endByte>anchor.startByte).map(row=>row.id),kind:'paragraph',confidence:'rawSourceReviewRange',section:'Source review',translation:'',translatable:true,writableSource:false,sourceReviewAvailable:this.app.core.sourceReviewAvailable?.(anchor.id)===true,...masked,sourceDiagnostics:[{code:'SOURCE_REVIEW_RAW_RANGE',severity:'warning',message:'This exact confirmed TeX range is retained independently of semantic decoding. Continue through explicit source review; protected source authority has not been inferred.'}],originalLine:file.bytes.subarray(0,anchor.startByte).toString('utf8').split('\n').length});}
+    paragraphs.sort((a,b)=>a.path.localeCompare(b.path)||a.startByte-b.startByte);
+    if (!paragraphs.length) for (const segment of state.segments.filter(item => item.translatable)) paragraphs.push({ ...segment, sourceHash: segment.beforeHash, sourceSegmentIds: [segment.id], canonicalSegmentIds: [segment.id], writableSource: state.project.inlineStructureSafety?.unboundedBindings !== true,sourceReviewAvailable:this.app.core.sourceReviewAvailable?.(segment.id)===true, requestable: true, translation: state.translations[state.project?.targetLanguage]?.[segment.id]?.text || '', originalLine: this.app.core._files.get(segment.path).bytes.subarray(0, segment.startByte).toString('utf8').split('\n').length });
     return { key, projections, paragraphs };
   }
   async syncLocked(history = null) {
@@ -82,11 +91,11 @@ export class ReadingWorkspace {
         if (!Object.hasOwn(state.readingDrafts[language], paragraph.id)) state.readingDrafts[language][paragraph.id] = { text: language === 'zh-CN' ? paragraph.translation : '', revision: paragraph.translation && language === 'zh-CN' ? 1 : 0, sourceHash: paragraph.sourceHash, status: 'saved', origin: 'sourceBilingual' };
       }
     }
-    await this.app.core._commit(state); this.cache = { ...view, key: `${state.project.snapshotId}:${state.readingAnchorRevision}` };
+    await this.app.core._commit(state);for(const paragraph of view.paragraphs)paragraph.sourceReviewAvailable=this.app.core.sourceReviewAvailable?.(paragraph.id)===true;this.cache = { ...view, key: readingCacheKey(state) };
   }
   state(state) {
     if (!state.project) return { ...state, readingParagraphs: [], englishView: { available: false, diagnostics: [] } };
-    const view = this.cache?.key === `${state.project.snapshotId}:${state.readingAnchorRevision || 0}` ? this.cache : this.derive(state);
+    const view = this.cache?.key === readingCacheKey(state) ? this.cache : this.derive(state);
     const translations = structuredClone(state.translations);
     for (const [language, drafts] of Object.entries(state.readingDrafts || {})) translations[language] = { ...(translations[language] || {}), ...structuredClone(drafts) };
     return { ...state, translations, originals: { ...(state.readingOriginals || {}), ...(state.originals || {}) }, readingParagraphs: structuredClone(view.paragraphs),

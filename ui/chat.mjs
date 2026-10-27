@@ -1,6 +1,4 @@
 import {renderMarkdown} from './markdown-reader.mjs';
-import {WRITING_SKILLS_POLICY} from '../src/writing-skills-policy.mjs';
-import {TRANSLATION_QUALITY_CHECK} from '../src/translation-quality.mjs';
 const $ = id => document.getElementById(id);
 const running = status => ['queued', 'running', 'inProgress', 'streaming', 'thinking', 'connecting', 'starting'].includes(status);
 const modelId = model => model?.id || model?.model || '';
@@ -23,26 +21,30 @@ const exactKeys = (value, keys) => onlyKeys(value, keys) && keys.every(key => Ob
 const identifier = value => typeof value === 'string' && value.length > 0 && value.length <= 128;
 const reviewId = value => typeof value === 'string' && /^review-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(value);
 const digest = value => typeof value === 'string' && /^[a-f0-9]{64}$/i.test(value);
+const protectedId=/^⟦(?:P\d+_(?:[a-f0-9]{6}|[a-f0-9]{12})|[ID]\d+_[a-f0-9]{12})⟧$/u;
+const unresolvedProtected=/⟦(?:P\d+_(?:[a-f0-9]{6}|[a-f0-9]{12})|[ID]\d+_[a-f0-9]{12})⟧/u;
 function boundedJson(text, limit) {
   if (typeof text !== 'string' || text.length > limit || new TextEncoder().encode(text).length > limit) return null;
   try { return JSON.parse(text); } catch { return null; }
 }
 function validSelection(request) {
-  return object(request) && identifier(request.requestId) && Object.hasOwn(selectionInstructions, request.kind) && identifier(request.snapshotId) && identifier(request.language) && typeof request.prompt === 'string' && Array.isArray(request.segments) && request.segments.length > 0 && new Set(request.segments.map(segment => segment?.segmentId || segment?.id)).size === request.segments.length && request.segments.every(segment => object(segment) && identifier(segment.segmentId || segment.id) && /^[a-f0-9]{64}$/i.test(segment.beforeHash) && typeof segment.text === 'string' && Array.isArray(segment.protectedTokens) && segment.protectedTokens.every(token => object(token) && /^⟦P\d+_[a-f0-9]{6}⟧$/u.test(token.id) && typeof token.raw === 'string'));
+  if (!object(request) || request.mode !== undefined && !['protected','source-review'].includes(request.mode)) return false;
+  if (request.mode === 'source-review') {
+    const review=request.sourceReview;
+    if(request.kind!=='revision'||!exactKeys(review,['schemaVersion','manifestHash','requiresHumanSourceReview','instructions'])||review.schemaVersion!==1||!digest(review.manifestHash)||review.requiresHumanSourceReview!==true||typeof review.instructions!=='string')return false;
+  } else if(request.sourceReview!==undefined)return false;
+  return identifier(request.requestId) && Object.hasOwn(selectionInstructions, request.kind) && identifier(request.snapshotId) && identifier(request.language) && typeof request.prompt === 'string' && Array.isArray(request.segments) && request.segments.length > 0 && new Set(request.segments.map(segment => segment?.segmentId || segment?.id)).size === request.segments.length && request.segments.every(segment => object(segment) && identifier(segment.segmentId || segment.id) && /^[a-f0-9]{64}$/i.test(segment.beforeHash) && typeof segment.text === 'string' && Array.isArray(segment.protectedTokens) && new Set(segment.protectedTokens.map(token=>token?.id)).size===segment.protectedTokens.length && segment.protectedTokens.every(token => object(token) && protectedId.test(token.id) && typeof token.raw === 'string'));
 }
 function selectionFromMessage(text) {
   if (text.startsWith(currentSelectionPrefix)) {
-    for (const [kind, instruction] of Object.entries(selectionInstructions)) {
-      const prefix = currentSelectionPrefix + instruction + (kind !== 'discussion' ? '\n' + WRITING_SKILLS_POLICY : '') + (kind === 'translation' ? '\n' + TRANSLATION_QUALITY_CHECK : '') + '\n\nRegistered author requirement:\n';
-      if (!text.startsWith(prefix)) continue;
-      const marker = '\n\nUntrusted manuscript context:\n', boundary = text.indexOf(marker, prefix.length);
-      if (boundary < 0) continue;
-      const author = boundedJson(text.slice(prefix.length, boundary), 64 * 1024), context = boundedJson(text.slice(boundary + marker.length), 64 * 1024);
-      if (!exactKeys(author, ['language', 'instruction']) || typeof author.instruction !== 'string' || !exactKeys(context, ['requestId', 'kind', 'snapshotId', 'language', 'segments']) || author.language !== context.language || context.kind !== kind) continue;
-      const request = {...context, prompt:author.instruction};
-      if (validSelection(request)) return request;
-    }
-    return null;
+    // This display recognizer follows the stable envelope and exact JSON
+    // schema, rather than copying changing writing/model policy paragraphs.
+    // Recognizing a card never grants tools, confirmation or source authority.
+    const authorMarker='\n\nRegistered author requirement:\n',marker='\n\nUntrusted manuscript context:\n',authorAt=text.indexOf(authorMarker,currentSelectionPrefix.length),start=authorAt+authorMarker.length,boundary=authorAt<0?-1:text.indexOf(marker,start);
+    if(boundary<0)return null;
+    const author=boundedJson(text.slice(start,boundary),64*1024),context=boundedJson(text.slice(boundary+marker.length),64*1024),required=['requestId','kind','snapshotId','language','segments'];
+    if(!exactKeys(author,['language','instruction'])||typeof author.instruction!=='string'||!onlyKeys(context,[...required,'mode','sourceReview'])||!required.every(key=>Object.hasOwn(context,key))||author.language!==context.language)return null;
+    const request={...context,prompt:author.instruction};return validSelection(request)?request:null;
   }
   if (!text.startsWith(selectionPrefix)) return null;
   for (const [kind, instruction] of Object.entries(selectionInstructions)) {
@@ -56,7 +58,7 @@ function selectionFromMessage(text) {
 function manuscriptText(text, segment) {
   let result = String(text || '');
   for (const token of segment.protectedTokens) result = result.split(token.id).join(token.raw);
-  return /⟦P\d+_[a-f0-9]{6}⟧/u.test(result) ? '此段保护对象无法还原，可展开原始数据核对。' : result;
+  return unresolvedProtected.test(result) ? '此段保护对象无法还原，可展开原始数据核对。' : result;
 }
 function selectionPresentation(request) {
   const title = { translation: '翻译选中段落', revision: '生成原文修改建议', discussion: '讨论选中段落' }[request.kind];

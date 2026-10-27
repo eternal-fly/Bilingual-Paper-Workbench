@@ -36,6 +36,12 @@ test('stale host catalogs use fixed native project/editor/preparation verbs with
  assert.throws(()=>parseDesktopCallback(['save-editor'],Buffer.from(JSON.stringify({...cases[3][1],text:'Injected model replacement'}))),{code:'INVALID_INPUT'});assert.throws(()=>parseDesktopCallback(['project'],Buffer.from(JSON.stringify({originThreadId:'foreign'}))),{code:'INVALID_INPUT'});
 });
 
+test('candidate compilation uses its fixed native tool and cannot accept a caller-selected tool or source approval',async t=>{
+ const f=await fixture(t),input={kind:'candidate',proposalIds:['proposal-a','proposal-b']};await callDesktopCallback(parseDesktopCallback(['compile'],Buffer.from(JSON.stringify(input))),f.options);
+ const sent=f.calls.filter(row=>row[0]==='tool').at(-1)[1];assert.equal(sent.name,'bilingual_paper_compile');assert.deepEqual(sent.arguments,input);
+ for(const extra of[{tool:'applyTransaction'},{confirmationToken:'forged'},{originThreadId:'foreign'}])assert.throws(()=>parseDesktopCallback(['compile'],Buffer.from(JSON.stringify({...input,...extra}))),{code:'INVALID_INPUT'});
+});
+
 test('missing or malformed inherited origin fails before installation reads or client connection', async t => {
   const f = await fixture(t), input = parseDesktopCallback(['get', 'req-1']);
   for (const origin of [undefined, '', 'foreign root/path', 'bad\nthread']) await assert.rejects(callDesktopCallback(input, { ...f.options, pluginRoot: path.join(f.installed, 'missing'), env: origin === undefined ? {} : { CODEX_THREAD_ID: origin } }), { code: 'HOST_CHAT_UNAVAILABLE' });

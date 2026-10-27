@@ -6,17 +6,21 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { MODEL_TOOL_BYTES } from './request-budgets.mjs';
 import { z } from 'zod';
+import {nativeWorkbenchSchema,nativeTranslationEditSchema} from './native-workbench-tools.mjs';
 const ROOT = fileURLToPath(new URL('../', import.meta.url)), MAX_INPUT = MODEL_TOOL_BYTES, MAX_OUTPUT = MODEL_TOOL_BYTES;
 const tools = { get: 'bilingual_paper_get_request', submit: 'bilingual_paper_submit_translation_result', revision: 'bilingual_paper_propose_revision', reply: 'bilingual_paper_submit_chat_reply' };
 const nativeId=z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/u),nativeLanguage=z.string().regex(/^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$/u),scope={expectedProjectId:nativeId,expectedSnapshotId:nativeId},ids=z.array(nativeId).min(1),offset=z.number().int().nonnegative();
 const nativeActions={
+  workbench:['bilingual_paper_workbench',nativeWorkbenchSchema],
+  compile:['bilingual_paper_compile',z.object({kind:z.enum(['english','baseline','candidate']).default('english'),proposalIds:ids.optional()}).strict()],
+  'edit-translation':['bilingual_paper_edit_translation',nativeTranslationEditSchema],
   state:['bilingual_paper_get_state',z.object({}).strict()],
   project:['bilingual_paper_read_project',z.object({expectedProjectId:nativeId.optional(),expectedSnapshotId:nativeId.optional(),offset:offset.optional(),limit:z.number().int().positive().optional()}).strict()],
   paragraphs:['bilingual_paper_read_paragraphs',z.object({...scope,segmentIds:ids,offset:offset.optional()}).strict()],
   'read-editor':['bilingual_paper_read_editor_drafts',z.object({...scope,segmentIds:ids.optional(),language:nativeLanguage.optional(),captureId:nativeId.optional(),offset:offset.optional()}).strict()],
   'save-editor':['bilingual_paper_save_editor_draft',z.object({...scope,captureId:nativeId,segmentId:nativeId,language:nativeLanguage,baseDraftRevision:offset,textHash:z.string().regex(/^[a-f0-9]{64}$/u)}).strict()],
   'reconcile-draft':['bilingual_paper_reconcile_translation_draft',z.object({...scope,segmentId:nativeId,language:nativeLanguage,expectedRevision:z.number().int().positive()}).strict()],
-  prepare:['bilingual_paper_prepare_request',z.object({...scope,kind:z.enum(['translation','revision','discussion']),segmentIds:ids,language:nativeLanguage.optional(),prompt:z.string().max(8000).optional()}).strict()],
+  prepare:['bilingual_paper_prepare_request',z.object({...scope,kind:z.enum(['translation','revision','discussion']),mode:z.enum(['protected','source-review']).optional(),segmentIds:ids,language:nativeLanguage.optional(),prompt:z.string().max(8000).optional()}).strict()],
   'prepare-translation':['bilingual_paper_prepare_translation_task',z.object({...scope,scope:z.enum(['all','selected']),sourceSegmentIds:ids.optional(),language:nativeLanguage.optional(),prompt:z.string().max(8000).optional()}).strict()],
   'control-translation':['bilingual_paper_control_translation_task',z.object({expectedProjectId:nativeId,expectedSnapshotId:nativeId.optional(),taskId:nativeId,action:z.enum(['cancel','resume'])}).strict()],
   languages:['bilingual_paper_configure_languages',z.object({...scope,expectedRevision:offset,uiLanguage:nativeLanguage.optional(),translationLanguage:z.union([nativeLanguage,z.literal('interface')]).optional()}).strict()],

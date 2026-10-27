@@ -4,7 +4,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createHash,randomUUID} from 'node:crypto';
 
-export const SOURCE_VERSION='1.6.2';
+export const SOURCE_VERSION='1.6.3';
 export const PLUGIN_ROOT=fileURLToPath(new URL('../',import.meta.url));
 const TOP=['LICENSE','NOTICE','SECURITY.md','CONTRIBUTING.md','README.md','plugin.json','package.json','mcp.json','pnpm-lock.yaml','pnpm-workspace.yaml','.gitignore'];
 const DIRECTORIES=['src','ui','scripts','test','docs'];

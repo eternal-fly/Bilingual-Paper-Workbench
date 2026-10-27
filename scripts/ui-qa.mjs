@@ -17,6 +17,7 @@ const suites = [
   ['editor-performance','ui-qa-editor-performance.mjs','work/ui-editor-performance-qa/report.json',13],
   ['submission-model-refresh','ui-qa-submission-model-refresh.mjs','work/ui-submission-model-refresh-qa/report.json',8],
   ['english-writeback','ui-qa-english-writeback.mjs','work/ui-english-writeback-qa/report.json',17],
+  ['source-review-candidate','ui-qa-source-review-candidate.mjs','work/ui-source-review-candidate-qa/report.json',6],
   ['review-revalidation','ui-qa-review-revalidation.mjs','work/ui-review-revalidation-qa/report.json',16],
   ['project-switcher','ui-qa-project-switcher.mjs','work/ui-project-switcher-qa/report.json',11],
   ['project-handoff','ui-qa-project-handoff.mjs','work/ui-project-handoff-qa/report.json',7],

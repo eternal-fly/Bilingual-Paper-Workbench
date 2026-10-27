@@ -11,6 +11,8 @@ import {MODEL_CONTEXT_BYTES} from '../src/request-budgets.mjs';
 import {createPaperServer} from '../src/server.mjs';
 import {callBackgroundModelTool} from '../src/native-tool-dispatch.mjs';
 import {editorDraftsFor} from '../src/editor-drafts.mjs';
+import {AUTHOR_FIDELITY_POLICY} from '../src/author-fidelity-policy.mjs';
+import {parseDesktopCallback} from '../src/desktop-callback.mjs';
 const threadId='trusted-native-paper-chat';
 for(const kind of ['translation','revision'])test(`native staged ${kind} publishes only after every result part and retries exactly once`,async t=>{
  const f=await fixture(t,3),ids=f.app.getState().readingParagraphs.map(p=>p.id),request=ok(await f.call('bilingual_paper_prepare_request',{...f.scope,kind,segmentIds:ids}));
@@ -30,6 +32,48 @@ test('an author draft edit while staged results arrive preserves the manual text
 async function connect(t,service,caller=threadId){const server=createPaperServer({service,nativeThreadId:caller,uiHtml:'<!doctype html>'}),client=new Client({name:'native-paper-tools-test',version:'1'}),[cs,ss]=InMemoryTransport.createLinkedPair();await server.connect(ss);await client.connect(cs);t.after(async()=>{await client.close();await server.close();});return client;}
 async function fixture(t,count=17,{padding=0}={}){const owned=path.resolve('work/native-paper-tools-tests');await mkdir(owned,{recursive:true});const temporary=await mkdtemp(path.join(owned,'case-')),root=path.join(temporary,'source');await mkdir(root);const source='\\documentclass{article}\n\\begin{document}\n\n'+Array.from({length:count},(_,i)=>`Paragraph ${i} protects $x_{${i}}=1$ and \\cite{paper${i}}. ${' Repeated reading text.'.repeat(padding)}`).join('\n\n')+'\n\n\\end{document}\n',filename=path.join(root,'main.tex');await writeFile(filename,source);const app=new PaperApplication({dataRoot:path.join(temporary,'private')});await app.openProject({root,mainFile:'main.tex',targetLanguage:'zh-CN'});const service=new Proxy(new EventEmitter(),{get(target,key){if(key in target)return typeof target[key]==='function'?target[key].bind(target):target[key];return typeof app[key]==='function'?app[key].bind(app):app[key];}});service.active=app;service.getHostContext=()=>({native:true,taskIdAvailable:true,hostTaskId:threadId});const project=app.getState().project;await app._flowAction(()=>{app.flow.nativeChatBinding={projectId:project.id,threadId,source:'originating-host-chat',model:'gpt-6-astra'};});const deliveries=[];app.translationTasks=new DesktopTranslationTasks(app,{getThreadId:()=>threadId,enqueue:async payload=>{deliveries.push(payload);return{};}});const client=await connect(t,service);t.after(async()=>{await app.close();assert(temporary.startsWith(owned+path.sep));await rm(temporary,{recursive:true,force:true});});const scope={expectedProjectId:project.id,expectedSnapshotId:project.snapshotId};return{app,service,client,project,scope,source,filename,deliveries,call:(name,args={})=>client.callTool({name,arguments:args})};}
 const ok=response=>{assert.equal(response.isError,undefined,response._meta?.paperError?.message||response.content?.[0]?.text);assert.equal(response._meta?.paperUiToken,undefined);return response.structuredContent;};
+
+test('later native request reads retain fidelity instructions and the exact registered selection',async t=>{
+ const f=await fixture(t,2),ids=f.app.getState().readingParagraphs.map(row=>row.id);
+ for(const kind of ['translation','revision']){
+  const prepared=ok(await f.call('bilingual_paper_prepare_request',{...f.scope,kind,segmentIds:ids,prompt:'Express every selected claim faithfully.'})),later=ok(await f.call('bilingual_paper_get_request',{requestId:prepared.requestId}));
+  assert(prepared.instruction.includes(AUTHOR_FIDELITY_POLICY));assert(later.instruction.includes(AUTHOR_FIDELITY_POLICY));assert.equal(later.requestId,prepared.requestId);assert.equal(later.kind,kind);assert.equal(later.prompt,prepared.prompt);assert.deepEqual(later.segments,prepared.segments);assert.equal(later.nextOffset,null);
+ }
+ assert.equal(f.deliveries.length,0);assert.equal(await readFile(f.filename,'utf8'),f.source);
+});
+
+test('native raw source review retains exact derived ranges and current author intent through callback staging',async t=>{
+ const f=await fixture(t,1),synthetic=String.raw`\documentclass{article}
+\newtheorem{claim}{Claim}
+\expandafter\def\csname Opaque\endcsname#1{#1}
+\begin{document}
+\begin{claim}
+First original \Opaque{claim} uses $x=1$.
+
+Second original \Opaque{claim} uses $y=1$.
+\end{claim}
+\end{document}
+`;
+ await writeFile(f.filename,synthetic);
+ try{
+  await f.app.openProject({root:f.app.getProjectRoot(),mainFile:'main.tex'});const state=f.app.getState(),scope={expectedProjectId:state.project.id,expectedSnapshotId:state.project.snapshotId},rows=state.readingParagraphs.filter(row=>/^(First|Second) original/u.test(row.source)),ids=rows.map(row=>row.id);assert.equal(ids.length,2);assert(rows.every(row=>row.writableSource===false&&row.sourceReviewAvailable===true));assert(rows.some(row=>f.app.reading.hasDerived(row.id)));
+  const protectedNative=ok(await f.call('bilingual_paper_prepare_request',{...scope,kind:'translation',mode:'protected',language:'zh-CN',segmentIds:ids}));assert.equal(protectedNative.kind,'translation');assert(protectedNative.segments.every(row=>row.protectedTokens.length>0));assert.equal(f.app.core.getState().requests.find(row=>row.requestId===protectedNative.requestId).origin,'readingView');
+  const protectedApp=await f.app.createRequest({kind:'translation',mode:'protected',language:'zh-CN',segmentIds:ids,bindingId:`native:${threadId}`});assert.equal(protectedApp.origin,'readingView');assert.deepEqual(protectedApp.segmentIds,ids);
+  const before=state.proposals.length,args={...scope,kind:'revision',mode:'source-review',language:'zh-CN',segmentIds:ids,prompt:'Use the exact current saved draft and review complete TeX changes.'},parsed=parseDesktopCallback(['prepare'],Buffer.from(JSON.stringify(args)));assert.equal(parsed.input.mode,'source-review');
+  const prepared=ok(await f.call('bilingual_paper_prepare_request',args)),later=ok(await f.call('bilingual_paper_get_request',{requestId:prepared.requestId}));assert.equal(prepared.mode,'source-review');assert.equal(later.mode,'source-review');assert.equal(later.sourceReview.requiresHumanSourceReview,true);assert.deepEqual(later.segments,prepared.segments);assert.deepEqual(later.segments.map(row=>row.id),ids);assert(later.segments.every(row=>row.rawSource===row.text&&row.sourceAuthority.kind==='source-review-range-v1'&&row.protectedTokens.length===0));
+  const foreign=await connect(t,f.service,'foreign-source-review-chat');assert.equal((await foreign.callTool({name:'bilingual_paper_get_request',arguments:{requestId:prepared.requestId}})).isError,true);
+  const edits=prepared.segments.map(row=>({segmentId:row.id,beforeHash:row.beforeHash,replacement:row.rawSource.replace('original','revised').replace('=1','=2')}));ok(await f.call('bilingual_paper_propose_revision',{requestId:prepared.requestId,reason:'Review both exact raw ranges.',resultCount:2,batchOffset:0,finalize:false,edits:edits.slice(0,1)}));assert.equal(f.app.getState().proposals.length,before);
+  await f.app.saveDraft({segmentId:ids[1],language:'zh-CN',text:'A newer complete author draft.',expectedRevision:0});const stale=await f.call('bilingual_paper_propose_revision',{requestId:prepared.requestId,reason:'Review both exact raw ranges.',resultCount:2,batchOffset:1,finalize:true,edits:edits.slice(1)});assert.equal(stale.isError,true);assert.match(stale.structuredContent.error.code,/STALE|VERSION_CONFLICT/u);assert.equal(f.app.getState().proposals.length,before);
+  const fresh=ok(await callBackgroundModelTool(f.service,{name:'bilingual_paper_prepare_request',arguments:args,bindingId:'synthetic-raw-callback',originThreadId:threadId}));assert.equal(fresh.mode,'source-review');assert.equal(fresh.segments[1].translationDraft.text,'A newer complete author draft.');
+  const proposed=ok(await f.call('bilingual_paper_propose_revision',{requestId:fresh.requestId,reason:'Faithful pending raw TeX revisions only.',edits:fresh.segments.map(row=>({segmentId:row.id,beforeHash:row.beforeHash,replacement:row.rawSource.replace('original','revised').replace('=1','=2')}))}));assert.equal(proposed.reviewState,'pending');assert.equal(proposed.applicationState,'notApplied');assert.equal(f.app.getState().proposals.find(row=>row.proposalId===proposed.proposalId).context.mode,'source-review');assert.equal(f.app.getState().proposals.length,before+1);assert.equal(f.app.getState().transactions.length,0);assert.equal(f.app.getState().translations['zh-CN'][ids[1]].text,'A newer complete author draft.');assert.equal(f.deliveries.length,0);assert.equal(await readFile(f.filename,'utf8'),synthetic);
+  const{expectedProjectId,expectedSnapshotId,...appArgs}=args,direct=await f.app.createRequest({...appArgs,bindingId:`native:${threadId}`});assert.equal(direct.mode,'source-review');assert.deepEqual(direct.segmentIds,ids);
+ }finally{await writeFile(f.filename,f.source);}
+});
+
+test('installed callback exposes only the fixed candidate compilation verb without accepting arbitrary tools or approval fields',()=>{
+ const parsed=parseDesktopCallback(['compile'],Buffer.from(JSON.stringify({kind:'candidate',proposalIds:['proposal-a','proposal-b']})));assert.equal(parsed.action,'compile');assert.deepEqual(parsed.input,{kind:'candidate',proposalIds:['proposal-a','proposal-b']});
+ for(const payload of [{kind:'candidate',proposalIds:['proposal-a'],tool:'applyTransaction'},{kind:'candidate',proposalIds:['proposal-a'],confirmationToken:'not-authority'},{kind:'arbitrary',proposalIds:['proposal-a']}])assert.throws(()=>parseDesktopCallback(['compile'],Buffer.from(JSON.stringify(payload))),{code:'INVALID_INPUT'});
+});
 
 function publishEditor(t,f,row){const store=editorDraftsFor(f.service);let sequence=0;const publish=()=>{const request=store.poll({...f.scope,clientId:'synthetic-editor'});if(request.captureId)store.publish({...f.scope,clientId:'synthetic-editor',sequence:++sequence,captureId:request.captureId,drafts:Array.isArray(row)?row:[row]});};store.poll({...f.scope,clientId:'synthetic-editor'});const timer=setInterval(publish,2);t.after(()=>{clearInterval(timer);store.close();});return store;}
 test('native status advertises current MCP/editor transport without exposing browser authority',async t=>{
