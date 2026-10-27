@@ -42,14 +42,14 @@ export async function switchPaperProject({ service, profile, session, input, ens
   if (targetSession.url !== session.url) { const status = await reserveWindow(reservation); if (status?.reason !== 'reserved') fail('PROJECT_WINDOW_HANDOFF_UNVERIFIED', 'The source window could not reserve the selected target safely.'); reserved = true; }
   try {
   await request({ url: targetSession.url, action: 'syncHostProject', payload: await signRefresh(targetOptions, targetSession) });
-  let response = await request({ url: targetSession.url, action: 'state', payload: {} }), target = response.state;
+  let response = await request({ url: targetSession.url, action: 'state', payload: {} }), target = response.result || response.state;
   if (target.workspaceIndex?.currentRecordId !== record.recordId) { response = await request({ url: targetSession.url, action: 'openWorkspaceRecord', payload: { recordId: record.recordId } }); target = response.state; }
   const deadline = Date.now() + readyTimeoutMs;
   for (;;) {
     if (target.workspaceIndex?.currentRecordId !== record.recordId || target.project?.id !== saved.projectId) fail('WORKSPACE_RECORD_CHANGED', 'The target workbench did not retain the exact selected paper.');
     if (target.desktopExecution?.available && target.desktopExecution.threadId === metadata.threadId && target.originatingChat?.verified === true && target.originatingChat.threadId === metadata.threadId) break;
     if (Date.now() >= deadline || ['failed', 'preserved-binding'].includes(target.originatingChat?.phase)) fail('PROJECT_CHAT_NOT_READY', 'The selected paper chat is not ready. Its source and history were preserved.');
-    await new Promise(resolve => setTimeout(resolve, 100)); response = await request({ url: targetSession.url, action: 'state', payload: {} }); target = response.state;
+    await new Promise(resolve => setTimeout(resolve, 100)); response = await request({ url: targetSession.url, action: 'state', payload: {} }); target = response.result || response.state;
   }
   service._assertIdle?.(); if (targetSession.url !== session.url && scope(service) !== originalScope) fail('WORKSPACE_RECORD_CHANGED', 'The source workbench changed while the target project was being prepared.');
   await service.registry.selectForChat({ threadId: metadata.threadId, recordId: record.recordId, hostProjectRoot: metadata.cwd });

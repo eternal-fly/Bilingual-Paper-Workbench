@@ -9,6 +9,15 @@ test('static prose formatting becomes readable Markdown while mathematical and c
   assert.equal(result.text, String.raw`**A *precise* claim** uses $\ket{x_i}$ and \cite{a,b}.`);
   assert.deepEqual(result.diagnostics, []);
 });
+test('safe transparent fonts, underline and prose spacing decode without changing math, reference or escaped bytes',()=>{
+ const raw=String.raw`\textsf{A}\,\textsc{B}\;\underline{C}\:\!D\ E~F $x~y\,z$ \cite{a~b} \% \_ \{literal\}`;
+ const result=decodeTexProse(raw);assert.equal(result.text,String.raw`A B C  D E F $x~y\,z$ \cite{a~b} \% \_ \{literal\}`);assert.deepEqual(result.diagnostics,[]);
+ const incomplete=String.raw`\textsf{keep~\underline{unfinished\,`;assert.equal(decodeTexProse(incomplete).text,incomplete);assert(decodeTexProse(incomplete).diagnostics.length);
+});
+test('balanced plain and mixed mbox content uses only the transparent inline scanner proof',()=>{
+ for(const[raw,expected]of[[String.raw`\mbox{plain text}`,'plain text'],[String.raw`\mbox{mixed $x~y\,z$ prose}`,String.raw`mixed $x~y\,z$ prose`],[String.raw`\mbox{$x$ $y$}`,String.raw`$x$ $y$`],[String.raw`\mbox{\textsf{A~B}\,\underline{C} \cite{paper}}`,String.raw`A B C \cite{paper}`]]){const result=decodeTexProse(raw);assert.equal(result.text,expected);assert.deepEqual(result.diagnostics,[]);}
+ for(const raw of[String.raw`\mbox{A \input{secret.tex}}`,String.raw`\mbox{\unknown{plain}}`,String.raw`\mbox{A % comment}`,String.raw`\mbox{<img src=x onerror=evil()>}`,String.raw`\mbox{A \textsf{unfinished}`,String.raw`\mbox{A $unfinished}`]){const result=decodeTexProse(raw);assert.equal(result.text,raw);assert(result.diagnostics.length);}
+});
 test('known section and list structure is decoded without interpreting unknown macros or raw HTML', () => {
   const raw = String.raw`\section{引言}
 \begin{enumerate}\item 第一项 $x=1$.\item 第二项 \textit{说明}.\end{enumerate}
@@ -43,7 +52,7 @@ test('source prose can resolve the5001st protected structure token without trunc
 test('repeated unclosed formatting is bounded and unsupported styling remains literal', () => {
   const raw = String.raw`\textbf{`.repeat(1500) + 'tail';
   const result = decodeTexProse(raw); assert.equal(result.text, raw); assert.ok(result.diagnostics.some(item => item.code === 'TEX_PROSE_LIMIT'));
-  const unsupported = String.raw`\underline{exact text}`; assert.equal(decodeTexProse(unsupported).text, unsupported); assert.ok(decodeTexProse(unsupported).diagnostics.length);
+  const unsupported = String.raw`\textcolor{red}{exact text}`; assert.equal(decodeTexProse(unsupported).text, unsupported); assert.ok(decodeTexProse(unsupported).diagnostics.length);
 });
 test('translation update scope uses only explicit staleness or source-hash mismatch, and lists missing translations separately', () => {
   const state = { readingParagraphs: ['fresh','changed','stale','missing','opaque'].map(id => ({ id, sourceHash: id, translatable: id !== 'opaque' })), translations: { 'zh-CN': { fresh: { text:'已译',sourceHash:'fresh' }, changed:{text:'作者草稿',sourceHash:'old',origin:'human'},stale:{text:'旧译',sourceHash:'stale',status:'stale'} } } };
@@ -57,8 +66,8 @@ test('single complete inline-math boxes unwrap only in reading and retain exact 
  for(const [source,expected]of[[String.raw`The value is \mbox{$Z^v=\Tr(\rho)$} and \cite{paper}.`,String.raw`The value is $Z^v=\Tr(\rho)$ and \cite{paper}.`],[String.raw`A \mbox{\(x^{2}+\ip{a}{b}\)} B.`,String.raw`A \(x^{2}+\ip{a}{b}\) B.`],[String.raw`A \mbox{ $x$ } B.`,String.raw`A  $x$  B.`]]){const before=source,result=decodeTexProse(source);assert.equal(result.text,expected);assert.deepEqual(result.diagnostics,[]);assert.equal(source,before);}
  const tokens=[{id:'⟦P1_ab⟧',raw:String.raw`\mbox{$x=1$}`}],before=structuredClone(tokens);assert.equal(decodeTexProse('Value ⟦P1_ab⟧.',{tokens}).text,'Value $x=1$.');assert.deepEqual(tokens,before);
 });
-test('mixed, nonmath, incomplete and unsafe boxes retain source and a warning',()=>{
- for(const source of[String.raw`\mbox{plain text}`,String.raw`\mbox{mixed $x$ prose}`,String.raw`\mbox{$x$ $y$}`,String.raw`\mbox{$x}`,String.raw`\mbox{\(x}`,String.raw`\mbox{$x^{2$}`,String.raw`\mbox{\(x$y\)}`,String.raw`\mbox{$x\)y$}`,String.raw`\mbox*{$x$}`,String.raw`\mbox{$\input{secret}$}`,String.raw`\mbox{$x$`,String.raw`\mbox{<img src=x onerror=evil()>}`]){const result=decodeTexProse(source);assert.equal(result.text,source);assert(result.diagnostics.some(item=>item.code==='TEX_PROSE_UNSUPPORTED'));}
+test('incomplete and unsafe boxes retain source and a warning',()=>{
+ for(const source of[String.raw`\mbox{$x}`,String.raw`\mbox{\(x}`,String.raw`\mbox{$x^{2$}`,String.raw`\mbox{\(x$y\)}`,String.raw`\mbox{$x\)y$}`,String.raw`\mbox*{$x$}`,String.raw`\mbox{$\input{secret}$}`,String.raw`\mbox{$x$`,String.raw`\mbox{<img src=x onerror=evil()>}`]){const result=decodeTexProse(source);assert.equal(result.text,source);assert(result.diagnostics.some(item=>item.code==='TEX_PROSE_UNSUPPORTED'));}
 });
 test('texorpdfstring decodes the balanced display branch recursively and requires a complete bookmark argument',()=>{
  const source=String.raw`\subsection{\texorpdfstring{A \textbf{precise} regime for $x^2$}{A regime for x2}}`,result=decodeTexProse(source);assert.equal(result.text,'\n### A **precise** regime for $x^2$\n');assert.deepEqual(result.diagnostics,[]);

@@ -35,3 +35,9 @@ test('writeback receipts never hide newer text or revisions, foreign scopes, cha
     const f = receiptFixture(); mutate(f.state); assert.notEqual(deriveEnglishWriteback(f.state, 'zh-CN').mode, 'empty');
   }
 });
+test('an applied receipt cannot consume a new or unresolved inline structure intent',()=>{
+  for(const key of ['inlineStructureIntent','inlineStructureConflict','inlineStructureUnmapped']){
+    const f=receiptFixture();f.state.translations['zh-CN'].a[key]=key==='inlineStructureIntent'?{projectId:'project',snapshotId:'after',segmentId:'a',language:'zh-CN',before:'old',after:'new'}:true;
+    assert.notEqual(deriveEnglishWriteback(f.state,'zh-CN').mode,'empty',key+' remains pending author intent');
+  }
+});

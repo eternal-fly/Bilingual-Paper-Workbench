@@ -1,6 +1,6 @@
 # Bilingual Paper Workbench — User Manual
 
-**Version 1.5.2 · Windows · English edition**
+**Version 1.6.0 · Windows · English edition**
 
 Bilingual Paper Workbench connects an English LaTeX paper, an editable translation and paragraph-linked review notes in one workspace. Your existing Codex Desktop chat performs translation and review; the workbench provides the reading, editing and confirmation interface. English is the default interface language. The translation language is a separate choice.
 
@@ -65,6 +65,14 @@ The default is feedback for the latest approved scope. You can request one parag
 
 Use the left toolbar for projects, source inspection, history, outline, language, theme, translation, synchronization, discussion and revisions. The light theme uses subdued cream and warm yellow; the dark theme is separately selectable. The window is resizable and opens normally rather than maximized by default.
 
+## Magnify the English PDF
+
+The PDF controls change the view, not the PDF file. **Fit width** initially fits the page to its column. Choose a percentage or use **Zoom in / Zoom out** to inspect a region; **Actual size** returns to 100%. **View options** provides an exact percentage from 25% to 400%.
+
+Use Ctrl+wheel or a trackpad pinch over the PDF to zoom around the pointer. To move a magnified page, use its scrollbars, hold Space while dragging, use the middle mouse button, or enable **Hand tool**. Ordinary scrolling remains ordinary scrolling. When hand mode is off, a normal click still locates the corresponding source; dragging does not submit that click.
+
+Keyboard operation and scrollbars remain available without dragging. Zoom and pan preserve the current PDF identity and page coordinates. Returning to fit width adapts to a resized column. Visible zoom and rendering resolution are separate: very large views use a bounded canvas rather than allocating an unbounded bitmap.
+
 ## Adjust the translation text size
 
 Open **More → Translation display → Text size**. Choose any size from **14 to 28 px**; the default is **17 px**. Select **Reset** to restore 17 px. Body paragraphs and captions use the same base size, while headings retain their relative hierarchy.
@@ -107,9 +115,25 @@ The supported commands are `cite`, `citep`, `citet`, `citealp`, `citealt`, `cite
 
 This release accepts literal ASCII keys up to 128 characters, using letters, digits, `_`, `.`, `:`, `/`, `+` and `-`. Case-colliding bibliography entries are treated as ambiguous; label names remain case-sensitive.
 
-This first reference-editing scope retains command names and optional notes. Label definitions such as `\label{eq:bound}`, numeric citation display atoms, structural objects and references inside formulas remain protected. A newly inserted or ambiguously mapped reference can be saved as a local draft without permission to change English source; the workbench explains when source mapping must be resolved.
+This reference-editing scope retains command names and optional notes. Label definitions such as `\label{eq:bound}`, numeric citation display atoms and references inside formulas retain their source-validation rules. Inline structures have their own editable scope below. A newly inserted or ambiguously mapped reference can be saved as a local draft without permission to change English source; the workbench explains when source mapping must be resolved.
 
 For a proven existing occurrence, the backend records your exact reference change as source-pinned author intent. Request an English candidate, review it, compile that exact candidate and confirm writeback. The model must retain all unedited formulas and references. Undoing the draft change revokes pending source authority; undoing a confirmed source change still needs a separately compiled inverse and confirmation. Later model translation/review output preserves active author reference edits rather than overwriting them.
+
+## Edit inline TeX structures
+
+The translation paragraph editor displays structural notation as text rather than forcing generic **Structure** chips. Edit spacing and formatting alongside prose, formulas and existing references:
+
+```tex
+Section~3.1 and \textbf{the main result}, with a literal 10\% value.
+```
+
+Supported source-revision intent includes nonbreaking spaces and safe spacing controls, escaped literal characters, and balanced static formatting such as `\emph{...}`, `\textbf{...}`, `\textit{...}`, `\textnormal{...}`, `\textrm{...}`, `\textsf{...}`, `\texttt{...}`, `\textsc{...}`, `\underline{...}` and `\mbox{...}`. The backend derives this intent from your exact saved paragraph and current source, alongside its formula and reference checks. The model must retain the exact authorized inventory in its English candidate.
+
+The source grant is also bound to the captured project dependencies. Projects that redefine spacing, escapes or formatting controls, or use unproved dynamic definitions, require source review before these structural changes can become English candidates. The draft remains editable.
+
+Being able to type a command does not make every command a valid source edit. An incomplete wrapper or a change to a label, environment boundary, file-loading control or executable macro receives a validation message and retains the current input for correction. It does not become an immutable browser object or permission to execute that TeX. The last valid saved draft remains available; keep or export input awaiting correction before closing the window.
+
+Generate and compile the corresponding English candidate, review it and confirm **Write back English** as usual. Repeated confirmed writes update the draft's association with the new source. Model translation/review output cannot silently overwrite pending structural author intent; resolve any stated mapping conflict before replacing that paragraph.
 
 ## Default writing Skills and translation checks
 

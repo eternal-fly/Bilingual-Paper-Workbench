@@ -38,6 +38,7 @@ await page.addInitScript(({ artifacts }) => {
       return { ...artifact, buildId: build.buildId, snapshotId: build.promotedSnapshotId || build.snapshotId, kind: build.kind, provenance: 'verified-isolated-build', ...(build.candidateHash ? { candidateHash: build.candidateHash } : {}), promoted: Boolean(build.promotedSnapshotId) };
     }
     if (action === 'recordPdfView') {
+      if(window.__denyRecord)throw Object.assign(Error('Synthetic PDF-view registration refused; the displayed artifact is unchanged.'),{code:'EPERM'});
       if (state.versionPair.available === false) throw Object.assign(Error('The current English pair is not ready.'), { code: 'VERSION_PAIR_COMPILE_REQUIRED' });
       state.pdfSelection = { ...state.pdfSelection, revision: state.pdfSelection.revision + 1, activeRole: payload.role, activeBuildId: payload.buildId, activePdfHash: payload.pdfHash };
       if (state.pdfSelection.requestedRole === payload.role) delete state.pdfSelection.requestedRole;
@@ -67,6 +68,17 @@ try {
   await page.goto('https://paper.invalid/'); await visible('original');
   assert.equal(await page.locator('#pdf-artifact').inputValue(), 'version-latest');
   check('the initial verified latest PDF opens without changing its frozen original');
+  await page.evaluate(()=>{window.__denyRecord=true;});await page.locator('#pdf-artifact').selectOption('version-original');await visible('original');
+  await page.waitForFunction(()=>document.querySelector('#notice').textContent.includes('Synthetic PDF-view registration refused'));
+  const deniedReads=await page.evaluate(()=>window.__paperCalls.filter(call=>call.action==='readPdf').length);
+  await page.locator('#translation-panel').focus();await page.evaluate(()=>{window.__denyRecord=false;window.__publish();});
+  await page.waitForFunction(()=>window.__paperState.pdfSelection.activeRole==='original',null,{timeout:3500});
+  assert.equal(await page.locator('#notice').isHidden(),true);assert.equal(await page.evaluate(()=>document.activeElement.id),'translation-panel');assert.equal(await page.evaluate(()=>window.__paperCalls.filter(call=>call.action==='readPdf').length),deniedReads);
+  check('a transient PDF-view registration failure retries only its exact displayed artifact and clears its own banner after acknowledgment without reloading or moving focus');
+  await page.evaluate(()=>{window.__denyRecord=true;});await page.locator('#pdf-artifact').selectOption('version-latest');await page.waitForFunction(()=>!document.querySelector('#notice').hidden&&document.querySelector('#notice').textContent.includes('Synthetic PDF-view registration refused'));
+  await page.locator('#refresh').click();const unrelatedNotice=await page.locator('#notice').textContent();assert.match(unrelatedNotice,/Unsupported synthetic action refreshProject/);
+  await page.evaluate(()=>{window.__denyRecord=false;window.__publish();});await page.waitForFunction(()=>window.__paperState.pdfSelection.activeRole==='latest',null,{timeout:3500});assert.equal(await page.locator('#notice').textContent(),unrelatedNotice);assert.equal(await page.locator('#notice').isVisible(),true);
+  check('recovering PDF-view registration preserves a newer unrelated source-operation error');
   await page.locator('#review-toggle').click(); await page.locator('#preview-proposal').click();
   await page.waitForFunction(() => window.__paperCalls.some(call => call.action === 'previewTransaction'));
   await page.evaluate(() => {

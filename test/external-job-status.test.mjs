@@ -28,12 +28,12 @@ test('authenticated HTTP polling refreshes external terminal jobs before ETag an
   const f = await fixture(t), beforeSource = await readFile(f.filename);
   const service = new WorkspaceService({ initialApp: f.app, factory: async () => { throw new Error('Must not start another controller'); }, dataRoot: path.join(f.directory, 'registry'), codexRoot: path.join(f.directory, 'chat') });
   const web = await startLocalWeb({ service }); t.after(() => web.close());
-  const first = await call(web); assert.equal(first.status, 200); const etag = first.headers.get('etag'); assert.equal((await first.json()).state.jobs[0].status, 'running');
+  const first = await call(web); assert.equal(first.status, 200); const etag = first.headers.get('etag'); assert.equal((await first.json()).result.jobs[0].status, 'running');
   assert.equal((await call(web, etag)).status, 304);
   const external = { ...structuredClone(f.app.flow), jobs: [f.terminal()], builds: [{ buildId: 'must-not-import' }], transactions: [{ transactionId: 'must-not-import' }] };
   const disk = JSON.stringify(external); await writeFile(f.workflow, disk);
   const changed = await call(web, etag); assert.equal(changed.status, 200); assert.notEqual(changed.headers.get('etag'), etag);
-  const state = (await changed.json()).state; assert.equal(state.jobs[0].status, 'completed'); assert.equal(state.jobs[0].controllable, false);
+  const state = (await changed.json()).result; assert.equal(state.jobs[0].status, 'completed'); assert.equal(state.jobs[0].controllable, false);
   assert.equal(state.builds[0].buildId, 'keep-local-build'); assert.equal(state.transactions[0].transactionId, 'keep-local-transaction');
   assert.equal((await call(web, changed.headers.get('etag'))).status, 304);
   assert.equal(await readFile(f.workflow, 'utf8'), disk); assert.deepEqual(await readFile(f.filename), beforeSource);

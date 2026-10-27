@@ -18,13 +18,15 @@ import { loadPlaywright, browserOptions } from './ui-qa-support.mjs';
 // This opt-in acceptance creates its own paper, reviews and translations.
 // It cannot select an existing manuscript or operate an existing Desktop chat.
 const root = fileURLToPath(new URL('../', import.meta.url));
+const releaseVersion = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')).version;
 const runtimeRoot = process.env.PAPER_EDITOR_TEST_RUNTIME;
 assert(runtimeRoot && path.isAbsolute(runtimeRoot), 'Set PAPER_EDITOR_TEST_RUNTIME to a prepared isolated compiler runtime.');
-const parent = path.join(root, 'work/a152'); await mkdir(parent, { recursive: true });
+const parent = path.join(root, 'work/a160'); await mkdir(parent, { recursive: true });
 const run = await mkdtemp(path.join(parent, 'roundtrip-')), sourceRoot = path.join(run, 'source'), dataRoot = path.join(run, 'state'), contextDir = path.join(run, 'context');
 await mkdir(sourceRoot); await mkdir(contextDir);
 const hash = value => createHash('sha256').update(value).digest('hex');
 const thread = 'synthetic-multiple-edit-chat', instanceId = 'synthetic-multiple-edit-session';
+const failedActions = [];
 const checks = [], artifacts = [], check = (name, details = {}) => { checks.push({ name, ...details }); console.log(JSON.stringify({ check: name, ...details })); };
 const original = String.raw`\documentclass[11pt]{article}
 \usepackage{amsmath}
@@ -52,6 +54,10 @@ d+e=f.\label{eq:second}
 
 The demonstration has no experimental data and makes no accuracy guarantee. A reviewer may keep this concern pending, ask for another revision, or accept a precisely scoped wording change after checking it.
 
+\section{Inline formatting}
+
+An inline example uses Section~1 and \textbf{clear scope}, with a literal 10\% value.
+
 \bibliographystyle{plain}
 \bibliography{references}
 \end{document}
@@ -68,13 +74,14 @@ const reviewText = JSON.stringify(reviewDocument, null, 2);
 await writeFile(path.join(run, 'review-comments.json'), reviewText, { flag: 'wx' });
 function translateFixture(text) {
   const pairs = [
-    ['A Small Synthetic Revision Study', '小型合成修订研究'], ['Introduction', '引言'], ['Method', '方法'], ['Limitations', '局限性'],
+    ['A Small Synthetic Revision Study', '小型合成修订研究'], ['Introduction', '引言'], ['Method', '方法'], ['Limitations', '局限性'], ['Inline formatting', '行内排版'],
     ['We study a synthetic revision workflow with a fixed illustrative scalar ', '我们研究一个合成修订流程，固定示例标量为 '],
     [' and an explicit reference to ', '，并明确引用 '],
     ['. This example tests editing and persistence rather than a scientific claim; see ', '。本示例测试编辑与持久保存流程，不提出科学结论；参见 '],
     ['The independent second paragraph keeps the illustrative value ', '独立的第二段保留示例数值 '],
     [' while the first paragraph changes. Its source identity should remain stable when unrelated text is written back, and it cites ', '，同时允许第一段发生变化。其他段落写回时，本段的源码关联应保持稳定，并引用 '],
     ['The demonstration has no experimental data and makes no accuracy guarantee. A reviewer may keep this concern pending, ask for another revision, or accept a precisely scoped wording change after checking it.', '本演示没有实验数据，也不保证准确率。审阅者可以将此意见保持待定、要求再次修改，或在核对后采纳范围明确的措辞修改。'],
+    ['An inline example uses Section', '一个行内示例使用第'], ['1 and ', '1节和'], ['clear scope', '清晰的范围'], [', with a literal 10', '，其中包含字面值10'], [' value.', '。'],
   ];
   for (const [before, after] of pairs) text = text.replaceAll(before, after);
   return text.replace(/\.$/u, '。');
@@ -94,7 +101,7 @@ async function start() {
   app.translationTasks = new DesktopTranslationTasks(app, { getThreadId: () => thread, enqueue: async () => { throw Error('The native acceptance must not enqueue another chat.'); } });
   app.versionPair = new VersionWorkflow(app, { contextDir });
   server = createPaperServer({ service: app, instanceId, nativeThreadId: thread, uiHtml: '<!doctype html>' });
-  client = new Client({ name: 'synthetic-repeat-acceptance', version: '1.5.2' });
+  client = new Client({ name: 'synthetic-repeat-acceptance', version: releaseVersion });
   const [a, b] = InMemoryTransport.createLinkedPair(); await server.connect(b); await client.connect(a);
   web = await startLocalWeb({ service: app, updateChecker: new ReleaseUpdateChecker({ readCache: async () => ({ schemaVersion: 1, autoCheck: false }), writeCache: async () => {}, fetchImpl: async () => { throw Error('The synthetic test must not require a public network request.'); } }) });
 }
@@ -132,7 +139,7 @@ try {
   const initialPair = await app.readVersionPair(); originalPdfHash = initialPair.original.hash;
   await snapshot('initial-english');
   const imported = await ui('importReviewNotes', { filename: 'review-comments.json', format: 'json', fileHash: hash(reviewText), text: reviewText });
-  const intro = row('We study'), method = row('The independent'), limitation = row('The demonstration'); assert(intro && method && limitation);
+  const intro = row('We study'), method = row('The independent'), limitation = row('The demonstration'), inline = row('An inline example'); assert(intro && method && limitation && inline);
   const batch = imported.batch, anchor = await app.prepareReviewAnchors({ batchId: batch.batchId, expectedRevision: batch.revision || 1, expectedFileHash: batch.fileHash }, { bindingId: instanceId });
   const context = await native('bilingual_paper_get_review_anchor_context', { requestId: anchor.requestId });
   const locations = [intro, method, limitation, intro];
@@ -147,11 +154,24 @@ try {
   check('Four imported opinions matched through native MCP and author decisions cover adopt/pending/revise');
   const { chromium } = await loadPlaywright(); browser = await chromium.launch(browserOptions); page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   const errors = []; page.on('pageerror', error => errors.push(error.message));
+  page.on('response', async response => { try { if(response.request().method() !== 'POST') return; const request=response.request().postDataJSON(), body=await response.json(); if(body?.ok === false) failedActions.push({action:request?.action,code:body.error?.code}); } catch {} });
   await page.goto(web.url); await page.locator(`[data-unit-id="${intro.id}"] .translation-reading`).waitFor();
+  await page.locator('#pdf-container canvas').waitFor();
+  const sourceBeforeZoom = hash(await readFile(path.join(sourceRoot, 'main.tex'))), pdfBeforeZoom = (await app.readVersionPair()).latest.hash;
+  const fittedWidth = await page.locator('#pdf-container canvas').evaluate(node => node.getBoundingClientRect().width);
+  await page.locator('#pdf-zoom').selectOption('2');
+  await page.waitForFunction(width => document.querySelector('#pdf-container canvas')?.getBoundingClientRect().width > width * 1.2, fittedWidth);
+  await page.locator('#pdf-fit').click();
+  await page.waitForFunction(width => Math.abs(document.querySelector('#pdf-container canvas')?.getBoundingClientRect().width - width) < 3, fittedWidth);
+  assert.equal(hash(await readFile(path.join(sourceRoot, 'main.tex'))), sourceBeforeZoom); assert.equal((await app.readVersionPair()).latest.hash, pdfBeforeZoom);
+  check('View-only PDF zoom visibly enlarges the actual compiled page and fit width restores it without changing source or PDF bytes');
   async function editAndApply(sourceId, scalar, verb, label) {
     const host = page.locator(`[data-unit-id="${sourceId}"]`), editor = host.locator('.translation-input'); if (!await editor.isVisible()) await host.locator('.translation-reading').click(); await editor.waitFor({ state: 'visible' });
     const current = await editor.evaluate(el => el.value);
-    const updated = current.replace(/\$x=\d+\$/u, `$x=${scalar}$`).replace(/\$y=\d+\$/u, `$y=${scalar}$`).replace(/\\cite\{(?:Alpha|Beta)\}/u, String.raw`\cite{${scalar === 3 ? 'Beta' : 'Alpha'}}`).replace(/\\eqref\{eq:(?:first|second)\}/u, String.raw`\eqref{eq:${scalar === 3 ? 'second' : 'first'}}`).replace(/^我们(?:研究|分析|描述)/u, verb === 'analyze' ? '我们分析' : '我们描述') + ` 第${scalar}轮作者补充。`;
+    const inlineEdit = sourceId === inline.id;
+    const updated = (inlineEdit
+      ? current.replace(/第(?:~|\s+)1/u, scalar === 11 ? '第 1' : '第~1').replace(/\\(?:textbf|emph|textit)\{/u, scalar === 11 ? String.raw`\emph{` : String.raw`\textit{`).replace(/10\\[%&]/u, scalar === 11 ? String.raw`10\&` : String.raw`10\%`)
+      : current.replace(/\$x=\d+\$/u, `$x=${scalar}$`).replace(/\$y=\d+\$/u, `$y=${scalar}$`).replace(/\\cite\{(?:Alpha|Beta)\}/u, String.raw`\cite{${scalar === 3 ? 'Beta' : 'Alpha'}}`).replace(/\\eqref\{eq:(?:first|second)\}/u, String.raw`\eqref{eq:${scalar === 3 ? 'second' : 'first'}}`).replace(/^我们(?:研究|分析|描述)/u, verb === 'analyze' ? '我们分析' : '我们描述')) + ` 第${scalar}轮作者补充。`;
     await editor.evaluate((el, text) => { el.value = text; el.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText' })); }, updated + ' $');
     // Capture before the ordinary autosave debounce. Native access sees the
     // actual live text, not a screen scrape or a persisted-draft substitute.
@@ -176,7 +196,10 @@ try {
     await page.waitForFunction(id => { const node = document.querySelector(`[data-unit-id="${id}"] .save-marker`); return node && /Saved|已保存/u.test(node.textContent); }, sourceId);
     const request = await native('bilingual_paper_prepare_request', { ...scope(), kind: 'revision', segmentIds: [sourceId], language: 'zh-CN', prompt: 'Apply only the exact saved illustrative author intent.' });
     const selected = request.segments[0];
-    const proposed = await native('bilingual_paper_propose_revision', { requestId: request.requestId, reason: 'Apply the saved synthetic author edit.', edits: [{ segmentId: sourceId, beforeHash: selected.beforeHash, replacement: selected.text.replace(/We (?:study|analyze|describe)/u, `We ${verb}`).replace('The independent second paragraph', 'The separate method paragraph') + ` The author records synthetic revision ${scalar}.` }] });
+    const english = inlineEdit
+      ? selected.text.replaceAll('一个行内示例使用第', 'An inline example uses Section').replaceAll('1节和', '1 and ').replaceAll('清晰的范围', 'clear scope').replaceAll('，其中包含字面值10', ', with a literal 10').replace(/ 第(\d+)轮作者补充。/gu, ' The author adds detail for synthetic round $1.').replaceAll('。', '.')
+      : selected.text.replace(/We (?:study|analyze|describe)/u, `We ${verb}`).replace('The independent second paragraph', 'The separate method paragraph');
+    const proposed = await native('bilingual_paper_propose_revision', { requestId: request.requestId, reason: 'Apply the saved synthetic author edit.', edits: [{ segmentId: sourceId, beforeHash: selected.beforeHash, replacement: english + ` The author records synthetic revision ${scalar}.` }] });
     const compiled = await native('bilingual_paper_compile', { kind: 'candidate', proposalIds: [proposed.proposalId] }); assert.equal(compiled.status, 'success');
     const before = scope().expectedSnapshotId;
     // This is the authenticated human UI boundary, intentionally absent from
@@ -213,8 +236,11 @@ try {
   assert.equal(hash(await readFile(path.join(sourceRoot, 'main.tex'))), artifacts.find(item => item.label === 'second-writeback').sourceHash);
   await snapshot('reviewed-undo');
   await editAndApply(method.id, 9, 'describe', 'final-writeback');
+  await editAndApply(inline.id, 11, 'describe', 'inline-first-writeback');
+  await editAndApply(inline.id, 13, 'describe', 'inline-second-writeback');
   const finalState = app.getState(), finalSource = await readFile(path.join(sourceRoot, 'main.tex')), finalDrafts = structuredClone(finalState.translations), finalNotes = structuredClone(finalState.reviewNotes), finalPdfHash = (await app.readVersionPair()).latest.hash;
   assert(finalSource.includes(Buffer.from('$x=5$')) && finalSource.includes(Buffer.from('$y=9$')) && finalSource.includes(Buffer.from(String.raw`\label{eq:first}`)));
+  assert(finalSource.includes(Buffer.from(String.raw`Section~1 and \textit{clear scope}, with a literal 10\%.`)));
   await writeFile(path.join(run, 'final-translation.md'), finalState.readingParagraphs.map(p => `## ${p.kind || 'paragraph'}\n\n${readableDraft(p, finalState)}`).join('\n\n'));
   await writeFile(path.join(run, 'final-opinions.json'), JSON.stringify(finalNotes, null, 2));
   const finalIntro = page.locator(`[data-unit-id="${intro.id}"]`); await finalIntro.scrollIntoViewIfNeeded();
@@ -226,11 +252,11 @@ try {
   assert.deepEqual(await readFile(path.join(sourceRoot, 'main.tex')), finalSource); assert.deepEqual(app.getState().translations, finalDrafts); assert.deepEqual(app.getState().reviewNotes, finalNotes); assert.equal((await app.readVersionPair()).latest.hash, finalPdfHash); assert.equal((await app.readVersionPair()).original.hash, originalPdfHash);
   const authorFiles = (await readdir(contextDir)).filter(name => name.endsWith('.pdf')); assert.deepEqual(authorFiles.sort(), ['latest-english.pdf', 'original.pdf']);
   check('Reopening preserves final source, translations, decisions, frozen original and exactly two author PDFs');
-  const receipt = { success: true, version: '1.5.2', syntheticOnly: true, originalManuscriptAccessed: false, modelTurns: 0, nativeMcpOperations: true, screenScraping: false, actualIsolatedCompiler: true, sourceWriteback: 'authenticated_ui_only', translated, checks, artifacts, sourceRoot, finalSourceHash: hash(finalSource), finalPdfHash, originalPdfHash, reviewDecisions: finalNotes.map(n => ({ title: n.title, decision: n.decision || 'pending' })), firstTransactionId: first.transactionId };
+  const receipt = { success: true, version: releaseVersion, syntheticOnly: true, originalManuscriptAccessed: false, modelTurns: 0, nativeMcpOperations: true, screenScraping: false, actualIsolatedCompiler: true, sourceWriteback: 'authenticated_ui_only', translated, checks, artifacts, sourceRoot, finalSourceHash: hash(finalSource), finalPdfHash, originalPdfHash, inlineStructureWritebacks: 2, reviewDecisions: finalNotes.map(n => ({ title: n.title, decision: n.decision || 'pending' })), firstTransactionId: first.transactionId };
   await writeFile(path.join(run, 'acceptance.json'), JSON.stringify(receipt, null, 2)); await writeFile(path.join(parent, 'latest-run.json'), JSON.stringify({ run, success: true }, null, 2));
   console.log(JSON.stringify({ success: true, checks: checks.length, run }));
 } catch (error) {
   if (page && !page.isClosed()) { await page.screenshot({ path: path.join(run, 'failure-workbench.png'), fullPage: true }).catch(() => {}); await writeFile(path.join(run, 'failure-editor.json'), JSON.stringify(await page.locator('[data-unit-id]').evaluateAll(nodes => nodes.map(node => ({ id: node.dataset.unitId, view: node.dataset.translationView, marker: node.querySelector('.save-marker')?.textContent, message: node.querySelector('.draft-message')?.textContent }))), null, 2)).catch(() => {}); }
-  await writeFile(path.join(run, 'failure.json'), JSON.stringify({ success: false, code: error.code, message: error.message, stack: error.stack, checks }, null, 2));
+  await writeFile(path.join(run, 'failure.json'), JSON.stringify({ success: false, code: error.code, message: error.message, stack: error.stack, checks, failedActions, notice: page && !page.isClosed() ? await page.locator('#notice').evaluate(node=>({text:node.textContent,hidden:node.hidden,dataset:{...node.dataset}})).catch(()=>null) : null }, null, 2));
   console.error(error); process.exitCode = 1;
 } finally { await browser?.close(); await stop().catch(() => {}); }

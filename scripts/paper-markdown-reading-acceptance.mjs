@@ -31,7 +31,7 @@ const token = new URLSearchParams(url.hash.slice(1)).get('session');
 const api = async (action, payload = {}) => {
   assert.equal(action, 'state', 'This actual gate permits direct state reads only.');
   const response = await fetch(new URL('/api', url), { method: 'POST', headers: { Origin: url.origin, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ action, payload }) });
-  const body = await response.json(); assert.ok(response.ok && body.ok, `State unavailable: ${body.error?.code || response.status}`); return body.state;
+  const body = await response.json(); assert.ok(response.ok && body.ok, `State unavailable: ${body.error?.code || response.status}`); return body.result;
 };
 async function sourceHashes(state) {
   assert.equal(state.project.mainFile, path.basename(target));

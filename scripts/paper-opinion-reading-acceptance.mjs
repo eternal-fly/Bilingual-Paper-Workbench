@@ -28,7 +28,7 @@ const api = async (action, payload = {}) => {
   const response = await fetch(new URL('/api', url), { method: 'POST', headers: { Origin: url.origin, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ action, payload }) });
   const body = await response.json(); assert.ok(response.ok && body.ok, `${action}: ${body.error?.code || response.status}`); return body;
 };
-const state = (await api('state')).state;
+const state = (await api('state')).result;
 assert.ok(state.project); assert.equal(state.project.mainFile, path.basename(targetFile));
 assert.equal((state.jobs || []).filter(job => ['running', 'queued', 'inProgress', 'cancelling'].includes(job.status)).length, 0, 'Wait for existing jobs before read-only acceptance.');
 const content = s => sha(JSON.stringify({ project: s.project, originals: s.originals, originalSnapshotId: s.originalSnapshotId, segments: s.segments, readingParagraphs: s.readingParagraphs, translations: s.translations, reviewNotes: s.reviewNotes, reviewBatches: s.reviewBatches, proposals: s.proposals, transactions: s.transactions, builds: s.builds, versionPair: s.versionPair }));
@@ -87,7 +87,7 @@ try {
   }
   assert.deepEqual(report.pageErrors, []); assert.deepEqual(report.forbiddenActions, []);
   check('both themes preserve outward three-column geometry with no browser or model actions');
-  assert.equal(content((await api('state')).state), initial);
+  assert.equal(content((await api('state')).result), initial);
   for (const [filename, expected] of sourceHashes) assert.equal(sha(await readFile(path.join(path.dirname(targetFile), filename))), expected);
   check('source files, drafts, raw notes and official build/version identities remain unchanged', { sourceFiles: sourceHashes.size, opinions: state.reviewNotes.length });
   report.passed = report.checks.length; report.success = true;

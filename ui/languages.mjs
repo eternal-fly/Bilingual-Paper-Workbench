@@ -98,23 +98,26 @@ export function populateLanguages(select, { follow = false, uiLanguage = 'en' } 
   if ([...select.options].some(option => option.value === old)) select.value = old;
 }
 const originalCopy = new WeakMap();
+Object.assign(english,{'缩小 PDF':'Zoom out PDF','放大 PDF':'Zoom in PDF','适合宽度':'Fit width','平移 PDF':'Pan PDF','更多 PDF 视图选项':'More PDF view options','自定义缩放 (%)':'Custom zoom (%)','自定义 PDF 缩放百分比':'Custom PDF zoom percentage','重置为 100%':'Reset to 100%','Ctrl + 滚轮缩放；空格或中键拖动平移。':'Ctrl + wheel to zoom; hold Space or the middle button to pan.'});
 const knownCopy = text => Object.hasOwn(english, text) || Object.hasOwn(traditional, text) || Object.values(CORE_LANGUAGE_PACKS).some(pack => Object.hasOwn(pack, text)) || Boolean(englishDynamic(text));
 export function localizeInterface(root, language) {
   const excluded = '#source-content,#translation-content,#annotation-list,#proposal-list,#proposal-detail,#chat-messages,#workspace-record-list,#workspace-history-context,#main-file,#project-label,#acceptance-diff,#layer-original-source,#layer-original-translation,#layer-suggestions,#layer-final,pre,code,textarea,option';
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  if(root.nodeType===Node.ELEMENT_NODE&&root.closest(excluded))return;
+  // Reject a protected content root once instead of walking every ignored
+  // formula/manuscript descendant on each status update.
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT|NodeFilter.SHOW_TEXT,{acceptNode(node){return node.nodeType===Node.ELEMENT_NODE&&node.matches(excluded)?NodeFilter.FILTER_REJECT:NodeFilter.FILTER_ACCEPT;}});
   for (let current; (current = walker.nextNode());) {
-    if (current.parentElement?.closest(excluded)) continue;
+    if(current.nodeType===Node.ELEMENT_NODE){
+      for(const attribute of ['aria-label','title','placeholder']){
+        const value=current.getAttribute(attribute);if(!value)continue;
+        const key=`i18n${attribute.replaceAll('-','')}`,original=current.dataset[key]||value;current.dataset[key]=original;
+        if(knownCopy(original))current.setAttribute(attribute,uiText(original,language));
+      }
+      continue;
+    }
     const value = current.nodeValue.trim(); if (!value) continue;
     let original = originalCopy.get(current);
     if (!original || (current.nodeValue.trim() !== uiText(original, language) && knownCopy(value))) { original = value; originalCopy.set(current, original); }
     if (knownCopy(original)) current.nodeValue = current.nodeValue.replace(value, uiText(original, language));
-  }
-  for (const element of root.querySelectorAll('[aria-label],[title],[placeholder]')) {
-    if (element.closest(excluded)) continue;
-    for (const attribute of ['aria-label', 'title', 'placeholder']) {
-      const value = element.getAttribute(attribute); if (!value) continue;
-      const key = `i18n${attribute.replaceAll('-', '')}`; const original = element.dataset[key] || value; element.dataset[key] = original;
-      if (knownCopy(original)) element.setAttribute(attribute, uiText(original, language));
-    }
   }
 }

@@ -8,12 +8,21 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { PaperApplication } from '../src/application.mjs';
 import { WorkspaceService } from '../src/workspace-service.mjs';
 import { createPaperServer } from '../src/server.mjs';
+import { callBackgroundModelTool } from '../src/native-tool-dispatch.mjs';
 
 async function connect(t, options) {
   const server = createPaperServer(options), client = new Client({ name: 'onboarding-test', version: '1' });
   const [cs, ss] = InMemoryTransport.createLinkedPair(); await server.connect(ss); await client.connect(cs);
   t.after(async () => { await client.close(); await server.close(); }); return client;
 }
+test('a native opener and subsequent native reads use the same current daemon with new or legacy state envelopes',async t=>{
+ for(const envelope of['result','state']){
+  const calls=[],state={project:{id:'exact-daemon-paper',snapshotId:'exact-daemon-source'},segments:[{id:'p1'},{id:'p2'}],translations:{},proposals:[]},daemon={getState:()=>structuredClone(state)};
+  const client=await connect(t,{service:{getState:()=>({project:null,segments:[]})},uiHtml:'<!doctype html>',backgroundWindow:true,openIndependentWindow:async()=>({opened:true,mode:'background-workbench'}),dispatchBackground:async(action,payload)=>{calls.push(action);if(action==='state')return{ok:true,[envelope]:structuredClone(state)};assert.equal(action,'callNativeTool');return{ok:true,result:await callBackgroundModelTool(daemon,payload)};}});
+  const opened=await client.callTool({name:'bilingual_paper_editor',arguments:{}});assert.equal(opened.isError,undefined);assert.equal(opened.structuredContent.projectOpen,true,envelope);assert.equal(opened.structuredContent.segmentCount,2);
+  const current=await client.callTool({name:'bilingual_paper_get_state',arguments:{}});assert.equal(current.isError,undefined);assert.equal(current.structuredContent.projectOpen,true);assert.equal(current.structuredContent.segmentCount,2);assert.deepEqual(calls,['state','callNativeTool']);
+ }
+});
 test('opening with supplied files opens first, skips unrelated host discovery, then imports in the same background', async t => {
   const calls = [], service = { getState: () => ({ project: null, segments: [] }), bootstrapHostProject: async () => { throw new Error('unrelated host discovery'); } };
   const client = await connect(t, { service, uiHtml: '<!doctype html>', backgroundWindow: true,

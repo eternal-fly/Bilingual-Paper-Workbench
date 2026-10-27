@@ -94,7 +94,7 @@ export class CodexBridge extends EventEmitter {
       this._child.stderr.on('data', () => {}); // Auth/diagnostic output is never copied into manuscript logs.
       this._child.on('error', error => this._processFailed(error));
       this._child.on('exit', code => this._processFailed(Object.assign(new Error(`Codex app-server exited (${code}).`), { code: 'CODEX_PROCESS_EXITED' })));
-      await this._request('initialize', { clientInfo: { name: 'bilingual_paper_editor', title: 'Bilingual Paper Editor', version: '1.5.2' }, capabilities: { experimentalApi: true } });
+      await this._request('initialize', { clientInfo: { name: 'bilingual_paper_editor', title: 'Bilingual Paper Editor', version: '1.6.0' }, capabilities: { experimentalApi: true } });
       this._notify('initialized', {}); this._state.connected = true; this._changed();
       return this.getState();
     } catch (error) { await this.close(); throw error; }

@@ -127,6 +127,8 @@ let commentsSignature = '';
 let batchBusy = false;
 let previewBusy = false;
 let noticeTimer = null;
+let noticeRevision = 0;
+let pendingPdfView = null;
 let annotationSignature = '';
 let opinionReader;
 let reviewImportBusy = false;
@@ -191,6 +193,7 @@ function applyLanguages() {
   if (fallback) { fallback.textContent = t('界面翻译暂以英语显示；译文与意见仍使用所选目标语言。'); fallback.hidden = !interfaceFallback(interfaceLanguage); }
   for (const node of document.querySelectorAll('.translation-input')) { node.lang = language; node.dir = 'auto'; }
   for(const editor of document.querySelectorAll('.protected-editor'))editor.refreshLabels?.();
+  pdfViewer?.refreshLabels?.();
   localizeInterface(document.body, interfaceLanguage);
   translationTypography.adopt(state);
   translationTypography.refreshLabels();
@@ -226,6 +229,7 @@ function errorMessage(error) {
 }
 function notify(message, error = false, persistent = false) {
   clearTimeout(noticeTimer);
+  noticeRevision++;
   draftSaveNotice=null;
   delete $('notice').dataset.desktopTranslationTask;
   $('notice').textContent = message;
@@ -259,11 +263,15 @@ function readingSources() {
   return Array.isArray(state.readingParagraphs) && state.readingParagraphs.length ? state.readingParagraphs : state.segments;
 }
 function allSources() {
-  const sources = new Map(state.segments.map(segment => [segment.id, segment]));
-  for (const paragraph of readingSources()) sources.set(paragraph.id, paragraph);
-  return [...sources.values()];
+  const reading=readingSources(),segments=state.segments;
+  if(sourceIndexCache?.segments!==segments||sourceIndexCache.reading!==reading||sourceIndexCache.size!==segments.length+reading.length){
+    const byId=new Map(segments.map(segment=>[segment.id,segment]));for(const paragraph of reading)byId.set(paragraph.id,paragraph);
+    sourceIndexCache={segments,reading,size:segments.length+reading.length,byId,values:[...byId.values()]};
+  }
+  return sourceIndexCache.values;
 }
-function selectedSegment() { return allSources().find(segment => segment.id === selectedId); }
+let sourceIndexCache=null;
+function selectedSegment() { allSources();return sourceIndexCache.byId.get(selectedId); }
 function translationUnits() {
   if (unitsCache.state === state && unitsCache.language === language) return unitsCache.units;
   const drafts = state.translations?.[language] || {};
@@ -317,11 +325,12 @@ async function withWorkspaceSwitch(work) {
 function adopt(result) {
   const incoming = result?.state || result;
   if (incoming && Array.isArray(incoming.segments)) {
-    if(incoming===lastAdoptedState){renderHost();return result;}
+    if(incoming===lastAdoptedState){renderHost();void reconcilePendingPdfView();return result;}
     lastAdoptedState=incoming;
     const changedProject = currentProjectId !== projectId(incoming.project) || currentWorkspaceKey !== workspaceKey(incoming);
     const confirmed = !changedProject && (incoming.transactions || []).some(transaction => transaction.state === 'applied' && transaction.afterSnapshotId === incoming.project?.snapshotId && !(state.transactions || []).some(previous => previous.transactionId === transaction.transactionId && previous.state === 'applied'));
     if (changedProject) {
+      clearDraftFeedback();
       for (const buffer of currentBuffers()) clearTimeout(buffer.timer);
       sourceNodes.clear(); translationNodes.clear();
       $('source-content').replaceChildren(); $('translation-content').replaceChildren();
@@ -375,6 +384,7 @@ function adopt(result) {
     render();
     workspaceController?.adopt(state);
     if (!reconcileConfirmedPdf()) { reconcilePdfSelection(); reconcileLatestPdf(); }
+    void reconcilePendingPdfView();
     prewarmPdfContext();
     if (changedProject) {
       const english = currentEnglishBuild();
@@ -1142,7 +1152,7 @@ function translationNode(segment, index) {
   editActions.append(element('span', '', translationReadCopy('保存草稿并返回阅读 · Esc', 'Save draft and return to reading · Esc', '儲存草稿並返回閱讀 · Esc')), done);
   let initialTokens;
   try { initialTokens = deriveTranslationProtectedTokens(bufferFor(segment.id).text, segment.protectedTokens || []); } catch { initialTokens = segment.protectedTokens || []; }
-  const input = createProtectedEditor({ tokens: initialTokens, sourceTokens:segment.protectedTokens||[], mathInline:true, referencesInline:true, getLanguage:()=>interfaceLanguage, onProtectedAttempt: () => notify(translationReadCopy('标签定义、数字引用和结构对象继续受保护；公式、文献键和交叉引用可直接在段落内修改。','Label definitions, numeric citations and structural objects remain protected. Edit formulas, citation keys and cross-references directly in the paragraph.'), false, true) });
+  const input = createProtectedEditor({ tokens: initialTokens, sourceTokens:segment.protectedTokens||[], mathInline:true, referencesInline:true, structuresInline:true, getLanguage:()=>interfaceLanguage, onProtectedAttempt: () => notify(translationReadCopy('可直接编辑公式、引用键和排版源码；保存会校验标签、对象顺序和安全结构，正式原文仍须编译并确认。','Edit formulas, reference keys and layout source in place. Saving checks labels, object order and safe structure; source changes still require compilation and confirmation.'), false, true) });
   input.setAttribute('aria-label', `段落 ${index + 1}的${languageNames[language] || language}译文`);
   input.placeholder = segment.translatable ? '尚无译文。可输入草稿，或点击“翻译选段”。' : '此区域暂不支持编辑。';
   input.disabled = !translationEditable(segment);
@@ -1161,8 +1171,7 @@ function translationNode(segment, index) {
     buffer.composing = buffer.composing || event.isComposing === true;
     editorDraftPublisher.changed();
     syncController?.onHumanInput(segment.id, buffer.text, { composing: buffer.composing });
-    updateDraftNode(segment.id);
-    updateSelectionLabels();
+    scheduleDraftFeedback(segment.id);
     clearTimeout(buffer.timer);
     if (!buffer.composing) buffer.timer = setTimeout(() => { saveBuffer(buffer).catch(() => {}); }, 650);
   });
@@ -1282,7 +1291,7 @@ function updateDraftNode(segmentId,{summary=true}={}) {
   node.marker.className = `save-marker ${buffer.state}`;
   const originalTranslation = language === 'zh-CN' ? readingSources().find(segment => segment.id === segmentId)?.translation || '' : '';
   const changed = !!buffer.text && (buffer.text !== (saved?.text ?? originalTranslation) || saved?.status === 'humanEdited' || saved?.status === 'draft' || buffer.revision > 0);
-  const formulaNotice = buffer.formulaNotice || paragraphInventoryNotice(saved) || (saved?.referenceEditUnmapped || saved?.referenceEditsConflict ? translationReadCopy('草稿已保留；引用与源码的对应关系需要核对，暂不能生成英文候选。', 'Draft retained. Review the reference/source correspondence before generating an English candidate.') : saved?.formulaEditUnmapped || saved?.formulaEditsConflict ? translationReadCopy('草稿已保留；公式与源码的对应关系需要核对，暂不能生成英文候选。', 'Draft retained. Review the formula/source correspondence before generating an English candidate.') : '');
+  const formulaNotice = buffer.formulaNotice || paragraphInventoryNotice(saved) || (saved?.inlineStructureConflict || saved?.inlineStructureUnmapped ? translationReadCopy('输入已保留；排版源码与原文的对应关系需要核对，暂不能生成英文候选。','Input retained. Review the layout/source correspondence before generating an English candidate.') : saved?.referenceEditUnmapped || saved?.referenceEditsConflict ? translationReadCopy('草稿已保留；引用与源码的对应关系需要核对，暂不能生成英文候选。', 'Draft retained. Review the reference/source correspondence before generating an English candidate.') : saved?.formulaEditUnmapped || saved?.formulaEditsConflict ? translationReadCopy('草稿已保留；公式与源码的对应关系需要核对，暂不能生成英文候选。', 'Draft retained. Review the formula/source correspondence before generating an English candidate.') : '');
   node.input.setAttribute('aria-invalid', String(buffer.state === 'saveFailed'));
   node.message.setAttribute('role', buffer.state === 'saveFailed' ? 'alert' : 'status');
   node.message.textContent = buffer.state === 'saveFailed' ? buffer.error : formulaNotice || (saved?.status === 'stale' ? '源版本已变化，保留草稿以供重新核对。' : selectionMapping(null, segmentId).unaligned ? '尚未归入当前对齐组；草稿仍独立保留，可通过“调整对齐”重新指定。' : changed ? t('译文已改，原文未改。') : t('译文是独立派生稿，原文保持不变。'));
@@ -1290,6 +1299,23 @@ function updateDraftNode(segmentId,{summary=true}={}) {
   node.retry.hidden = buffer.state !== 'saveFailed'; node.exportDraft.hidden = buffer.state !== 'saveFailed';
   if(summary)renderSaveSummary();
 }
+let draftFeedbackFrame=null;
+const pendingDraftFeedback=new Map();
+function scheduleDraftFeedback(segmentId){
+  const buffer=bufferFor(segmentId);pendingDraftFeedback.set(bufferKey(segmentId),{segmentId,scope:buffer.workspaceKey,snapshotId:state.project?.snapshotId,language:buffer.language,node:translationNodes.get(segmentId)});
+  if(draftFeedbackFrame!==null)return;
+  draftFeedbackFrame=requestAnimationFrame(()=>{
+    draftFeedbackFrame=null;const entries=[...pendingDraftFeedback.values()];pendingDraftFeedback.clear();let changed=false;
+    for(const entry of entries){
+      if(entry.scope!==workspaceKey(state)||entry.snapshotId!==state.project?.snapshotId||entry.language!==language||translationNodes.get(entry.segmentId)!==entry.node)continue;
+      updateDraftNode(entry.segmentId,{summary:false});changed=true;
+      const unit=translationUnit(entry.segmentId);
+      if(selectedUnit()?.id===entry.segmentId)$('split-translation').disabled=!unit?.translatable||unit?.writableSource===false||!bufferFor(entry.segmentId).text;
+    }
+    if(changed)renderSaveSummary();
+  });
+}
+function clearDraftFeedback(){if(draftFeedbackFrame!==null)cancelAnimationFrame(draftFeedbackFrame);draftFeedbackFrame=null;pendingDraftFeedback.clear();}
 function renderSaveSummary() {
   const buffers = currentBuffers();
   const failed = buffers.filter((buffer) => buffer.state === 'saveFailed').length;
@@ -1344,7 +1370,7 @@ async function saveBuffer(buffer) {
       // A validation result belongs to the submitted text. If the human has
       // already repaired it, save that newer buffer after this request settles.
       const superseded = (buffer.sequence || 0) !== sentSequence && buffer.text !== sentText;
-      buffer.state = superseded && (['FORMULA_INCOMPLETE', 'FORMULA_REFERENCE_PROTECTED'].includes(error.code) || typeof error.code === 'string' && error.code.startsWith('REFERENCE_')) ? 'dirty' : 'saveFailed';
+      buffer.state = superseded && (['FORMULA_INCOMPLETE', 'FORMULA_REFERENCE_PROTECTED','PROTECTED_TOKEN_CHANGED','UNSUPPORTED_TEX','STRUCTURE_INVALID'].includes(error.code) || typeof error.code === 'string' && error.code.startsWith('REFERENCE_')) ? 'dirty' : 'saveFailed';
       buffer.error = errorMessage(error); throw tagDraftSaveFailure(error,buffer,sentSequence);
     }
     finally {
@@ -1440,7 +1466,7 @@ function renderLayers() {
   $('layer-final').replaceChildren(finalBody);
 }
 function paragraphInventoryNotice(draft) {
-  return draft?.origin === 'human' && (draft.formulaEditUnmapped || draft.formulaEditsConflict) && !draft.referenceEditUnmapped && !draft.referenceEditsConflict ? translationReadCopy('整段公式修改已保存；生成英文候选时会自动列出修改前后的完整公式清单，供编译与确认。', 'Paragraph formula edits saved. Generating an English candidate will list the complete math inventory for compilation and confirmation.') : '';
+  return draft?.origin === 'human' && (draft.formulaEditUnmapped || draft.formulaEditsConflict) && !draft.referenceEditUnmapped && !draft.referenceEditsConflict && !draft.inlineStructureConflict && !draft.inlineStructureUnmapped ? translationReadCopy('整段公式修改已保存；生成英文候选时会自动列出修改前后的完整公式清单，供编译与确认。', 'Paragraph formula edits saved. Generating an English candidate will list the complete math inventory for compilation and confirmation.') : '';
 }
 function mathIntentReview(selected, sourceSnapshotId) {
   const review = selected?.mathReview;
@@ -1747,7 +1773,7 @@ function clearPdf(invalidate = true) {
   if (invalidate) pdfLoadGeneration += 1;
   Promise.resolve(pdfViewer?.destroy()).catch(() => {});
   pdfViewer = null; pdfPage = 1; pdfScale = 1; pdfSnapshotId = null; pdfContext = null; activePdfArtifact = null; $('pdf-container').replaceChildren(); $('pdf-container').hidden = true; $('pdf-tools').hidden = true; $('pdf-empty').hidden = false; $('synctex-status').hidden = true;
-  $('synctex-dialog').close(); delete $('synctex-status').dataset.buildId; $('synctex-status').textContent = ''; updatePdfMappingControls();
+  $('synctex-dialog').close(); delete $('synctex-status').dataset.buildId; $('synctex-status').textContent = ''; updatePdfTools();
   $('pdf-caption').textContent = '已有 PDF 的来源版本未经构建证明。PDF 精确定位暂不可用，文本视图按段落关联。';
 }
 function setSourceMode(mode) {
@@ -1801,6 +1827,32 @@ function reconcileLatestPdf() {
   latestPdfRequest = request;
   loadPdf(build.buildId, { automatic: true, role: 'latest' });
 }
+async function reconcilePendingPdfView(){
+  const receipt=pendingPdfView;
+  if(!receipt)return false;
+  if(!receipt.current()){if(pendingPdfView===receipt)pendingPdfView=null;return false;}
+  if(receipt.inFlight||Date.now()<receipt.nextAttempt)return false;
+  receipt.inFlight=true;receipt.attempts++;
+  try{
+    const acknowledgement=await api('recordPdfView',receipt.payload);
+    if(pendingPdfView!==receipt||!receipt.current())return false;
+    pendingPdfView=null;
+    // A draft receipt cannot resolve this error. Only the exact PDF-view
+    // acknowledgment may clear its own banner, never a newer operation's.
+    if(receipt.noticeRevision===noticeRevision){clearTimeout(noticeTimer);$('notice').hidden=true;$('notice').textContent='';$('notice').classList.remove('error');noticeRevision++;}
+    if(acknowledgement?.state?.segments||acknowledgement?.segments)adopt(acknowledgement);
+    else{if(acknowledgement?.pdfSelection)state.pdfSelection=acknowledgement.pdfSelection;else if(acknowledgement?.target&&Number.isInteger(acknowledgement.revision))state.pdfSelection=acknowledgement;if(receipt.overridden)ignoredPdfSelectionIntent=pdfSelectionIntent();renderPdfSelection();}
+    receipt.onAcknowledged?.();return true;
+  }catch(error){
+    if(pendingPdfView!==receipt||!receipt.current())return false;
+    if((receipt.noticeRevision??receipt.noticeBaseline)===noticeRevision){reportError(error);receipt.noticeRevision=noticeRevision;}
+    // Only the known temporary private-state write failures are retried, and
+    // state polling supplies bounded backoff rather than another request loop.
+    if(['EPERM','EACCES','PROJECT_BUSY'].includes(error.code)&&receipt.attempts<4)receipt.nextAttempt=Date.now()+[500,1500,4000][receipt.attempts-1];
+    else pendingPdfView=null;
+    return false;
+  }finally{receipt.inFlight=false;}
+}
 async function loadPdf(buildId = activeBuildId, { automatic = false, role } = {}) {
   if (buildId === 'version-original' || buildId === 'version-latest') { role = buildId === 'version-original' ? 'original' : 'latest'; buildId = state.versionPair?.[role]?.buildId || (role === 'latest' ? currentEnglishBuild()?.buildId : null); }
   if (!buildId && role) { reportError(new Error('此 PDF 版本尚无可读取的验证构建。')); return; }
@@ -1824,10 +1876,14 @@ async function loadPdf(buildId = activeBuildId, { automatic = false, role } = {}
     if (state.pdfSelection && verified) { const hash = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(value => value.toString(16).padStart(2, '0')).join(''); if (hash !== (result.hash || result.pdfHash)) throw new Error('PDF 散列与验证构建不一致，未登记当前阅读目标。'); if (!current()) return; }
     clearPdf(false);
     const canvasHost = element('div', 'pdf-canvas-host'); $('pdf-container').append(canvasHost);
-    const viewer = await renderPdf(canvasHost, bytes, { page: 1, scale: 1, onPoint: point => locatePdfPoint(point) });
+    // Fit measures the actual visible scrollport, not a display:none ancestor.
+    $('pdf-container').hidden=false;$('pdf-empty').hidden=true;
+    let displayedViewer=null;
+    const sameView=()=>displayedViewer&&pdfViewer===displayedViewer&&generation===pdfLoadGeneration&&project===currentProjectId&&record===workspaceKey(state);
+    const viewer = await renderPdf(canvasHost, bytes, { page: 1, scale: 'fit-width', onPoint: point => locatePdfPoint(point),onViewChange:()=>{if(sameView())updatePdfTools();},onError:error=>{if(sameView())reportError(error);} });
     if (!current()) { await viewer.destroy(); canvasHost.remove(); return; }
-    pdfViewer = viewer; pdfSnapshotId = result.snapshotId;
-    $('pdf-container').hidden = false; $('pdf-tools').hidden = false; $('pdf-empty').hidden = true; $('pdf-zoom').value = '1'; updatePdfTools();
+    pdfViewer = displayedViewer = viewer; pdfSnapshotId = result.snapshotId;
+    $('pdf-container').hidden = false; $('pdf-tools').hidden = false; $('pdf-empty').hidden = true; updatePdfTools();
     activePdfRole = role || (candidate ? 'candidate' : buildId === currentEnglishBuild()?.buildId ? 'latest' : 'technical');
     pdfContext = { versionRole: activePdfRole, kind: englishBuild ? 'english' : candidate ? 'candidate' : 'source', verified, candidate, buildId: result.buildId || buildId, snapshotId: result.snapshotId, pdfHash: result.hash || result.pdfHash };
     activePdfArtifact = { buildId: pdfContext.buildId, pdfHash: pdfContext.pdfHash, base64: result.base64 };
@@ -1839,18 +1895,27 @@ async function loadPdf(buildId = activeBuildId, { automatic = false, role } = {}
     renderPdfSelection(); applyLanguages();
     if (state.pdfSelection && verified && ['original', 'latest', 'candidate'].includes(activePdfRole) && !(activePdfRole === 'original' && state.versionPair?.available === false)) {
       const overridden = Boolean(ignoredPdfSelectionIntent && ignoredPdfSelectionIntent === pdfSelectionIntent());
-      const acknowledgement = await api('recordPdfView', { role: activePdfRole, buildId: pdfContext.buildId, pdfHash: pdfContext.pdfHash, ...(state.versionPair?.pairId ? { expectedPairId: state.versionPair.pairId } : {}) });
-      if (!current()) return;
-      if (acknowledgement?.state?.segments || acknowledgement?.segments) adopt(acknowledgement); else { if (acknowledgement?.pdfSelection) state.pdfSelection = acknowledgement.pdfSelection; else if (acknowledgement?.target && Number.isInteger(acknowledgement.revision)) state.pdfSelection = acknowledgement; if (overridden) ignoredPdfSelectionIntent = pdfSelectionIntent(); renderPdfSelection(); }
-      if (candidate && state.capabilities?.nativePdfContext) {
+      const onAcknowledged=()=>{if (candidate && state.capabilities?.nativePdfContext) {
         const captured = activePdfArtifact;
         extractActivePdfContext(captured, { signal: pdfWarmController?.signal }).then(activePdfContext => { if (current() && captured === activePdfArtifact) return api('cacheActivePdfContext', { activePdfContext }); }).catch(problem => { if (current()) $('pdf-selection-status').textContent = `候选 PDF 全文尚未就绪：${errorMessage(problem)}`; });
-      }
+      }};
+      const viewedContext=pdfContext;
+      pendingPdfView={current:()=>current()&&pdfViewer===viewer&&pdfContext===viewedContext&&sourceMode==='pdf',payload:{role:activePdfRole,buildId:pdfContext.buildId,pdfHash:pdfContext.pdfHash,...(state.versionPair?.pairId?{expectedPairId:state.versionPair.pairId}:{})},overridden,onAcknowledged,inFlight:false,attempts:0,nextAttempt:0,noticeBaseline:noticeRevision};
+      await reconcilePendingPdfView();
     }
   } catch (error) { if (current()) { reportError(error); renderBuilds(); } }
   finally { if (generation === pdfLoadGeneration) $('load-pdf').disabled = !state.project; }
 }
-function updatePdfTools() { $('pdf-page-label').textContent = `${pdfPage} / ${pdfViewer?.pageCount || 1}`; $('pdf-previous').disabled = !pdfViewer || pdfPage <= 1; $('pdf-next').disabled = !pdfViewer || pdfPage >= pdfViewer.pageCount; updatePdfMappingControls(); }
+function updatePdfTools() {
+  const viewer=pdfViewer;if(Number.isFinite(viewer?.scale))pdfScale=viewer.scale;if(Number.isInteger(viewer?.page))pdfPage=viewer.page;
+  $('pdf-page-label').textContent=`${pdfPage} / ${viewer?.pageCount||1}`;$('pdf-previous').disabled=!viewer||pdfPage<=1;$('pdf-next').disabled=!viewer||pdfPage>=viewer.pageCount;
+  const select=$('pdf-zoom'),preset=[...select.options].find(option=>!option.dataset.currentZoom&&Math.abs(Number(option.value)-pdfScale)<.0001);let custom=select.querySelector('[data-current-zoom]');
+  if(preset){select.value=preset.value;custom?.remove();}else{if(!custom){custom=new Option('','');custom.dataset.currentZoom='true';select.add(custom);}custom.textContent=`${Math.round(pdfScale*100)}%`;custom.value=String(pdfScale);select.value=custom.value;}
+  select.disabled=!viewer;
+  if($('pdf-zoom-value')){$('pdf-zoom-value').value=String(Math.round(pdfScale*100));$('pdf-zoom-value').disabled=!viewer;}
+  for(const [id,enabled]of [['pdf-zoom-out',pdfScale>.25001],['pdf-zoom-in',pdfScale<3.99999],['pdf-fit',true],['pdf-reset',true],['pdf-pan',true]])if($(id))$(id).disabled=!viewer||!enabled;
+  $('pdf-fit')?.setAttribute('aria-pressed',String(viewer?.mode==='fit-width'));$('pdf-pan')?.setAttribute('aria-pressed',String(viewer?.panMode===true));updatePdfMappingControls();
+}
 function allBuilds() { return [...new Map([...(state.builds || []), ...(state.englishBuilds || []).map(build => ({ ...build, kind: 'english' }))].map(build => [build.buildId, build])).values()]; }
 function currentEnglishBuild() {
   const snapshot = state.project?.snapshotId, pair = state.versionPair, latest = pair?.available !== false && pair?.latest?.snapshotId === snapshot ? pair.latest : null;
@@ -1916,7 +1981,12 @@ async function locatePdfPoint(point) {
   } catch (error) { reportError(error); }
   finally { synctexBusy = false; updatePdfMappingControls(); }
 }
-async function navigatePdf(page = pdfPage, scale = pdfScale) { if (!pdfViewer) return; try { await pdfViewer.render(page, scale); pdfPage = page; pdfScale = scale; updatePdfTools(); } catch (error) { reportError(error); } }
+async function changePdfView(work){
+  const viewer=pdfViewer,generation=pdfLoadGeneration;if(!viewer)return;
+  try{await work(viewer);if(viewer===pdfViewer&&generation===pdfLoadGeneration)updatePdfTools();}
+  catch(error){if(viewer===pdfViewer&&generation===pdfLoadGeneration&&error?.name!=='AbortError'&&error?.code!=='PDF_VIEW_CANCELLED')reportError(error);}
+}
+async function navigatePdf(page = pdfPage, scale = null) { return changePdfView(async viewer=>{await viewer.render(page,scale??(viewer.mode==='fit-width'?'fit-width':pdfScale));if(viewer===pdfViewer){pdfPage=Number.isInteger(viewer.page)?viewer.page:page;if(Number.isFinite(viewer.scale))pdfScale=viewer.scale;else if(Number.isFinite(scale))pdfScale=scale;}}); }
 async function refreshState() { return adopt(await api('state')); }
 async function previewProposal(proposalId = activeProposal) {
   if (previewBusy) return;
@@ -2133,7 +2203,14 @@ $('compile-baseline').addEventListener('click', async () => { $('compile-baselin
 $('cancel-build').addEventListener('click', async () => { const jobId = $('cancel-build').dataset.jobId; if (!jobId) return; $('cancel-build').disabled = true; try { await api('cancelJob', { jobId }); await refreshState(); } catch (error) { reportError(error); } finally { renderBuilds(); } });
 $('pdf-previous').addEventListener('click', () => navigatePdf(Math.max(1, pdfPage - 1)));
 $('pdf-next').addEventListener('click', () => navigatePdf(Math.min(pdfViewer?.pageCount || 1, pdfPage + 1)));
-$('pdf-zoom').addEventListener('change', () => navigatePdf(pdfPage, Number($('pdf-zoom').value)));
+$('pdf-zoom').addEventListener('change', () => {const scale=Number($('pdf-zoom').value);if(Number.isFinite(scale)&&scale>0)void navigatePdf(pdfPage,scale);});
+$('pdf-zoom-out')?.addEventListener('click',()=>void changePdfView(viewer=>viewer.zoomBy(1/1.2)));
+$('pdf-zoom-in')?.addEventListener('click',()=>void changePdfView(viewer=>viewer.zoomBy(1.2)));
+$('pdf-fit')?.addEventListener('click',()=>void changePdfView(viewer=>viewer.fitWidth()));
+$('pdf-reset')?.addEventListener('click',()=>void changePdfView(viewer=>viewer.resetZoom()));
+$('pdf-pan')?.addEventListener('click',()=>void changePdfView(viewer=>viewer.setPanMode(!viewer.panMode)));
+$('pdf-zoom-value')?.addEventListener('change',()=>{const percent=Number($('pdf-zoom-value').value);if(Number.isFinite(percent)&&percent>=25&&percent<=400)void changePdfView(viewer=>viewer.setScale(percent/100));else updatePdfTools();});
+$('pdf-zoom-value')?.addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();$('pdf-zoom-value').dispatchEvent(new Event('change'));}});
 $('translate-selected').addEventListener('click', () => desktopTranslationController?.handles() ? desktopTranslationController.open({ scope: 'selected', sourceSegmentIds: selectionMapping().sourceIds }) : openRequest('translation'));
 $('discuss-selected').addEventListener('click', () => openRequest('discussion'));
 $('propose-selected').addEventListener('click', () => openRequest('revision'));
@@ -2263,7 +2340,7 @@ chatPanel = initializeChat({ api: async (action, payload = {}) => {
   return api(action, payload);
 }, getNativeHost: () => nativeHostMode() ? hostState() : null, getOriginatingChat: () => !state.originatingChat?.projectId || !state.project?.id || state.originatingChat.projectId === state.project.id ? state.originatingChat : null, refreshState, notify, onPaperFeedback: instruction => startReviewCycle({ instruction, conversation: true }), onChatChange: chat => { state.chat = chat; renderHost(); syncController?.adopt(state); workspaceController?.adopt(state); } });
 syncController = initializeSync({ api, notify, getState: () => hostState().mode === 'native-window' ? { ...state, capabilities: { ...state.capabilities, codexChat: false }, chat: { connected: false, threadId: null, status: 'idle', busy: false } } : cycleStarting || workspaceSwitching ? { ...state, chat: { ...state.chat, busy: true } } : state, getLanguage: () => language, getSelection: () => selectionMapping(), getUnit: id => translationUnit(id), getBuffer: (id, lang) => bufferFor(id, lang), flushDrafts, refreshState });
-window.addEventListener('pagehide', () => { updatesController?.destroy();editorDraftPublisher.destroy();cycleController?.abort(); pdfWarmController?.abort(); versionPairCache.clear(); syncController?.destroy(); workspaceController?.destroy(); projectSwitcher?.destroy(); englishWritebackController?.destroy(); sourceWorkflow?.destroy(); desktopTranslationController?.destroy(); reviewOrganizationController?.destroy(); reviewAnchorController?.destroy(); existingChatBindingController?.destroy();backgroundConnectionController?.destroy(); }, { once: true });
+window.addEventListener('pagehide', () => { clearDraftFeedback();updatesController?.destroy();editorDraftPublisher.destroy();cycleController?.abort(); pdfWarmController?.abort(); versionPairCache.clear(); syncController?.destroy(); workspaceController?.destroy(); projectSwitcher?.destroy(); englishWritebackController?.destroy(); sourceWorkflow?.destroy(); desktopTranslationController?.destroy(); reviewOrganizationController?.destroy(); reviewAnchorController?.destroy(); existingChatBindingController?.destroy();backgroundConnectionController?.destroy(); }, { once: true });
 closeOutline();
 matchMedia('(max-width: 1049px)').addEventListener('change', (event) => { if (event.matches) closeOutline(); });
 subscribe((event) => {

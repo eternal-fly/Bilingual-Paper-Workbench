@@ -29,14 +29,14 @@ function objectLabel(raw, kind,language) {
 }
 
 /** Plain-language editing with atomic, non-editable original TeX objects. */
-export function createProtectedEditor({ tokens = [], sourceTokens = tokens, onProtectedAttempt = () => {}, mathInline = false, referencesInline = false, getLanguage=()=>document.documentElement.lang||'en' } = {}) {
+export function createProtectedEditor({ tokens = [], sourceTokens = tokens, onProtectedAttempt = () => {}, mathInline = false, referencesInline = false, structuresInline = false, getLanguage=()=>document.documentElement.lang||'en' } = {}) {
   const editor = document.createElement('div');
   editor.className = 'translation-input protected-editor';
   editor.contentEditable = 'true';
   editor.setAttribute('role', 'textbox'); editor.setAttribute('aria-multiline', 'true');
   editor.tabIndex = 0;
   let disabled = false, lastSafe = '', expectedObjects = [], history = [{ value: '', caret: 0 }], historyIndex = 0, replaying = false;
-  let fixedLabels = mathInline && referencesInline ? sourceLabels(sourceTokens) : [];
+  let fixedLabels = !structuresInline && mathInline && referencesInline ? sourceLabels(sourceTokens) : [];
   const objects = () => [...editor.querySelectorAll('.protected-object')];
   editor.refreshLabels=()=>{for(const object of objects()){const label=objectLabel(object.dataset.raw,object.dataset.protectedKind,getLanguage()),aria=`${uiText('受保护对象',getLanguage())}: ${object.dataset.raw}`;if(object.textContent!==label)object.textContent=label;if(object.getAttribute('aria-label')!==aria)object.setAttribute('aria-label',aria);}};
   const objectSignature = () => objects().map(node => node.dataset.raw);
@@ -97,7 +97,7 @@ export function createProtectedEditor({ tokens = [], sourceTokens = tokens, onPr
     const selection = getSelection(); selection.removeAllRanges(); selection.addRange(range);
   }
   function render(text, resetHistory = false, objectSnapshot = null) {
-    const renderTokens = (mathInline ? deriveTranslationProtectedTokens(text, tokens).filter(token=>token.kind!=='math') : tokens).filter(token=>!referencesInline||!isEditableInlineReference(token.raw));
+    const renderTokens = (mathInline ? deriveTranslationProtectedTokens(text, tokens).filter(token=>token.kind!=='math') : tokens).filter(token=>(!referencesInline||!isEditableInlineReference(token.raw))&&(!structuresInline||token.kind==='math'||token.kind==='citation'||isEditableInlineReference(token.raw)));
     const matched = []; let position = 0;
     if(objectSnapshot){for(const token of objectSnapshot)if(text.slice(token.start,token.end)===token.raw)matched.push({start:token.start,end:token.end,token});}
     else for (const token of renderTokens) {
@@ -176,7 +176,7 @@ export function createProtectedEditor({ tokens = [], sourceTokens = tokens, onPr
   });
   editor.setProtectedTokens = (next, nextSourceTokens = null) => {
     if (!Array.isArray(next) || next.length > 16384 || next.some(token => !token || typeof token.raw !== 'string' || !token.raw)) throw new TypeError('Provide bounded exact protected editor atoms.');
-    const text = value(); tokens = next.map(token => ({ id: token.id, raw: token.raw, kind: token.kind })); if (nextSourceTokens) fixedLabels = mathInline && referencesInline ? sourceLabels(nextSourceTokens) : []; render(text, true);
+    const text = value(); tokens = next.map(token => ({ id: token.id, raw: token.raw, kind: token.kind })); if (nextSourceTokens) fixedLabels = !structuresInline && mathInline && referencesInline ? sourceLabels(nextSourceTokens) : []; render(text, true);
   };
   editor.acceptCanonicalValue = (expected, canonical) => {
     if(value()!==expected||typeof canonical!=='string'||expected.replaceAll('\r\n','\n')!==canonical.replaceAll('\r\n','\n'))return false;

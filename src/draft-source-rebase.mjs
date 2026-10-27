@@ -2,8 +2,9 @@ import { sha256 } from './latex.mjs';
 import { captureFormulaRequest } from './formula-edits.mjs';
 import { parseEditableReference } from './reference-edits.mjs';
 import { deriveTranslationProtectedTokens } from '../ui/translation-protection.mjs';
+import { inlineStructureFields } from './inline-structures.mjs';
 
-const fields = ['formulaEdits', 'formulaEditHistory', 'formulaEditsConflict', 'formulaEditUnmapped', 'referenceEdits', 'referenceEditHistory', 'referenceEditsConflict', 'referenceEditUnmapped'];
+const fields = ['formulaEdits', 'formulaEditHistory', 'formulaEditsConflict', 'formulaEditUnmapped', 'referenceEdits', 'referenceEditHistory', 'referenceEditsConflict', 'referenceEditUnmapped',...inlineStructureFields];
 const copy = value => structuredClone(value), same = (a, b) => JSON.stringify(a) === JSON.stringify(b), sourceHash = row => row?.sourceHash || row?.beforeHash;
 const fingerprint = draft => sha256(JSON.stringify({ ...draft, status: null }));
 const index = state => new Map([...(state.segments || []), ...(state.readingParagraphs || [])].map(row => [row.id, row]));
@@ -14,6 +15,7 @@ function retag(draft, source, oldProject, project, registry, language) {
   try { captureFormulaRequest({ id: source.id, text: source.displayText, protectedTokens: source.protectedTokens }, source, draft, oldProject, language); } catch { return null; }
   if (!targetsCurrent(draft.referenceEdits, registry)) return null;
   const result = copy(draft), edits = rows => (rows || []).map(row => ({ ...row, snapshotId: project.snapshotId, sourceHash: sourceHash(source), ...(row.registryHash ? { registryHash: registry.hash } : {}) }));
+  if(result.inlineStructureIntent){if(!project.inlineStructureSafety?.safe)return null;Object.assign(result.inlineStructureIntent,{snapshotId:project.snapshotId,sourceHash:sourceHash(source),syntaxHash:project.inlineStructureSafety.fingerprint});}
   for (const kind of ['formula', 'reference']) {
     if (result[kind + 'Edits']) result[kind + 'Edits'] = edits(result[kind + 'Edits']);
     const history = kind + 'EditHistory'; if (result[history]) result[history] = result[history].filter(row => row.projectId === oldProject.id && row.snapshotId === oldProject.snapshotId && row.sourceHash === sourceHash(source) && targetsCurrent(kind === 'reference' ? [...(row.beforeIntent?.edits || []), ...(row.afterIntent?.edits || [])] : [], registry)).map(row => ({ ...row, snapshotId: project.snapshotId, beforeIntent: { ...row.beforeIntent, edits: edits(row.beforeIntent?.edits) }, afterIntent: { ...row.afterIntent, edits: edits(row.afterIntent?.edits) } }));

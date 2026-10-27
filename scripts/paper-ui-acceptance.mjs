@@ -48,7 +48,7 @@ const api = async (action, payload = {}) => {
   return body;
 };
 const sourceBefore = hash(await readFile(target));
-const initial = (await api('state')).state;
+const initial = (await api('state')).result;
 const contentIdentity = state => hash(JSON.stringify({ project: state.project, segments: state.segments, originals: state.originals, originalSnapshotId: state.originalSnapshotId, translations: state.translations, alignments: state.alignments, proposals: state.proposals, requests: state.requests, transactions: state.transactions }));
 const initialIdentity = contentIdentity(initial);
 const report = { schemaVersion: 1, actualPaper: true, standalone: true, readOnlyAcceptance: true, startedAt: new Date().toISOString(), sourceHashBefore: sourceBefore, checks: [], screenshots: [], pageErrors: [], blockedActions: [], apiActions: [] };
@@ -239,13 +239,13 @@ try {
   process.exitCode = 1;
 } finally {
   try {
-    const current = (await api('state')).state;
+    const current = (await api('state')).result;
     if (current.chat?.connected === true && initial.chat?.connected !== true && !current.chat?.busy) {
       cleanupAllowed = true;
       await api('chatDisconnect');
       report.chatConnectionReleased = true;
     }
-    const after = (await api('state')).state;
+    const after = (await api('state')).result;
     report.sourceHashAfter = hash(await readFile(target));
     assert.equal(report.sourceHashAfter, sourceBefore);
     assert.equal(contentIdentity(after), initialIdentity);

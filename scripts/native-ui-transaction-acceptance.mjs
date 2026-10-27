@@ -145,7 +145,7 @@ export async function runNativeUiTransactionAcceptance({ phase, env = process.en
       return body;
     };
     if(['apply','undo'].includes(phase)) check(env.ACK_NATIVE_MVP_WRITES === 'true', 'ACK_REQUIRED');
-    let state = (await api('state')).state;
+    let state = (await api('state')).result;
     let sources = await sourceManifest(state, target, root);
     const context = { phase, version: session.version, mode: session.mode, pid: session.pid, projectId: state.project.id, snapshotId: state.project.snapshotId, sourceFiles: sources.length };
     if(phase === 'status') return { ...context, baselinePresent: Boolean(baseline), ...(baseline ? { requestId: baseline.requestId || null, appliedTransactionId: baseline.applied?.transactionId || null, undoProposalId: baseline.undoProposalId || null, restored: baseline.undone?.restored === true } : {}), transactions: (state.transactions || []).map(t => ({ transactionId: t.transactionId, state: t.state, candidateHash: t.candidateHash, buildId: t.buildId, proposalIds: t.proposalIds, revertedBy: t.revertedBy })) };
@@ -192,7 +192,7 @@ export async function runNativeUiTransactionAcceptance({ phase, env = process.en
     const confirmation = (await api('prepareAcceptance', { transactionId })).result;
     check(confirmation.transactionId === transactionId && confirmation.candidateHash === candidate.tx.candidateHash && confirmation.buildId === candidate.build.buildId && typeof confirmation.confirmationToken === 'string' && confirmation.confirmationToken.length >= 20 && confirmation.confirmationToken.length <= 128 && Date.parse(confirmation.expiresAt) > Date.now(), 'CONFIRMATION_MISMATCH');
     // A fresh exact snapshot/read-set check follows confirmation. Tokens stay in RAM.
-    state = (await api('state')).state; sources = await sourceManifest(state, target, root);
+    state = (await api('state')).result; sources = await sourceManifest(state, target, root);
     if(undo) { verifyOriginalBaselines(state, baseline); verifyAppliedSource(state, sources, baseline.applied); }
     else verifyBaselines(state, baseline);
     check(same(manifestOnly(sources), undo ? baseline.applied.readSet : baseline.readSet), 'SOURCE_MISMATCH');
@@ -202,7 +202,7 @@ export async function runNativeUiTransactionAcceptance({ phase, env = process.en
     check(result.state === 'applied' && result.transactionId === transactionId && result.candidateHash === candidate.tx.candidateHash && result.buildId === candidate.build.buildId, 'APPLY_MISMATCH');
     const receipt = { transactionId, candidateHash: result.candidateHash, buildId: result.buildId, snapshotId: result.snapshotId, readSet: candidate.after, sourceVerified: false, verified: false, at: new Date().toISOString() };
     if(undo) baseline.undone = receipt; else baseline.applied = receipt; await persist();
-    state = (await api('state')).state; sources = await sourceManifest(state, target, root);
+    state = (await api('state')).result; sources = await sourceManifest(state, target, root);
     check(same(manifestOnly(sources), candidate.after), 'SOURCE_MISMATCH');
     const appliedTx = state.transactions?.find(t => t.transactionId === transactionId);
     check(state.project.snapshotId === result.snapshotId && appliedTx?.state === 'applied' && appliedTx.projectId === state.project.id && appliedTx.afterSnapshotId === result.snapshotId && appliedTx.candidateHash === result.candidateHash && appliedTx.buildId === result.buildId, 'APPLY_MISMATCH');

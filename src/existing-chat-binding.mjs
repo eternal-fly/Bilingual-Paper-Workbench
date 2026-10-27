@@ -25,4 +25,6 @@ export async function restoreExistingChat(app){
  if(app.chat?.getState?.().mode==='bound-existing-chat'&&app.chat.getState().threadId===record.threadId)return;
  const next=await app.createBoundChat(record.threadId,{model:record.model,effort:record.effort}),state=next.getState();if(state?.mode!=='bound-existing-chat'||(state.boundThreadId||state.threadId)!==record.threadId)fail('THREAD_MISMATCH','The saved paper chat did not restore its exact identity.');await app.chat?.close?.();app.attachChat(next);
 }
-export function verifiedExistingChat(service){const state=service.getState?.(),record=state?.nativeChatBinding,chat=service.chat?.getState?.();return record?.kind==='bound-existing-chat'&&record.projectId===state?.project?.id&&id(record.threadId)&&chat?.mode==='bound-existing-chat'&&(chat.boundThreadId||chat.threadId)===record.threadId?record:null;}
+// Internal response readers may reuse their freshly captured state. Mutation
+// authorization omits the argument and always reads current service state.
+export function verifiedExistingChat(service,state=service.getState?.()){const record=state?.nativeChatBinding,chat=service.chat?.getState?.();return record?.kind==='bound-existing-chat'&&record.projectId===state?.project?.id&&id(record.threadId)&&chat?.mode==='bound-existing-chat'&&(chat.boundThreadId||chat.threadId)===record.threadId?record:null;}

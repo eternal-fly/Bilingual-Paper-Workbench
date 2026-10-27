@@ -19,7 +19,7 @@ const session = JSON.parse(await readFile(sessionFile, 'utf8')), url = new URL(s
 assert.equal(url.hostname, '127.0.0.1'); assert.ok(['independent-workbench', 'native-independent-workbench'].includes(session.mode)); assert.ok(/^[A-Za-z0-9_-]{40,50}$/.test(token));
 const report = { actualFileImport: true, version: session.version, startedAt: new Date().toISOString(), checks: [], errors: [], screenshots: [] };
 const record = (name, detail = {}) => { report.checks.push({ name, passed: true, ...detail }); console.log(`PASS ${name}`); };
-const state = async () => { const response = await fetch(new URL('/api', url), { method: 'POST', headers: { Origin: url.origin, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'state', payload: {} }) }); const result = await response.json(); assert.ok(result.ok); return result.state; };
+const state = async () => { const response = await fetch(new URL('/api', url), { method: 'POST', headers: { Origin: url.origin, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'state', payload: {} }) }); const result = await response.json(); assert.ok(result.ok); return result.result; };
 const identity = value => hash(JSON.stringify(Object.fromEntries(['project', 'segments', 'readingParagraphs', 'originals', 'originalSnapshotId', 'translations', 'alignments', 'proposals', 'comments', 'requests', 'transactions'].map(key => [key, value[key]]))));
 let browser, page, before, captured, baseline, sourceHash;
 try {

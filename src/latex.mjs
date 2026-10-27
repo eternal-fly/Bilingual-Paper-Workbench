@@ -1,4 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { inlineFormattingNames } from '../ui/inline-structures.mjs';
+import { inlineSyntaxHazard } from './inline-structure-syntax.mjs';
 
 export const sha256 = value => createHash('sha256').update(value).digest('hex');
 
@@ -52,7 +54,7 @@ function readGroup(source, start) {
 }
 
 const protectedCommands = new Set(['cite', 'citep', 'citet', 'citealp', 'citealt', 'citeauthor', 'citeyear', 'nocite', 'ref', 'eqref', 'pageref', 'autoref', 'cref', 'Cref', 'label', 'url', 'path', 'includegraphics', 'input', 'include', 'bibliography', 'bibliographystyle', 'addbibresource', 'footnotemark']);
-const textCommands = new Set(['section', 'subsection', 'subsubsection', 'paragraph', 'title', 'caption', 'emph', 'textbf', 'textit', 'textnormal', 'underline']);
+const textCommands = new Set(['section', 'subsection', 'subsubsection', 'paragraph', 'title', 'caption', ...inlineFormattingNames]);
 const nonTextCommands = new Set(['maketitle', 'tableofcontents', 'printbibliography', 'clearpage', 'newpage', 'item', 'noindent', 'par', 'centering', 'vfill']);
 const presentationCommands = new Set(['par', 'noindent', 'normalfont', 'rmfamily', 'sffamily', 'ttfamily', 'mdseries', 'bfseries', 'upshape', 'itshape', 'slshape', 'scshape', 'tiny', 'scriptsize', 'footnotesize', 'small', 'normalsize', 'large', 'Large', 'LARGE', 'huge', 'Huge', 'enspace', 'quad', 'qquad', 'ignorespaces']);
 const fontCommands = new Set(['normalfont', 'rmfamily', 'sffamily', 'ttfamily', 'mdseries', 'bfseries', 'upshape', 'itshape', 'slshape', 'scshape', 'tiny', 'scriptsize', 'footnotesize', 'small', 'normalsize', 'large', 'Large', 'LARGE', 'huge', 'Huge']);
@@ -227,7 +229,7 @@ export function extractSegments(source, filePath, previous = [], rangeOverrides 
     spans.push({ start: i, end, math: true, reason: 'Math spans a paragraph boundary; preserve it as opaque.' });
     i = end - 1;
   }
-  const dynamicSyntax = parsed.find(c => {
+  const dynamicSyntax = inlineSyntaxHazard(source,{strictDefinitions:false}) || parsed.find(c => {
     if (['catcode', 'mathcode', 'lccode', 'uccode', 'def', 'edef', 'gdef', 'xdef', 'let', 'futurelet', 'csname', 'directlua'].includes(c.name) || c.name.startsWith('if')) return true;
     if (['renewcommand', 'newcommand', 'providecommand'].includes(c.name)) {
       const target = c.args[0]?.replace(/^\\/, '');

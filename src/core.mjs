@@ -6,6 +6,7 @@ import { commands, extractSegments, restoreProtected, sha256 } from './latex.mjs
 import { extractBilingualPairs } from './bilingual-import.mjs';
 import { prepareRangeFile, authorizeReadingRange, maskRawReplacement, literalLexicalSafety } from './range-authority.mjs';
 import {reconcileFormulaDraft,captureFormulaRequest,formulaSourceForRequest,formulaDraftFromState,carryFormulaDraft,requestDraft} from './formula-edits.mjs';
+import {inlineStructureSafetyForFiles} from './inline-structures.mjs';
 
 const MAX_FILE = 4 * 1024 * 1024;
 const MAX_TREE = 32 * 1024 * 1024;
@@ -248,6 +249,7 @@ export class PaperService {
       return narrowed;
     });
     const next = { ...emptyState(), ...old, project: { id: projectId, rootLabel: path.basename(resolvedRoot), mainFile, sourceLanguage, targetLanguage, snapshotId, files: list, diagnostics: scanned.diagnostics }, segments };
+    next.project.inlineStructureSafety=inlineStructureSafetyForFiles(scanned.files,next.project,{lexicalSafety:literalLexicalSafety});
     next.originalSnapshotId ||= snapshotId;
     next.originals ||= {};
     const companions = new Map(bilingual.map(({ segment, pair }) => [segment.id, pair]));

@@ -16,7 +16,7 @@ await mkdir(outputPath, { recursive: true, mode: 0o700 }); const output = await 
 const session = JSON.parse(await readFile(sessionFile, 'utf8')), url = new URL(session.url), token = new URLSearchParams(url.hash.slice(1)).get('session');
 assert.equal(url.protocol, 'http:'); assert.equal(url.hostname, '127.0.0.1'); assert.match(token, /^[A-Za-z0-9_-]{43}$/);
 const sha = value => createHash('sha256').update(value).digest('hex');
-async function state() { const response = await fetch(new URL('/api', url), { method: 'POST', headers: { Origin: url.origin, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'state', payload: {} }) }); const result = await response.json(); assert.ok(result.ok && response.ok); return result.state; }
+async function state() { const response = await fetch(new URL('/api', url), { method: 'POST', headers: { Origin: url.origin, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'state', payload: {} }) }); const result = await response.json(); assert.ok(result.ok && response.ok); return result.result; }
 const identity = s => sha(JSON.stringify(Object.fromEntries(['project', 'segments', 'readingParagraphs', 'originals', 'originalSnapshotId', 'translations', 'alignments', 'reviewNotes', 'reviewHistory', 'reviewBatches', 'reviewHistoryPreferences', 'comments', 'proposals', 'transactions', 'requests', 'builds', 'versionPair'].map(key => [key, s[key]]))));
 const before = await state(), baseline = identity(before); assert.equal(before.project.mainFile, path.basename(target));
 assert.match(before.project.id, /^project-[a-f0-9]+$/);

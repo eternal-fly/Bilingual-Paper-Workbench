@@ -1,4 +1,4 @@
-# Bilingual Paper Workbench: Codex Integration, Version 1.5.2
+# Bilingual Paper Workbench: Codex Integration, Version 1.6.0
 
 The existing Codex Desktop chat owns model execution. The plugin owns the paper window, protected requests, durable delivery receipts and validated returns. Explicit UI actions enter that exact chat's official durable queue. Desktop processes them with its current model and history; the plugin does not acquire another writer, resume the chat in a separate model process or require Desktop to release it. Other Desktop chats can continue.
 

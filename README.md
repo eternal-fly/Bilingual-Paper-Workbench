@@ -1,4 +1,4 @@
-# Bilingual Paper Workbench 1.5.2
+# Bilingual Paper Workbench 1.6.0
 
 A local Windows plugin for reading, translating and revising LaTeX papers with Codex. Three aligned columns show the English PDF, an editable translation in reading view, and paragraph-linked notes. Import the original LaTeX project to preserve its document class, columns, figures and bibliography when compiling English revisions.
 
@@ -50,7 +50,7 @@ Use the same explicit `-Node`, `-Codex`, or `-PrivateRoot` arguments in both com
 1. Enable **Bilingual Paper Workbench** in a Codex chat and provide the paper's source ZIP, main `.tex` file or project directory, plus any review files you want imported. Ask Codex to open the workbench and import those files. The independent window opens first, including on a new task without a saved project.
 2. Codex passes those explicit paths to the plugin; no shell extraction, browser address copying or file-dialog automation is needed. Source imports create a private editable project and retain the supplied archive/directory unchanged. Include original class, style, bibliography and figure dependencies. If several main files or review ZIP members qualify, select the intended candidate; the plugin does not guess. A PDF alone does not provide editable LaTeX source.
 3. Compile the confirmed English source. Choose the original, latest confirmed English PDF, or an explicitly selected candidate preview in the PDF column.
-4. Set the target language. Translate the paper or selected paragraphs, then click a translation paragraph or press Enter to edit it. Edit LaTeX formulas and existing standalone citation/cross-reference keys directly inside the paragraph text, then finish editing to return to typeset reading. Exact author changes can enter a protected English candidate; labels and other structure remain fixed.
+4. Set the target language. Translate the paper or selected paragraphs, then click a translation paragraph or press Enter to edit it. Edit LaTeX formulas and existing standalone citation/cross-reference keys directly inside the paragraph text, then finish editing to return to typeset reading. Exact author changes can enter a protected English candidate. Supported inline spacing and static formatting are editable too; labels and executable source structures remain validated.
 5. For a substantial review, first ask Codex to save an inspectable review document, read it, then import it. You can also request feedback directly in the workbench. Select a paragraph to see its current notes and inspect proposed English wording, translation and bilingual reasons before creating a source candidate.
 6. Review and compile the English candidate, then click **Write back English** in the first PDF column. That click confirms the complete current candidate and publishes **Latest English**. If compilation is still needed, the button prepares it first and waits for your next click. Undo requires a separate inverse candidate, successful compilation and confirmation.
 
@@ -76,7 +76,7 @@ Queue acknowledgment, model completion and accepted paper results are separate s
 
 ## Features
 
-- **Source-preserving editing:** inspect original `.tex`, class, style and bibliography files; replace verified UTF-8 ranges while retaining unaffected bytes and line endings. Supported prose, headings, captions, theorem/proof text and lists can produce candidates. Explicit human formula intent can authorize the corresponding mathematical change; references and other protected syntax retain spelling and order.
+- **Source-preserving editing:** inspect original `.tex`, class, style and bibliography files; replace verified UTF-8 ranges while retaining unaffected bytes and line endings. Supported prose, headings, captions, theorem/proof text and lists can produce candidates. Exact human formula, existing-reference and supported inline-formatting intent can authorize corresponding changes; all other protected objects retain spelling and order.
 - **Inline formula editing:** click a paragraph and edit its text and LaTeX together, including formula changes and deletion. No separate formula panel is required. Use Ctrl+Z/Redo and finish editing to return to typeset reading. The saved math intent can enter a pending English candidate through the existing Desktop chat; exact safe compilation and human-confirmed writeback still apply. Embedded labels, references and citations cannot be removed with the formula.
 - **Readable translations:** offline Markdown + KaTeX, bundled fonts, decoded supported static TeX formatting, and source fallback for unknown constructs. Failed saves, input-method composition and conflicts preserve the editing buffer.
 - **Adjustable translation text:** use **More → Translation display → Text size** for 14–28 px, with 17 px as the default and **Reset** to restore it. Body and caption text share that base. Math, paragraph editing and Compare text scale together; the PDF, notes and metadata keep their own sizes. Each paper remembers its preference, and changing size preserves an active edit and its caret without starting a draft save or model request.
@@ -97,6 +97,14 @@ Review imports allow **64 MiB per file**, **32 MiB of extracted text/annotations
 PDF review supplies text and paragraph evidence, not visual inspection of binary figures. SyncTeX offers coarse navigation. Compilation and feedback do not prove scientific correctness. The compiler enforces CPU, memory, wall-time and process limits with sampled output monitoring rather than a hard volume quota. Private state relies on user filesystem access controls; encryption at rest and a VM boundary are not claimed.
 
 See [Data and Source Boundaries](docs/core-boundaries.md), [Compiler Security](docs/compiler-security.md) and [Font Support](docs/fonts-support.md).
+
+## Version 1.6.0: inline structures and genuine PDF zoom
+
+Translation paragraphs expose inline TeX structures directly, including nonbreaking spaces, escaped literal characters and supported balanced static formatting. Their validated author intent can enter the same protected English-candidate, isolated-compile and confirmed-writeback workflow. Incomplete or unsafe text remains available for correction; typing never grants source acceptance or arbitrary TeX execution.
+
+The English PDF has actual display zoom, fit width, 100% actual size, pointer-anchored Ctrl/wheel zoom and optional hand panning. Scrollbars and keyboard controls remain available. Enlarging the view does not change the PDF or its source, and bounded rendering prevents huge zoom settings from allocating an unbounded canvas.
+
+Editing performance work targets measured repeated source indexing, per-key toolbar work and language scans through manuscript/math content. It preserves live native capture, input-method composition, caret position, undo/redo and save-failure recovery. The release-specific verification record reports measured improvements and their limits.
 
 ## Version 1.5.2: reliable repeated editing
 

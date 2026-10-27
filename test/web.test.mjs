@@ -15,13 +15,28 @@ function call(web, body, extra = {}) {
   return fetch(web.origin + '/api', { method: 'POST', headers: { Origin: web.origin, 'Content-Type': 'application/json', Authorization: `Bearer ${web.token}`, ...extra }, body: JSON.stringify(body) });
 }
 
+for (const nativeBindingId of [null, 'synthetic-window']) test(`state polling serializes one complete graph with authenticated conditional reads (${nativeBindingId || 'local'})`, async t => {
+  const service = new EventEmitter(); let reads = 0;
+  const marker = 'synthetic-unique-document-marker';
+  service.getState = () => { reads++; return { eventSeq: 1, project: {id:'synthetic-paper'}, nativeChatBinding:{kind:'bound-existing-chat',projectId:'synthetic-paper',threadId:'synthetic-chat'}, document: marker + 'x'.repeat(128 * 1024) }; };
+  service.chat = {getState:()=>({mode:'bound-existing-chat',threadId:'synthetic-chat'})};
+  const web = await startLocalWeb({ service, nativeBindingId }); t.after(() => web.close());
+  const response = await call(web, { action: 'state' }), etag = response.headers.get('etag'), raw = await response.text(), packet = JSON.parse(raw);
+  assert.equal(packet.ok, true); assert.equal(packet.result.document, marker + 'x'.repeat(128 * 1024));
+  assert.equal(raw.split(marker).length - 1, 1, 'The full manuscript must not be duplicated in result and state.');
+  assert.equal(packet.state, undefined); assert.equal(reads, 1); assert.ok(etag);
+  if(nativeBindingId) assert.equal(packet.transport.messageRoute,'bound-existing-chat');
+  assert.equal((await call(web, { action: 'state' }, { 'If-None-Match': etag })).status, 304); assert.equal(reads, 1);
+  assert.equal((await call(web, { action: 'state' }, { Authorization: '' })).status, 401);
+});
+
 test('editor capture uses the authenticated paper channel and never resends full manuscript state per keystroke', async t => {
   let stateReads = 0;
   const project = { id: 'capture-paper', snapshotId: 'capture-snapshot' };
   const service = { core: { _state: { project, segments: [{ id: 'capture-paragraph' }] } }, getState() { stateReads++; return { project, capabilities: {}, segments: [{ id: 'capture-paragraph' }] }; } };
   const web = await startLocalWeb({ service }); t.after(() => web.close());
   const state = await (await call(web, { action: 'state' })).json();
-  assert.equal(state.state.capabilities.editorDraftCapture, true);
+  assert.equal(state.result.capabilities.editorDraftCapture, true);
   const readsBeforeTyping = stateReads;
   const scope = { clientId: 'one-capture-page', expectedProjectId: project.id, expectedSnapshotId: project.snapshotId };
   const poll = await (await call(web, { action: 'pollEditorDraftCapture', payload: scope })).json();
@@ -88,5 +103,5 @@ test('unchanged state polling avoids resending large opinions and invalidates on
   const capturedReads = reads, idle = await call(web, { action: 'state' }, { 'If-None-Match': etag });
   assert.equal(idle.status, 304); assert.equal(reads, capturedReads);
   version++; service.emit('change');
-  const changed = await call(web, { action: 'state' }, { 'If-None-Match': etag }); assert.equal(changed.status, 200); assert.notEqual(changed.headers.get('etag'), etag); assert.equal((await changed.json()).state.eventSeq, 2);
+  const changed = await call(web, { action: 'state' }, { 'If-None-Match': etag }); assert.equal(changed.status, 200); assert.notEqual(changed.headers.get('etag'), etag); assert.equal((await changed.json()).result.eventSeq, 2);
 });

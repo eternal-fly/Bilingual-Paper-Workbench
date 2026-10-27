@@ -275,6 +275,26 @@
 .review-anchor-evidence{margin:12px 0;padding-inline-start:12px;border-inline-start:2px solid var(--line);line-height:1.7;overflow-wrap:anywhere}
 .annotation-match-proof{margin-block:12px;font-size:13px}.annotation-match-proof summary{cursor:pointer;color:var(--muted)}.annotation-match-evidence{margin:10px 0;padding-inline-start:12px;border-inline-start:2px solid var(--line);line-height:1.7;white-space:pre-wrap;overflow-wrap:anywhere}
 
+/* PDF zoom uses page dimensions, with scrolling contained in the first pane. */
+.pdf-container{overscroll-behavior:contain;scrollbar-gutter:stable;direction:ltr;touch-action:pan-x pan-y pinch-zoom;isolation:isolate}
+.pdf-canvas-host{min-width:0;width:100%;min-height:100%}
+.pdf-sheet{max-width:none;flex:none;margin:0 auto;overflow:hidden}
+.pdf-container canvas{max-width:none;height:100%!important;margin:0;touch-action:pan-x pan-y pinch-zoom}
+.pdf-pan-enabled canvas,.pdf-pan-enabled .pdf-sheet{cursor:grab;touch-action:none}
+.pdf-dragging,.pdf-dragging canvas{cursor:grabbing!important;user-select:none}
+.source-footer .pdf-tools{gap:2px;max-width:100%}
+.source-footer .pdf-icon-button{display:inline-flex;align-items:center;justify-content:center;flex:0 0 22px;min-width:22px;padding:1px!important;min-height:24px!important}
+.pdf-icon-button svg{display:block;width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.source-footer .pdf-tools select{width:66px;max-width:66px;min-height:24px;font-size:11px}
+.source-footer .pdf-tools .mono{min-width:30px;white-space:nowrap;text-align:center}
+.pdf-tools button[aria-pressed=true]{background:var(--selected);color:var(--accent);border-color:var(--selected-line)}
+.pdf-zoom-options{position:relative;flex:0 0 22px}
+.pdf-zoom-options>summary{display:flex;align-items:center;justify-content:center;list-style:none;width:22px;height:24px;cursor:pointer;border-radius:var(--radius);font-size:18px;color:var(--accent)}
+.pdf-zoom-options>summary::-webkit-details-marker{display:none}
+.pdf-zoom-options>summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.pdf-zoom-settings{position:absolute;right:0;bottom:calc(100% + 8px);width:220px;max-width:calc(100vw - 96px);padding:14px;display:grid;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);font-size:12px;z-index:12;text-align:left}
+.pdf-zoom-settings input,.pdf-zoom-settings .button{min-height:40px!important;padding:6px 10px!important;font-size:13px!important;width:100%}
+.source-footer:has(.pdf-zoom-options[open]){overflow:visible;position:relative;z-index:10}
 /* Translation-only display sizing never changes PDF zoom, notes or metadata. */
 #translation-panel .translation-input,#translation-panel .layer-body,#translation-panel .layer-original-text,#translation-panel .layer-candidate-text,#translation-panel .layer-reason{font-size:var(--translation-text-size,17px)}
 #edit-proposal-dialog[data-translation-typography=true] .candidate-edit-input{font-size:var(--translation-text-size,17px)}

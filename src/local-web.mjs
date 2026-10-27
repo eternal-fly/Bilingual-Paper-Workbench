@@ -125,7 +125,7 @@ export async function dispatchUi(service, action, payload = {}, { nativeBindingI
 export async function startLocalWeb({ service, port = 0, htmlPath = path.join(packageRoot, 'dist/preview.html'), nativeBindingId = null, syncHostProject = null, switchWorkspace = null, projectWindowHandoff = null,updateChecker=null } = {}) {
   if (!service) throw new TypeError('service is required');
   if (nativeBindingId !== null && (typeof nativeBindingId !== 'string' || !/^[A-Za-z0-9_.:-]{1,128}$/.test(nativeBindingId))) throw new TypeError('Use an exact internal native instance identity.');
-  const transport = () => {const direct=verifiedExistingChat(service),relay=service.nativeRelay?.getState?.(),ready=relay?.available&&relay?.canSendMessage;return nativeBindingId ? { mode:'native-window',nativeChat:true,canSendMessage:Boolean(ready||direct),directChat:Boolean(direct),relayChat:Boolean(!direct&&relay),messageRoute:direct?'bound-existing-chat':relay?'native-relay':'unavailable',reason:direct?'此窗口直接继续已验证的同一持久聊天。':relay?.reason||'请在绑定聊天中加载聊天连接卡。',...(direct?{threadId:direct.threadId}:{}) } : undefined;};
+  const transport = state => {if(!nativeBindingId)return undefined;const direct=verifiedExistingChat(service,state),relay=service.nativeRelay?.getState?.(),ready=relay?.available&&relay?.canSendMessage;return nativeBindingId ? { mode:'native-window',nativeChat:true,canSendMessage:Boolean(ready||direct),directChat:Boolean(direct),relayChat:Boolean(!direct&&relay),messageRoute:direct?'bound-existing-chat':relay?'native-relay':'unavailable',reason:direct?'此窗口直接继续已验证的同一持久聊天。':relay?.reason||'请在绑定聊天中加载聊天连接卡。',...(direct?{threadId:direct.threadId}:{}) } : undefined;};
   const token = randomBytes(32).toString('base64url');
   let revision = 0;
   let relayFingerprint='';
@@ -176,7 +176,7 @@ export async function startLocalWeb({ service, port = 0, htmlPath = path.join(pa
       if (editorActions.has(input.action)||updateActions.has(input.action)) return reply(200, { schemaVersion: 1, ok: true, result });
       const decorate = value => value && (service.active || service).core ? { ...value, capabilities: { ...value.capabilities, editorDraftCapture: true,releaseUpdates:true } } : value;
       const state = decorate(input.action === 'state' ? result : service.getState());
-      const route=transport();return reply(200, { schemaVersion: 1, ok: true, result: input.action === 'state' ? state : result, state, ...(route ? { transport:route } : {}) }, etag ? { ETag: etag } : {});
+      const route=transport(state);return reply(200, { schemaVersion: 1, ok: true, result: input.action === 'state' ? state : result, ...(input.action === 'state' ? {} : { state }), ...(route ? { transport:route } : {}) }, etag ? { ETag: etag } : {});
     } catch (e) {
       return reply(e.code === 'INPUT_TOO_LARGE' ? 413 : e.code === 'VERSION_CONFLICT' ? 409 : 400, { schemaVersion: 1, ok: false, error: { code: e.code ?? 'INTERNAL_ERROR', message: e.code ? e.message : '操作失败。请检查项目权限与服务状态。' } });
     }

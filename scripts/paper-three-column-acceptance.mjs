@@ -101,7 +101,7 @@ const inAbstract = paragraph => {
 try {
   sourceBefore = hash(await readFile(resolvedTarget));
   report.sourceHashBefore = sourceBefore;
-  initial = (await api('state')).state;
+  initial = (await api('state')).result;
   assert.equal(initial.project?.mainFile, path.basename(resolvedTarget));
   assert.equal(initial.project.files.find(file => file.path === initial.project.mainFile)?.hash, sourceBefore);
   sourceFiles = await sourceManifest(initial.project);
@@ -330,7 +330,7 @@ try {
 } finally {
   try {
     if (initial) {
-      const after = (await api('state')).state;
+      const after = (await api('state')).result;
       report.sourceHashAfter = hash(await readFile(resolvedTarget));
       assert.equal(report.sourceHashAfter, sourceBefore);
       await sourceManifest(initial.project);

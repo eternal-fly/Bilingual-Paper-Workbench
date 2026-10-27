@@ -56,7 +56,7 @@ async function main() {
   nativeServerConfiguration(config);
   const command = config.env.PAPER_EDITOR_CODEX_COMMAND;
   if (typeof command !== 'string' || !path.isAbsolute(command)) fail('INVALID_NATIVE_MCP_CONFIG', 'The installed native Codex executable is unavailable.');
-  const client = new NativeAppControl({ command, transportMode: 'configuration', requestTimeoutMs: 45000, clientInfo: { name: 'bilingual_paper_mcp_configuration', title: 'Paper MCP Configuration', version: '1.5.2' } });
+  const client = new NativeAppControl({ command, transportMode: 'configuration', requestTimeoutMs: 45000, clientInfo: { name: 'bilingual_paper_mcp_configuration', title: 'Paper MCP Configuration', version: '1.6.0' } });
   try { await client.open(); const report = await configureNativeMcp({ client, serverConfig: config, dryRun }); process.stdout.write(JSON.stringify(report) + '\n'); }
   finally { await client.close(); }
 }

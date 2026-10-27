@@ -1,7 +1,8 @@
 // Presentation-only decoding. This does not expand TeX or create source edits.
+import { scanInlineStructures } from './inline-structures.mjs';
 const mathEnvironments = new Set(['equation','equation*','align','align*','aligned','alignedat','alignat','alignat*','gather','gather*','gathered','matrix','pmatrix','bmatrix','Bmatrix','vmatrix','Vmatrix','smallmatrix','cases','array','split']);
 const references = new Set(['cite','citep','citet','ref','eqref','autoref','cref','Cref','label']);
-const wrappers = { textbf: ['**','**'], textit: ['*','*'], emph: ['*','*'], textsl: ['*','*'], textrm: ['',''], textnormal: ['',''] };
+const wrappers = { textbf: ['**','**'], textit: ['*','*'], emph: ['*','*'], textsl: ['*','*'], textrm: ['',''], textnormal: ['',''], textsf: ['',''], textsc: ['',''], underline: ['',''] };
 const headings = { title:'# ', section:'## ', subsection:'### ', subsubsection:'#### ', paragraph:'##### ', subparagraph:'###### ' };
 function group(source, at, budget) {
   while (/\s/u.test(source[at] || '') && at < source.length) at++;
@@ -10,7 +11,7 @@ function group(source, at, budget) {
   for (let end = at + 1; end < source.length; end++) {
     if (--budget.remaining < 0) return null;
     if (source[end] === '\\') { end++; continue; }
-    if (source[end] === '{') depth++;
+    if (source[end] === '{' && ++depth > 128) { budget.remaining = -1; return null; }
     if (source[end] === '}' && --depth === 0) return { start:at, end:end+1, text:source.slice(at+1,end) };
   }
   return null;
@@ -48,6 +49,31 @@ function hasUnescapedComment(text){
   for(let at=text.indexOf('%');at>=0;at=text.indexOf('%',at+1)){let slashes=0;for(let back=at-1;back>=0&&text[back]==='\\';back--)slashes++;if(slashes%2===0)return true;}
   return false;
 }
+// Plain or mixed boxes need the same literal inline whitelist as the editor.
+// The scanner receives only independently complete opaque math/references;
+// unknown commands and malformed groups therefore keep the whole box literal.
+function safeInlineBox(text,budget){
+  const opaque=[];
+  for(let at=0;at<text.length;){
+    if(--budget.remaining<0)return false;
+    const end=mathEnd(text,at);
+    if(end!==null){const raw=text.slice(at,end);if(!singleInlineMath(raw,budget))return false;opaque.push({start:at,end,raw,kind:'math'});at=end;continue;}
+    if(text[at]==='<'||text[at]==='>')return false;
+    if(text[at]==='\\'){
+      const control=/^\\([A-Za-z]+)\*?/u.exec(text.slice(at));
+      if(control&&references.has(control[1])){
+        const argument=group(text,at+control[0].length,budget);
+        if(!argument||/[\\{}%<>\u0000-\u001f\u007f\u200b-\u200f\u202a-\u202e\u2060-\u206f]|\^\^/u.test(argument.text))return false;
+        opaque.push({start:at,end:argument.end,raw:text.slice(at,argument.end),kind:'reference'});at=argument.end;continue;
+      }
+      if(!control){at+=2;continue;}
+      at+=control[0].length;continue;
+    }
+    at++;
+  }
+  budget.remaining-=text.length;
+  return budget.remaining>=0&&scanInlineStructures(text,opaque).issues.length===0;
+}
 export function decodeTexProse(value, { tokens = [] } = {}) {
   let source = String(value ?? ''); const diagnostics=[];
   const warn = code => { if(!diagnostics.some(item=>item.code===code))diagnostics.push({code,message:code==='TEX_PROSE_LIMIT'?'Deep or long formatting remains readable as source.':'Unsupported or incomplete prose formatting remains readable as source.'}); };
@@ -64,9 +90,9 @@ export function decodeTexProse(value, { tokens = [] } = {}) {
     for(let at=0;at<text.length;){
       if(--budget.remaining<0){warn('TEX_PROSE_LIMIT');output+=text.slice(at);break;}
       const end=mathEnd(text,at);if(end!==null){output+=text.slice(at,end);at=end;continue;}
-      if(text[at]!=='\\'){output+=text[at++];continue;}
+      if(text[at]!=='\\'){output+=text[at]==='~'?' ':text[at];at++;continue;}
       const match=/^\\([A-Za-z]+)\*?/u.exec(text.slice(at));
-      if(!match){output+=text.slice(at,at+2);at+=2;continue;}
+      if(!match){output+=/[ ,;:!]/u.test(text[at+1]||'\0')?' ':text.slice(at,at+2);at+=2;continue;}
       const name=match[1], begin=at;at+=match[0].length;
       if(name==='begin'||name==='end'){
         const argument=group(text,at,budget);if(argument && ['itemize','enumerate'].includes(argument.text)){
@@ -78,8 +104,10 @@ export function decodeTexProse(value, { tokens = [] } = {}) {
       }
       if(name==='item'&&list.length){const current=list.at(-1);output+=`\n${'  '.repeat(list.length-1)}${current.kind==='enumerate'?`${++current.index}.`:'-'} `;while(/[ \t]/u.test(text[at]||''))at++;continue;}
       const argument=group(text,at,budget);
+      if(!argument&&/^\s*\{/u.test(text.slice(at))){warn(budget.remaining<0?'TEX_PROSE_LIMIT':'TEX_PROSE_UNSUPPORTED');output+=text.slice(begin);break;}
       if(name==='mbox'){
         if(argument&&match[0]==='\\mbox'&&singleInlineMath(argument.text,budget)){output+=argument.text;at=argument.end;continue;}
+        if(argument&&match[0]==='\\mbox'&&safeInlineBox(argument.text,budget)){output+=decode(argument.text,level+1);at=argument.end;continue;}
         warn(budget.remaining<0?'TEX_PROSE_LIMIT':'TEX_PROSE_UNSUPPORTED');
         if(argument){output+=text.slice(begin,argument.end);at=argument.end;continue;}
         output+=text.slice(begin);break;

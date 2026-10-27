@@ -95,7 +95,7 @@ const validateSubmission = payload => {
 };
 let expectedContext;
 try {
-  initial = (await api('state')).state;
+  initial = (await api('state')).result;
   assert.equal(initial.project?.mainFile, path.basename(resolvedTarget));
   sources = await sourceManifest(initial.project); beforeIdentity = invariant(initial);
   report.sourceHashBefore = hash(await readFile(resolvedTarget));
@@ -185,7 +185,7 @@ try {
 
   const deadline = Date.now() + 360000;
   for (;;) {
-    finalState = (await api('state')).state;
+    finalState = (await api('state')).result;
     completedBatch = finalState.reviewBatches.find(batch => batch.cycleId === queued.cycleId);
     if (completedBatch && ['completed', 'failed', 'cancelled', 'stale'].includes(completedBatch.status)) break;
     assert.ok(Date.now() < deadline, 'The authorized review cycle did not finish in the acceptance wait window; no retry was started.');
@@ -260,7 +260,7 @@ try {
 } finally {
   try {
     if (initial) {
-      const after = (await api('state')).state;
+      const after = (await api('state')).result;
       assert.equal(invariant(after), beforeIdentity); assert.deepEqual(await sourceManifest(initial.project), sources);
       report.sourceHashAfter = hash(await readFile(resolvedTarget)); assert.equal(report.sourceHashAfter, report.sourceHashBefore);
       const afterPair = (await api('readVersionPair')).result; assert.deepEqual(pairMetadata(afterPair), pairMetadata(pair));

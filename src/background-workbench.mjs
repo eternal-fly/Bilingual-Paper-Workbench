@@ -108,7 +108,7 @@ export async function probeBackgroundSession(session, profile, { timeoutMs = 300
   const reader = response.body.getReader(); let length = 0, chunks = [];
   try { for (;;) { const part = await reader.read(); if (part.done) break; length += part.value.length; if (length > 40 * 1024 * 1024) { await reader.cancel(); return false; } chunks.push(part.value); } }
   finally { reader.releaseLock(); }
-  const result = JSON.parse(Buffer.concat(chunks).toString('utf8')), state = result.state, lifecycle = state?.backgroundLifecycle, record = state?.workspaceIndex?.currentRecord;
+  const result = JSON.parse(Buffer.concat(chunks).toString('utf8')), state = result.result || result.state, lifecycle = state?.backgroundLifecycle, record = state?.workspaceIndex?.currentRecord;
   const exactPaper = profile.record ? state.project?.mainFile === profile.record.mainFile && samePath(record?.projectRoot || '', profile.record.projectRoot) && (!profile.record.recordId || record?.recordId === profile.record.recordId) : lifecycle?.launchId === profile.launchId;
   return Boolean(result.ok && Boolean(lifecycle?.viewerOnly) === profile.viewerOnly && lifecycle?.key === profile.key && lifecycle.owner === session.owner && lifecycle.pid === session.pid && lifecycle.version === profile.version && (lifecycle.originThreadId || null) === profile.originThreadId && exactPaper && (lifecycle.threadId || null) === (profile.binding?.threadId || null));
 }

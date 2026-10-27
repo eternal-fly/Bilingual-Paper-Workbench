@@ -42,7 +42,7 @@ const unpack = (result, source = 'rpc') => {
   return result._meta?.paperResult ?? result._meta?.paperState ?? result.structuredContent;
 };
 const ready = local ? Promise.resolve() : (async () => {
-  app = new App({ name: 'bilingual-paper-editor', version: '1.5.2' });
+  app = new App({ name: 'bilingual-paper-editor', version: '1.6.0' });
   app.ontoolresult = result => { try { unpack(result, 'tool-result'); } catch (e) { host.reason = e.message; announce(); } };
   app.onhostcontextchanged = context => {
     if (context.theme && !document.documentElement.dataset.themePreference) document.documentElement.dataset.theme = context.theme;
@@ -101,7 +101,8 @@ export async function api(action, payload = {}) {
       host.mode='native-window';host.connected=true;host.canSendMessage=body.transport.canSendMessage===true;host.directChat=body.transport.directChat===true;host.relayChat=body.transport.relayChat===true;host.messageRoute=body.transport.messageRoute;host.threadId=body.transport.threadId||null;
       host.label=host.canSendMessage?'独立窗口 · 已连接绑定聊天':'独立窗口 · 等待聊天连接卡';host.reason=body.transport.reason||'';
     }
-    if (body.state&&!lightActions.has(action)) lastState = body.state;
+    const responseState=action==='state'?(body.state||body.result):body.state;
+    if (responseState&&!lightActions.has(action)) lastState = responseState;
     host.relayPending=Boolean(host.relayChat&&lastState?.nativeChatRelay?.messages?.some(message=>!message.historical&&['pending','claimed','sent'].includes(message.status)));
     if (action === 'state') stateTag = response.headers.get('etag'); else if(!lightActions.has(action)) stateTag = null;
     if(!lightActions.has(action))announce();
