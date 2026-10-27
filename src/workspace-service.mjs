@@ -66,7 +66,10 @@ export class WorkspaceService extends EventEmitter {
   }
   async refreshExternalJobStatus() {
     if (this._switching || this._closing) return { changed: false, updatedJobIds: [] };
-    return await this.active.refreshExternalJobStatus?.() ?? { changed: false, updatedJobIds: [] };
+    const app = this.active, desktop = await this.desktopExecution?.refreshStatus?.();
+    if (this._switching || this._closing || this.active !== app) return desktop || { changed: false, updatedJobIds: [] };
+    const external = await app.refreshExternalJobStatus?.() ?? { changed: false, updatedJobIds: [] };
+    return { ...external, changed: Boolean(desktop?.changed || external.changed), updatedJobIds: [...new Set([...(desktop?.updatedJobIds || []), ...(external.updatedJobIds || [])])], ...(desktop ? { updatedMessageIds: desktop.updatedMessageIds } : {}) };
   }
   async compileReviewNote(input) {
     if (this._switching || this._closing) fail('PROJECT_BUSY', 'Wait for the project switch to finish.');

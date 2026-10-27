@@ -78,6 +78,7 @@ let markdownContextValue, markdownContextSignature = '';
 let lastAdoptedState = null;
 let activeProposal = null;
 let currentRequest = null;
+let requestSubmission = null;
 let requestKind = 'discussion';
 let pdfViewer = null;
 let pdfPage = 1;
@@ -397,7 +398,7 @@ function hostState() {
   const execution = desktopExecutionState();
   const translationTasks = Array.isArray(state.translationTasks) ? state.translationTasks : Array.isArray(state.translationTasks?.tasks) ? state.translationTasks.tasks : [];
   if (execution) return { ...execution, mode: 'desktop-queue', desktopExecution: true, connected: execution.available === true, canSendMessage: execution.available === true, relayChat: true, relayPending: false, isHost: true,
-    metadataRefreshBusy: ['queued', 'running'].includes(execution.phase) || ['verifying', 'waiting-paper-operation'].includes(state.originatingChat?.phase) || translationTasks.some(task => ['queued', 'running'].includes(task.status)) || (state.jobs || []).some(job => ['queued', 'running', 'compiling', 'cancelling', 'inProgress'].includes(job.status)) };
+    metadataRefreshBusy: execution.activity?.busy===true || !execution.activity&&['queued', 'running'].includes(execution.phase) || ['verifying', 'waiting-paper-operation'].includes(state.originatingChat?.phase) || translationTasks.some(task => ['queued', 'running'].includes(task.status)) || (state.jobs || []).some(activePaperJob) };
   try { return getHostState() || {}; } catch { return {}; }
 }
 function desktopExecutionState() {
@@ -443,7 +444,10 @@ function renderHost() {
     $('chat-status').textContent = '等待绑定聊天连接卡';
     $('chat-input').placeholder = '连接卡就绪后可在这里直接提问…';
   }
-  $('send-request').disabled = cycleStarting || Boolean(activeReview()) || !(direct || (native && host.connected && host.canSendMessage)) || !currentRequest;
+  const requestBlocked=requestSubmission?translationReadCopy('本次请求正在发送；请等待确认，预览保留。','This request is being sent. Wait for confirmation; the preview is retained.'):englishWritebackController?.isBusy()?translationReadCopy('英文修改操作正在核对；预览保留，完成后再发送。','The English change action is being checked. The preview is retained; send after it finishes.'):modelRequestBlockReason();
+  $('send-request').disabled = Boolean(requestBlocked) || !(direct || (native && host.connected && host.canSendMessage)) || !currentRequest;
+  if(currentRequest&&requestBlocked){$('request-note').textContent=requestBlocked;$('request-note').dataset.executionBlocked='true';}
+  else if($('request-note').dataset.executionBlocked){delete $('request-note').dataset.executionBlocked;$('request-note').textContent=translationReadCopy('本地预览已保留。核对后可显式发送；不会自动启动模型或写回原文。','The local preview is retained. Send it explicitly after review; models and source changes never start automatically.');}
   $('send-request').textContent = desktop ? interfaceLanguage.startsWith('zh') ? '发送至桌面端聊天' : 'Send to Desktop chat' : native ? '发送至当前线程' : direct ? '发送至论文 Codex' : '发送至当前线程';
   $('copy-request').hidden = Boolean(desktop);
   $('copy-request').disabled = !currentRequest;
@@ -510,8 +514,37 @@ function annotationAction(label, action, key) {
   button.addEventListener('click', async () => { button.disabled = true; try { await action(); } catch (error) { reportError(error); } finally { button.disabled = false; } });
   return button;
 }
-function reviewMutationBusy() {
-  return englishWritebackController?.isBusy() || reviewImportBusy || reviewImportHistoryBusy || Boolean(reviewImportDeleteWork) || reviewOrganizationBusy || reviewAnchorBusy || existingChatBindingBusy || reviewHistoryBusy || reviewDecisionPending.size > 0 || cycleStarting || workspaceSwitching || state.chat?.busy || ['queued', 'running', 'inProgress', 'streaming', 'thinking', 'connecting', 'starting'].includes(state.chat?.status) || (state.jobs || []).some(job => ['queued', 'running', 'inProgress', 'compiling', 'cancelling'].includes(job.status));
+function reviewMutationBusy({includeWriteback=true}={}) {
+  return includeWriteback&&englishWritebackController?.isBusy() || reviewImportBusy || reviewImportHistoryBusy || Boolean(reviewImportDeleteWork) || reviewOrganizationBusy || reviewAnchorBusy || existingChatBindingBusy || reviewHistoryBusy || reviewDecisionPending.size > 0 || cycleStarting || workspaceSwitching || desktopExecutionState()?.activity?.busy===true || state.chat?.busy || ['queued', 'running', 'inProgress', 'streaming', 'thinking', 'connecting', 'starting'].includes(state.chat?.status) || (state.jobs || []).some(activePaperJob);
+}
+function activePaperJob(job){
+  const execution=desktopExecutionState(),activity=execution?.activity;
+  if(job.kind==='desktop-request'){
+    if(job.projectId&&job.projectId!==state.project?.id||job.snapshotId&&job.snapshotId!==state.project?.snapshotId||job.threadId&&execution?.threadId&&job.threadId!==execution.threadId)return false;
+    if(activity&&Array.isArray(activity.activeJobIds))return activity.activeJobIds.includes(job.jobId);
+    if(job.controllable===false)return false;
+  }
+  return ['queued','running','inProgress','compiling','cancelling'].includes(job.status);
+}
+function sourceMutationBlockReason(){
+  if((state.transactions||[]).some(row=>row.state==='recoveryRequired'))return translationReadCopy('源文件需要恢复核对；请先处理受中断的写回。','Source recovery is required. Review the interrupted writeback before continuing.');
+  return workspaceSwitching||acceptanceBusy||(state.transactions||[]).some(row=>['committing','recovering'].includes(row.state))?translationReadCopy('论文正在切换或写回；请完成后再准备英文修改。','The paper is switching or writing source. Wait before preparing English changes.'):'';
+}
+function modelRequestBlockReason({requireConnection=true}={}){
+  const sourceBusy=sourceMutationBlockReason();if(sourceBusy)return sourceBusy;
+  const execution=desktopExecutionState();
+  if(execution){
+    const pending=(execution.messages||[]).find(row=>row.historical!==true&&(!row.projectId||row.projectId===state.project?.id)&&(!row.snapshotId||row.snapshotId===state.project?.snapshotId)&&(!row.threadId||row.threadId===execution.threadId)&&row.status==='unknown');
+    if(requireConnection&&pending)return translationReadCopy('当前发送仍待确认；预览已保留，不会重复发送。','Current delivery is awaiting confirmation. The preview is retained and will not be resent.');
+    if(requireConnection&&!execution.available)return execution.reason||translationReadCopy('绑定聊天尚未准备好；本地预览仍可查看。','The bound chat is unavailable; the local preview remains readable.');
+  }
+  return reviewMutationBusy({includeWriteback:false})?translationReadCopy('另一论文操作正在进行；本地预览已保留，完成后再执行。','Another paper operation is busy. The local preview is retained; wait before execution.'):'';
+}
+function writebackBlockReason(action){
+  const sourceBusy=sourceMutationBlockReason();if(sourceBusy)return sourceBusy;
+  if(action==='prepare')return '';
+  if(previewBusy||batchBusy)return translationReadCopy('候选操作仍在进行；请完成后再编译或写回。','Another candidate operation is busy. Wait before compilation or source writeback.');
+  return modelRequestBlockReason({requireConnection:false});
 }
 const historyCopy = (zh, en) => interfaceLanguage.startsWith('zh') ? zh : en;
 function historyClearScope(selected, filter) { return filter === 'all' ? { scope: 'project' } : filter === 'selected' && selected.length ? { scope: 'selected', sourceIds: [...selected] } : null; }
@@ -1536,7 +1569,7 @@ function renderReview() {
   const proposal = selectedProposal();
   const transaction = transactionForProposal(proposal);
   const ready = transactionReady(transaction);
-  const busy = (state.jobs || []).some(job => ['queued', 'running', 'compiling', 'cancelling'].includes(job.status));
+  const busy = desktopExecutionState()?.activity?.busy===true || (state.jobs || []).some(activePaperJob);
   $('selected-proposal-count').textContent = selectedIds.length ? `已勾选 ${selectedIds.length} 项 · 合并为一份精确候选` : '勾选提案可合并审查';
   $('preview-selected').disabled = !selectedIds.length || busy || previewBusy || batchBusy;
   $('reject-selected').disabled = !selectedIds.length || batchBusy;
@@ -2251,16 +2284,20 @@ $('copy-request').addEventListener('click', async () => {
   catch { $('request-payload').focus(); $('request-payload').select(); $('request-error').textContent = '剪贴板权限不可用，已选中请求内容。请手动复制。'; $('request-error').hidden = false; }
 });
 $('request-form').addEventListener('submit', async (event) => {
-  event.preventDefault(); if (!currentRequest) return;
+  event.preventDefault(); if (!currentRequest||requestSubmission) return;
+  const submission={request:currentRequest,record:workspaceKey(state),projectId:state.project?.id,snapshotId:state.project?.snapshotId};requestSubmission=submission;
+  const current=()=>requestSubmission===submission&&currentRequest===submission.request&&workspaceKey(state)===submission.record&&state.project?.id===submission.projectId&&state.project?.snapshotId===submission.snapshotId;
   $('send-request').disabled = true;
   try {
-    if (desktopExecutionState()) { const discussion = currentRequest.kind === 'discussion' || requestKind === 'discussion'; if (discussion) await sendToHost($('request-payload').value); else await api('runDesktopRequest', { requestId: currentRequest.requestId }); $('request-dialog').close(); notify(interfaceLanguage.startsWith('zh') ? '选段请求已进入绑定的桌面端聊天队列。' : 'The selection request is queued in the bound Desktop chat.', false, true); if (!discussion) await refreshState(); }
-    else if (nativeHostMode()) { await sendToHost($('request-payload').value); $('request-dialog').close(); notify('请求已发送至调用工作台的当前聊天。原生结果工具校验后会更新译稿或待审提案。', false, true); }
-    else if (chatPanel?.isReady()) { await api('runRequest', { requestId: currentRequest.requestId }); $('request-dialog').close(); chatPanel.toggle(true, false); notify('请求已发送至此文稿固定的 Codex 线程。结构化结果通过校验后会进入译稿或修订队列。', false, true); await refreshState(); }
-    else { await sendToHost($('request-payload').value); $('request-dialog').close(); notify('发送动作已完成；请核对宿主中实际接收的项目线程。结构化结果返回后会进入工作台。', false, true); }
+    if(englishWritebackController?.isBusy())throw Error(translationReadCopy('英文修改操作正在核对，请完成后再发送。','The English change action is being checked. Wait before sending a model request.'));
+    const blocked=modelRequestBlockReason();if(blocked)throw Error(blocked);
+    if (desktopExecutionState()) { const discussion = submission.request.kind === 'discussion' || requestKind === 'discussion'; if (discussion) await sendToHost($('request-payload').value); else await api('runDesktopRequest', { requestId: submission.request.requestId });if(!current())return; $('request-dialog').close(); notify(interfaceLanguage.startsWith('zh') ? '选段请求已进入绑定的桌面端聊天队列。' : 'The selection request is queued in the bound Desktop chat.', false, true); if (!discussion) await refreshState(); }
+    else if (nativeHostMode()) { await sendToHost($('request-payload').value);if(!current())return; $('request-dialog').close(); notify('请求已发送至调用工作台的当前聊天。原生结果工具校验后会更新译稿或待审提案。', false, true); }
+    else if (chatPanel?.isReady()) { await api('runRequest', { requestId: submission.request.requestId });if(!current())return; $('request-dialog').close(); chatPanel.toggle(true, false); notify('请求已发送至此文稿固定的 Codex 线程。结构化结果通过校验后会进入译稿或修订队列。', false, true); await refreshState(); }
+    else { await sendToHost($('request-payload').value);if(!current())return; $('request-dialog').close(); notify('发送动作已完成；请核对宿主中实际接收的项目线程。结构化结果返回后会进入工作台。', false, true); }
   }
-  catch (error) { $('request-error').textContent = desktopExecutionState() ? errorMessage(error) : `${errorMessage(error)}。可复制请求手动传递。`; $('request-error').hidden = false; }
-  finally { renderHost(); }
+  catch (error) { if(current()){$('request-error').textContent = desktopExecutionState() ? errorMessage(error) : `${errorMessage(error)}。可复制请求手动传递。`; $('request-error').hidden = false;} }
+  finally { if(requestSubmission===submission)requestSubmission=null;renderHost(); }
 });
 $('request-prompt').addEventListener('input', () => { currentRequest = null; $('request-payload').value = '说明已改变，请点击“更新请求预览”。'; renderHost(); });
 $('result-form').addEventListener('submit', async (event) => {
@@ -2330,8 +2367,8 @@ projectSwitcher = initializeProjectSwitcher({ api, getState: () => englishWriteb
   withSwitch: withWorkspaceSwitch, onManage: showProjectDialog, onHistory: () => workspaceController.show()
 });
 let writebackPreviousInert = false;
-englishWritebackController = initializeEnglishWriteback({ api, getState: () => state, getLanguage: () => language, getInterfaceLanguage: () => interfaceLanguage, getBuffers: currentBuffers, flushDrafts, refreshState, getBusy: () => reviewMutationBusy() || acceptanceBusy || previewBusy || batchBusy || (state.desktopExecution?.messages || []).some(message => ['queued', 'running', 'unknown'].includes(message.status)), notify,
-  lockEditing: locked => { if (locked) { writebackPreviousInert = $('translation-panel').inert; $('translation-panel').inert = true; } else $('translation-panel').inert = writebackPreviousInert; },
+englishWritebackController = initializeEnglishWriteback({ api, getState: () => state, getLanguage: () => language, getInterfaceLanguage: () => interfaceLanguage, getBuffers: currentBuffers, flushDrafts, refreshState, getBusy: action => Boolean(writebackBlockReason(action)), getBusyReason:writebackBlockReason, notify,
+  lockEditing: locked => { if (locked) { writebackPreviousInert = $('translation-panel').inert; $('translation-panel').inert = true; } else $('translation-panel').inert = writebackPreviousInert;renderHost(); },
   onPrepareRequest: prepareEnglishWritebackRequest,
   onCompile: (result, proposalIds) => { activeProposal = proposalIds[0]; proposalSelection.clear(); for (const id of proposalIds) proposalSelection.add(id); if (result.jobId) pendingPdfJobId = result.jobId; renderReview(); },
   onApplied: async (result, proposalIds) => { const record = workspaceKey(state), project = projectId(state.project), targetLanguage = language; activeProposal = proposalIds[0]; proposalSelection.clear(); if (result.englishPdfJobId) pendingPdfJobId = result.englishPdfJobId; await refreshState(); if (record !== workspaceKey(state) || project !== projectId(state.project) || targetLanguage !== language) return; if (result.englishPdfError) notify(translationReadCopy('英文源稿已写回，但新版 PDF 尚未生成：', 'English changes applied, but the latest PDF is not ready: ') + errorMessage(result.englishPdfError), true, true); else notify(translationReadCopy('英文修改已写回。最新版 PDF 自动更新；可在“修订”中撤销。', 'English changes applied. The latest PDF updates automatically; undo remains available in Revisions.'), false, true); }

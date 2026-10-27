@@ -9,6 +9,7 @@ import { startLocalWeb } from '../src/local-web.mjs';
 import { createPaperServer } from '../src/server.mjs';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { createHash } from 'node:crypto';
 
 async function fixture(t) {
   const parent = fileURLToPath(new URL('../work/external-job-status-tests/', import.meta.url)); await mkdir(parent, { recursive: true });
@@ -74,4 +75,28 @@ test('native UI state aliases await external refresh while getState stays synchr
     const response = await client.callTool({ name: 'bilingual_paper_ui', arguments: { action, payload: {}, uiToken } });
     assert.equal(response.isError, undefined); assert.equal(response._meta.paperState.jobs[0].status, 'completed');
   }
+});
+
+test('workspace polling calibrates exact validated Desktop requests and exposes only unfinished runtimes as controllable', async t => {
+  const f = await fixture(t), sourceBefore = await readFile(f.filename), deliveries = [];
+  const selection = { threadId: 'status-audit-chat', model: 'synthetic-model', effort: 'high', title: 'Synthetic paper' };
+  const service = new WorkspaceService({ initialApp: f.app, factory: async () => { throw Error('No new controller'); }, dataRoot: path.join(f.directory, 'registry'), codexRoot: path.join(f.directory, 'chat'), createDesktopProducer: async () => ({ state: () => ({ desktopQueueVerified: true }), close: async () => {}, enqueue: async (input, { beforeEnqueue }) => {
+    await beforeEnqueue({ ...selection, cwd: path.dirname(f.filename) }); deliveries.push(input);
+    return { threadId: selection.threadId, clientUserMessageId: input.clientUserMessageId, inputHash: createHash('sha256').update(input.text).digest('hex'), status: 'queued', queuedSubmissionId: 'status-audit-delivery' };
+  } }) });
+  t.after(() => service.desktopExecution.close());
+  await f.app._flowAction(() => { f.app.flow.backgroundChatReference = { ...selection, projectId: f.app.getState().project.id }; });
+  await service.desktopExecution.bind({ app: f.app, project: f.app.getState().project, selection });
+  const segmentId = f.app.getState().segments[0].id;
+  const request = await f.app.createRequest({ kind: 'translation', segmentIds: [segmentId], language: 'zh-CN', bindingId: `desktop:${selection.threadId}` });
+  const sent = await service.runDesktopRequest({ requestId: request.requestId });
+  assert.equal(service.getState().desktopExecution.activity.busy, true);
+  assert.equal(f.app.getState().jobs.find(job => job.jobId === sent.jobId).controllable, true);
+  await f.app.submitTranslationResult({ requestId: request.requestId, translations: [{ segmentId, text: '一项合成的主张。' }] });
+  const refreshed = await service.refreshExternalJobStatus(); assert.equal(refreshed.changed, true);
+  const state = service.getState(), job = state.jobs.find(row => row.jobId === sent.jobId);
+  assert.equal(job.status, 'completed'); assert.equal(job.controllable, false);
+  assert.equal(state.desktopExecution.activity.busy, false); assert.equal(state.desktopExecution.messages[0].resultState, 'validated');
+  assert.equal(f.app.jobs.get(sent.jobId).finished, true); assert.equal(deliveries.length, 1);
+  assert.deepEqual(await readFile(f.filename), sourceBefore);
 });

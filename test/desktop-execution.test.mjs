@@ -119,3 +119,100 @@ test('a registered preflight failure settles its job and requires a fresh select
   await assert.rejects(f.execution.runRequest(f.app, { requestId: 'req-1' }), { code: 'DESKTOP_REQUEST_NOT_SENT' });
   assert.equal(f.app.flow.desktopMessages.length, 1);
 });
+
+test('delivery history is not a live task and only exact current-scope uncertainty blocks new sends', async t => {
+  const f = fixture(t); await f.bind();
+  const sent = await f.execution.sendMessage({ text: 'Retain this discussion in the paper history.', idempotencyKey: 'history-only' });
+  assert.equal(sent.status, 'queued'); assert.equal(f.app.jobs.size, 0); assert.equal(f.execution.state().available, true);
+  const current = { ...f.app.flow.desktopMessages[0], status: 'unknown' };
+  for (const [key, value] of [['projectId', 'earlier-paper'], ['snapshotId', 'earlier-source'], ['threadId', 'earlier-chat']]) {
+    f.app.flow.desktopMessages.push({ ...current, messageId: `historical-${key}`, [key]: value });
+  }
+  let projected = f.execution.state();
+  assert.equal(projected.available, true); assert.equal(projected.phase, 'ready');
+  assert.equal(projected.messages.filter(row => row.historical).length, 3);
+  assert.equal(projected.activity.busy, false); assert.deepEqual(projected.activity.activeJobIds, []);
+  assert.equal(projected.messages[0].activityState, 'awaiting-result'); assert.equal(projected.messages[0].resultState, 'awaiting-return');
+  assert.equal(projected.messages[0].deliveryState, 'acknowledged');
+  assert.deepEqual(projected.activity.awaitingResultMessageIds, [sent.messageId]);
+  f.app.flow.desktopMessages.push({ ...current, messageId: 'current-uncertain' });
+  projected = f.execution.state(); assert.equal(projected.available, false); assert.equal(projected.phase, 'attention');
+  assert.equal(projected.activity.busy, false); assert.deepEqual(projected.activity.uncertainMessageIds, ['current-uncertain']);
+  assert.equal(f.calls.filter(call => call[0] === 'enqueue').length, 1);
+});
+
+test('a registered lost acknowledgment releases its local runtime but retains no-resend uncertainty until a validated return', async t => {
+  const f = fixture(t); await f.bind(); const request = register(f);
+  f.producer.enqueue = async input => { f.calls.push(['enqueue', input]); throw Object.assign(Error('Acknowledgment lost after delivery may have happened.'), { code: 'DESKTOP_QUEUE_DELIVERY_UNCERTAIN' }); };
+  await assert.rejects(f.execution.runRequest(f.app, { requestId: request.requestId }), { code: 'DESKTOP_QUEUE_DELIVERY_UNCERTAIN' });
+  const runtime = f.app.jobs.get(`desktop-${request.requestId}`);
+  assert.equal(runtime.finished, true); assert.equal(runtime.cancelled, false);
+  assert.equal([...f.app.jobs.values()].some(job => !job.finished), false);
+  assert.equal(f.execution.state().activity.busy, false);
+  assert.equal(f.app.flow.jobs[0].status, 'unknown'); assert.equal(f.execution.state().available, false);
+  await assert.rejects(f.execution.runRequest(f.app, { requestId: request.requestId }), { code: 'DESKTOP_QUEUE_DELIVERY_UNCERTAIN' });
+  assert.equal(f.calls.filter(call => call[0] === 'enqueue').length, 1);
+  request.status = 'completed'; request.resultHash = 'validated-after-lost-ack';
+  await f.execution.requestSubmitted(f.app, request.requestId, selection.threadId, { status: 'completed' });
+  assert.equal(f.app.flow.jobs[0].status, 'completed'); assert.equal(f.execution.state().available, true);
+  assert.equal(f.execution.state().messages[0].status, 'completed');
+  await assert.rejects(f.execution.runRequest(f.app, { requestId: request.requestId }), { code: 'VERSION_CONFLICT' });
+  assert.equal(f.calls.filter(call => call[0] === 'enqueue').length, 1);
+});
+
+test('exact registered result proof calibrates a missed terminal callback without delivery or paper mutation', async t => {
+  const f = fixture(t); await f.bind(); const request = register(f);
+  const sent = await f.execution.runRequest(f.app, { requestId: request.requestId }), runtime = f.app.jobs.get(sent.jobId);
+  assert.equal(f.execution.state().activity.busy, true); assert.deepEqual(f.execution.state().activity.activeJobIds, [sent.jobId]);
+  request.status = 'completed'; request.resultHash = 'already-validated-result';
+  const preview = f.execution.state(); assert.equal(preview.messages[0].resultState, 'validated'); assert.equal(preview.activity.busy, false);
+  assert.equal(runtime.finished, false); assert.equal(f.app.flow.desktopMessages[0].status, 'queued');
+  const original = structuredClone(f.state), updated = await f.execution.refreshStatus();
+  assert.equal(updated.changed, true); assert.deepEqual(updated.updatedMessageIds, [sent.messageId]); assert.deepEqual(updated.updatedJobIds, [sent.jobId]);
+  assert.equal(runtime.finished, true); assert.equal((await runtime.promise).status, 'completed');
+  assert.equal(f.app.flow.desktopMessages[0].status, 'completed'); assert.equal(f.app.flow.jobs[0].status, 'completed');
+  assert.deepEqual(f.state, original); assert.equal(f.calls.filter(call => call[0] === 'enqueue').length, 1);
+  assert.deepEqual(await f.execution.refreshStatus(), { changed: false, updatedMessageIds: [], updatedJobIds: [] });
+});
+
+test('status calibration refuses altered requests and preserves owned cancellation and unrelated delivery history', async t => {
+  const f = fixture(t); await f.bind(); const request = register(f), sent = await f.execution.runRequest(f.app, { requestId: request.requestId });
+  request.status = 'completed'; request.resultHash = 'untrusted-different-context'; request.segments[0].text += ' altered after registration';
+  assert.equal(f.execution.state().activity.busy, true);
+  const before = structuredClone(f.app.flow); assert.equal((await f.execution.refreshStatus()).changed, false); assert.deepEqual(f.app.flow, before);
+  const runtime = f.app.jobs.get(sent.jobId); runtime.controller.abort(); await runtime.cancellation;
+  assert.equal(runtime.finished, true); assert.equal(f.execution.state().activity.busy, false);
+  assert.equal(f.execution.state().messages[0].resultState, 'cancelled'); assert.equal((await f.execution.refreshStatus()).changed, false);
+  assert.equal(f.app.flow.jobs[0].status, 'cancelled'); assert.equal(f.calls.filter(call => call[0] === 'enqueue').length, 1);
+});
+
+test('status calibration settles only after durable metadata succeeds and a stale validated result is terminal', async t => {
+  const f = fixture(t); await f.bind(); const request = register(f), sent = await f.execution.runRequest(f.app, { requestId: request.requestId });
+  const runtime = f.app.jobs.get(sent.jobId); request.status = 'stale'; request.resultHash = 'validated-but-newer-human-draft-retained';
+  const persist = f.app._flowAction; let denied = true;
+  f.app._flowAction = async work => { const value = await persist(work); if (denied) throw Object.assign(Error('Synthetic metadata persistence denied.'), { code: 'EACCES' }); return value; };
+  await assert.rejects(f.execution.refreshStatus(), { code: 'EACCES' }); assert.equal(runtime.finished, false);
+  denied = false; const result = await f.execution.refreshStatus(); assert.equal(result.changed, true);
+  assert.equal(runtime.finished, true); assert.equal((await runtime.promise).imported.status, 'stale');
+  assert.equal(f.app.flow.desktopMessages[0].resultStatus, 'stale'); assert.equal(f.app.flow.jobs[0].status, 'completed');
+  assert.equal(f.execution.state().activity.busy, false); assert.equal(f.calls.filter(call => call[0] === 'enqueue').length, 1);
+});
+
+test('a validated native result arriving before the queue acknowledgment cannot be downgraded to queued', async t => {
+  const f = fixture(t); await f.bind(); const request = register(f);
+  let release, entered; const waiting = new Promise(resolve => { entered = resolve; });
+  f.producer.enqueue = async (input, { beforeEnqueue } = {}) => {
+    await beforeEnqueue?.({ ...selection, cwd: process.cwd() }); f.calls.push(['enqueue', input]); entered();
+    await new Promise(resolve => { release = resolve; });
+    return { threadId: selection.threadId, clientUserMessageId: input.clientUserMessageId, inputHash: digest(input.text), status: 'queued', queuedSubmissionId: 'queue-late' };
+  };
+  const sending = f.execution.runRequest(f.app, { requestId: request.requestId }); await waiting;
+  const runtime = f.app.jobs.get(`desktop-${request.requestId}`); assert.equal(runtime.finished, false);
+  request.status = 'completed'; request.resultHash = 'validated-before-queue-ack';
+  await f.execution.requestSubmitted(f.app, request.requestId, selection.threadId, { status: 'completed' });
+  assert.equal(runtime.finished, true); assert.equal(f.app.flow.jobs[0].status, 'completed');
+  release(); const sent = await sending;
+  assert.equal(sent.status, 'completed'); assert.equal(f.app.flow.jobs[0].status, 'completed');
+  assert.equal(f.execution.state().messages[0].status, 'completed'); assert.equal(f.execution.state().available, true);
+  assert.equal(f.calls.filter(call => call[0] === 'enqueue').length, 1);
+});

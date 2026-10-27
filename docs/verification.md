@@ -1,5 +1,24 @@
 # Bilingual Paper Workbench Verification
 
+## Version 1.6.2 delivery lifecycle and writeback availability
+
+Date: 2026-10-28. **Status: PASSED for the synthetic lifecycle, repeated-writeback and installed-delivery gates below.**
+
+This patch separates local English request preparation, Desktop delivery evidence, actual current paper activity and validated results. Retained acknowledged messages awaiting a reply cannot alone assert global activity. Exact validated request completion can reconcile a missed terminal receipt; elapsed time, missing runtimes and queue disappearance do not prove completion. Uncertain delivery remains protected against automatic resending.
+
+Acceptance includes the reported 22-draft preparation state and old same-paper queued messages, active runtime protection, in-flight submission reentrancy, post-refresh/confirmation races, actual isolated compilation, repeated writeback and latest-PDF association. All manuscript operations use self-authored synthetic fixtures. The user's four old tickets and manuscript are not changed by these acceptance tests.
+
+| Gate | Fresh result |
+| --- | --- |
+| Complete native regression | **1,218 passed, zero failures or skips**: 1,198 tests with concurrency four and the actual isolated compiler enabled; 20 Desktop queue tests separately, including the read-only Windows process-owner probe |
+| Complete browser regression | **576 checks across 50 suites**, zero failed suites or uncaught page errors. Includes four same-scope acknowledged queued messages, a stale uncontrollable job, 22 pending English candidates, genuine active/unknown-phase runtime, current delivery uncertainty, submit reentrancy, post-refresh/acceptance races and source recovery |
+| Repeated source/PDF acceptance | Self-authored paper: 10 translated units, four matched opinions with adopt/pending/revise decisions, **eight confirmed writes through the actual isolated compiler**, one separately compiled reviewed undo, exact final save/reopen and two author-context PDFs. Latest-English hash association was checked after each ordinary write. No real paper or model inference was used |
+| Build and validation | Three manifests, **333 syntax files, 20 verified built artifacts**, no external UI assets. Source application remains authenticated human UI only |
+| Independent clean source | Manifest-verified **413 source files / 414 archive entries**. Fresh offline frozen-lock installation reused 112 packages with zero downloads and no copied development dependencies. Native 119/119, browser 24/24, build and validation passed. Repeat clean builds match 20/20 artifacts; development versus clean layout matches 16/20 because four backend bundles resolve equivalent Zod dependency copies differently. No full cross-layout byte-equivalence or fresh-network installation claim |
+| Installed copies | Three copies match **57 public files and 20 built-artifact hashes**. Existing private configuration and binding presence were preserved. A fresh installed stdio catalog exposes 31 tools using disposable data only. No real-paper window or old Desktop catalog was forcibly refreshed |
+
+The source rebuild used the frozen production snapshot before this final verification text was filled in; release packaging verifies the final documentation and all production hashes again. A successful fixture test does not prove that every package, live model response or manuscript is supported. Existing windows load the patch after a safe reopen; export any unsaved input before restarting Desktop to load a new native catalog.
+
 ## Version 1.6.1 durable author drafts and adaptive source review
 
 Date: 2026-10-28. **Status: PASSED for native/browser regression, actual isolated-compiler multi-round acceptance, clean-source rebuild and installed delivery.**

@@ -1,6 +1,6 @@
 # Bilingual Paper Workbench — User Manual
 
-**Version 1.6.1 · Windows · English edition**
+**Version 1.6.2 · Windows · English edition**
 
 Bilingual Paper Workbench connects an English LaTeX paper, an editable translation and paragraph-linked review notes in one workspace. Your existing Codex Desktop chat performs translation and review; the workbench provides the reading, editing and confirmation interface. English is the default interface language. The translation language is a separate choice.
 
@@ -34,6 +34,14 @@ Source ZIP imports create a private working copy and retain the supplied archive
 There is no fixed paragraph or opinion count limit on the complete selection. Work units depend on actual serialized size and estimated response size; you do not manually split your selection into groups of eight.
 
 You can also ask Codex in the same paper chat: “Translate this entire open paper into French,” or “Translate paragraphs 3–7.” Codex reads the current paper and processes its protected batches within that existing turn. This direct route needs no Computer Use, window clicking or additional queued message. Ask it to cancel or resume the remaining scope when needed; completed translations remain saved.
+
+### Read the request status
+
+**Prepare English changes** saves your current edits and opens a request preview. This local preparation does not send another model message, compile a candidate or write source. Earlier acknowledged messages awaiting a return do not silently disable it. If a real paper operation or source write is active, the interface explains why the next execution step must wait.
+
+Delivery and result status are distinct. An acknowledged delivery means Desktop accepted the request; it does not prove that the model finished or that a valid result reached the paper. The workbench distinguishes active work, waiting for a return, validated completion and uncertain delivery. It does not infer success from elapsed time or automatically resend an uncertain request. Keep the bound Desktop chat available and inspect that chat when a result has not returned.
+
+Once Codex returns the complete current English candidate, compile it and inspect the PDF. Click **Write back English** to confirm that exact candidate. The latest PDF then updates automatically. A new edit requires a new current candidate; it does not require redoing unaffected translations.
 
 ### 3. Generate a review file before importing it — recommended
 

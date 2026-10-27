@@ -1,4 +1,4 @@
-# Bilingual Paper Workbench 1.6.1
+# Bilingual Paper Workbench 1.6.2
 
 A local Windows plugin for reading, translating and revising LaTeX papers with Codex. Three aligned columns show the English PDF, an editable translation in reading view, and paragraph-linked notes. Import the original LaTeX project to preserve its document class, columns, figures and bibliography when compiling English revisions.
 
@@ -97,6 +97,12 @@ Review imports allow **64 MiB per file**, **32 MiB of extracted text/annotations
 PDF review supplies text and paragraph evidence, not visual inspection of binary figures. SyncTeX offers coarse navigation. Compilation and feedback do not prove scientific correctness. The compiler enforces CPU, memory, wall-time and process limits with sampled output monitoring rather than a hard volume quota. Private state relies on user filesystem access controls; encryption at rest and a VM boundary are not claimed.
 
 See [Data and Source Boundaries](docs/core-boundaries.md), [Compiler Security](docs/compiler-security.md) and [Font Support](docs/fonts-support.md).
+
+## Version 1.6.2: preparation availability and delivery status
+
+Preparing an English candidate remains available while an earlier Desktop request is awaiting its return. Delivery acknowledgment, actual owned model work and validated paper results are separate states. Retained queued messages do not silently hold a global writeback lock. Current execution or uncertain delivery is explained in the request dialog; uncertainty is never resolved by automatically resending a request.
+
+Compilation and writeback still require the complete current candidate and the exact successful build. Source changes require your explicit confirmation. Execution guards are checked again after asynchronous refresh and confirmation preparation. See the [verification record](docs/verification.md) for the tested scope.
 
 ## Version 1.6.1: durable drafts and adaptive source review
 

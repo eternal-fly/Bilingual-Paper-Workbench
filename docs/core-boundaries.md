@@ -1,4 +1,6 @@
-# Bilingual Paper Workbench: Data and Source Boundaries, Version 1.6.1
+# Bilingual Paper Workbench: Data and Source Boundaries, Version 1.6.2
+
+Delivery, execution and accepted-result evidence have separate authority. A saved `queued` message records delivery history; it cannot alone assert a live model worker or validated result. Known exact validated request completion may reconcile its workflow receipt, while unresolved delivery retains uncertainty and is never automatically resent. Local candidate preparation has no source-write authority. Compilation and application recheck genuine current work and exact candidate/source identity after asynchronous boundaries.
 
 Version 1.6.1 separates durable human authoring from source authority. Exact bounded raw text persists under paper/revision CAS and native capture checks even when math, reference or structural analysis is incomplete. Diagnostics use `sourceReviewRequired`; they cannot masquerade as storage failure or a source grant. Physical source validation remains mandatory for requests, candidate construction, compilation and writeback.
 

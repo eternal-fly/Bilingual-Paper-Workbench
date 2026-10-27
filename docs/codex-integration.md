@@ -1,4 +1,6 @@
-# Bilingual Paper Workbench: Codex Integration, Version 1.6.1
+# Bilingual Paper Workbench: Codex Integration, Version 1.6.2
+
+Desktop delivery evidence is separate from execution liveness. A retained acknowledged queue ticket awaiting a return is not sufficient to mark the paper busy. Current owned runtimes and paper/source operations provide execution guards; uncertain delivery separately prevents a new automatic model submission. The UI must not infer model success from elapsed time, queue disappearance or a missing runtime. Late replies still need the exact bound chat, paper snapshot and ticket/request identity. Confirmed source application remains an explicit author UI action.
 
 Version 1.6.1 saves the exact bounded captured author text even when source syntax needs review. `sourceReviewRequired` and `sourceReviewDiagnostics` describe source eligibility, not a storage failure. Raw snapshots cannot provide author-intent metadata or source authority. Actual CAS, caller/capture, storage and permission failures still reject saving.
 

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "version": "1.6.1",
+  "version": "1.6.2",
   "files": [
     {
       "path": ".gitignore",
@@ -24,8 +24,8 @@
     },
     {
       "path": "README.md",
-      "size": 37620,
-      "sha256": "37d7405c133820f8c77f570268d1347532245639ece72847012f93489f58f692"
+      "size": 38175,
+      "sha256": "82a906871cd434ec178df6a4e3185e5575981b080556fa7afc370dc31d09c47e"
     },
     {
       "path": "SECURITY.md",
@@ -94,8 +94,8 @@
     },
     {
       "path": "docs/USER_GUIDE.md",
-      "size": 38306,
-      "sha256": "af103ae6d026fceb3a712c6d0944a8bc9adb7d8f2731c61fadfa4cfaca91b35d"
+      "size": 39206,
+      "sha256": "8d21724d48781295f8fb99241677459dc252d5c8b252bce68df8cb7b8816b578"
     },
     {
       "path": "docs/codex-bilingual-import.md",
@@ -104,8 +104,8 @@
     },
     {
       "path": "docs/codex-integration.md",
-      "size": 30522,
-      "sha256": "e1fcbbc3d05e33e01e885a7ab079809faba29266030d8e73f2b8d24b3051d42f"
+      "size": 30917,
+      "sha256": "9d6d921101be2d5da327738a7418361bb813b3d10c538aaa66439c7007547448"
     },
     {
       "path": "docs/compiler-security.md",
@@ -114,8 +114,8 @@
     },
     {
       "path": "docs/core-boundaries.md",
-      "size": 26187,
-      "sha256": "e427187458749401d929468b2e5022f42e3c0199cee5add63d2ee9bd6a7f8d5a"
+      "size": 26623,
+      "sha256": "85e9c1e4fdc38e72e9b07c41ba2e3dd398a98b94920379cc59606cca617988ad"
     },
     {
       "path": "docs/fonts-support.md",
@@ -228,6 +228,11 @@
       "sha256": "67d216779a9b02f32b46d068ce5204ebafce9f5677a95253d9a624548f42af77"
     },
     {
+      "path": "docs/superpowers/plans/2026-10-28-v1.6.2-writeback-availability.md",
+      "size": 792,
+      "sha256": "3cde92e109bc629ce738823b3a068557f33138ac7697a507fc79a60e7ee68b51"
+    },
+    {
       "path": "docs/superpowers/specs/2026-10-27-v1.6-editing-and-zoom-design.md",
       "size": 3171,
       "sha256": "fc272c7905138de97428c02a4124925b4f9d21e6997bb444a29ad5aa965c4f05"
@@ -238,14 +243,19 @@
       "sha256": "682a28d17f0e43c6654ec95655970bf7e97c4994d2f6ef83c5c8cba6c7657085"
     },
     {
+      "path": "docs/superpowers/specs/2026-10-28-v1.6.2-writeback-availability.md",
+      "size": 1201,
+      "sha256": "26d758d3bbfffe75b77f8dd4f87f588ff78a7cd2dc6d05d413172515b73329ac"
+    },
+    {
       "path": "docs/three-column-plan.md",
       "size": 5475,
       "sha256": "818ed4eab92e767e209d8d55a127e7da17f1897ada255d959d4bf28d0d9f34c6"
     },
     {
       "path": "docs/verification.md",
-      "size": 129410,
-      "sha256": "a74a7734b5b1cf2da0154d37e5d7f6128cb0b5aa0075b328406a459b426e47b2"
+      "size": 132951,
+      "sha256": "fa0aa98419d8a8f2575598ed5c4598115a6d76174f4b35f08f4d2202c8a42209"
     },
     {
       "path": "fixtures/sample-paper/main.pdf",
@@ -265,12 +275,12 @@
     {
       "path": "package.json",
       "size": 799,
-      "sha256": "066a8632b49582d001ac06a15605de76c32ade957676e72665c1f3e5f3f269ac"
+      "sha256": "61c3647678d9a8047c41083fe941ed769fd9ce473680550ec6e417d32dc9aa83"
     },
     {
       "path": "plugin.json",
-      "size": 4035,
-      "sha256": "1f6efc4fdff2b90930e5d5c5f662bec301c34b96936ed7b8c20f43f754a197de"
+      "size": 3992,
+      "sha256": "e4e875c591a3a41b5a45d39906b84a6b8fdf053e9bc975c37f73b3ac15446839"
     },
     {
       "path": "pnpm-lock.yaml",
@@ -315,7 +325,7 @@
     {
       "path": "scripts/configure-native-mcp.mjs",
       "size": 7888,
-      "sha256": "5ed64b9868459ffa5b696bf034499993e10b79ae53df95b157fd5cfea14f4e85"
+      "sha256": "a5fd33af340df581278455c331e5df7a0c030f183dfd353cbeb3389afc73e53b"
     },
     {
       "path": "scripts/desktop-discovery.ps1",
@@ -385,7 +395,7 @@
     {
       "path": "scripts/native-app-control.mjs",
       "size": 8142,
-      "sha256": "e53ff21031fea50960c92cd553f4960d3c4b31d354ee9c221a96e9d3023f991b"
+      "sha256": "0555152b27e3abd497482b9fe6958e44bce0b8c70802bd632829d0f3a4f6de94"
     },
     {
       "path": "scripts/native-ui-transaction-acceptance.mjs",
@@ -400,7 +410,7 @@
     {
       "path": "scripts/package-source.mjs",
       "size": 16580,
-      "sha256": "bf4940195dbbb0298a30f15d92118477e6bc88100127b651f23d8f2ead9b04b0"
+      "sha256": "b183a2568caba04de1da70fab220dd91e8672796e25f64206c6474c0329ae487"
     },
     {
       "path": "scripts/paper-acceptance.mjs",
@@ -514,8 +524,8 @@
     },
     {
       "path": "scripts/ui-qa-english-writeback.mjs",
-      "size": 17168,
-      "sha256": "0a25c320d4637f52c449e322443758df5ec44951bafd1a2322a3f9dc923d9b28"
+      "size": 19361,
+      "sha256": "7154be6ed98717e8dd5f1b4eefe3eb966362ac9f314d081821b8da7cd0ed5d61"
     },
     {
       "path": "scripts/ui-qa-existing-chat-binding.mjs",
@@ -564,8 +574,8 @@
     },
     {
       "path": "scripts/ui-qa-native-host-routing.mjs",
-      "size": 34893,
-      "sha256": "5b04b6c6159ffd555ce02162b5ab3e310a9f42527c53a7cfced359d9ef569932"
+      "size": 35396,
+      "sha256": "fc8acc41e661aecfd3a06b32584aeb59b3c9999fe31c03bea84320427c9668fa"
     },
     {
       "path": "scripts/ui-qa-native-window.mjs",
@@ -733,9 +743,14 @@
       "sha256": "e9c7d2c37d9279803e451029f6c8bc2befbc4b93265a9ca5fbe951db34065c3d"
     },
     {
+      "path": "scripts/ui-qa-writeback-availability.mjs",
+      "size": 14826,
+      "sha256": "abe054c1fe2fc1b51dc740e163b592708f004908f34c25f99d0649a3a821bf72"
+    },
+    {
       "path": "scripts/ui-qa.mjs",
-      "size": 7186,
-      "sha256": "be017babbf1eefb00765a39d6189c981ff2e844bd0dd0f245f6208074bed9a11"
+      "size": 7302,
+      "sha256": "125937810fe75b4bbda1e2a601e9e71835570ad810be7a2931670573d83228d9"
     },
     {
       "path": "scripts/validate.mjs",
@@ -754,8 +769,8 @@
     },
     {
       "path": "src/application.mjs",
-      "size": 114965,
-      "sha256": "3414d6e9df1bb7b31d5b359eccabfd01bcbad95f8ee01e36ddb4b7b45c70d0fa"
+      "size": 115012,
+      "sha256": "ee94f3f2366aa3c154d825f893dc51daff05ded524f23ee70aeac9bf13f9e1b6"
     },
     {
       "path": "src/assistant-import.mjs",
@@ -795,7 +810,7 @@
     {
       "path": "src/codex-bridge.mjs",
       "size": 35653,
-      "sha256": "9fe82e453e687cbd15731e7c8abeff1d805310a7829252f8e6e924baf835d954"
+      "sha256": "deb44fb5e6bbb657c8ce4b71e9ee7fb61606c86a5fd73cf01350d9934dccdd02"
     },
     {
       "path": "src/compiler/AppContainerBroker.cs",
@@ -824,8 +839,8 @@
     },
     {
       "path": "src/desktop-execution.mjs",
-      "size": 26527,
-      "sha256": "c58128d73f65b57e37af776872c175ebf881e932bf8332fa1785f05e7b126d69"
+      "size": 31775,
+      "sha256": "239b7f26a27a402595ee0b9629e6a8400b351aff475bbaf98fb846d0e48df3fa"
     },
     {
       "path": "src/desktop-queue.mjs",
@@ -935,12 +950,12 @@
     {
       "path": "src/native-tool-dispatch.mjs",
       "size": 4264,
-      "sha256": "c576a963eb7157eeba743ed3c0ee212b55d00c82b76ade229891ea99f12101f2"
+      "sha256": "c69e3afeaa987e021464177deacff29a5c4798a14de347818a79ff3ebe874f44"
     },
     {
       "path": "src/native-window.mjs",
       "size": 14094,
-      "sha256": "42c37b0379525370be4ff433f5aa3da92053b80a9519c1f92de7b7a50fd91f5d"
+      "sha256": "5044e4bb9bd0d6065efba0fd98590f59b29500a251638760ea681959da3a3bdb"
     },
     {
       "path": "src/opinion-math.mjs",
@@ -1095,7 +1110,7 @@
     {
       "path": "src/server.mjs",
       "size": 58562,
-      "sha256": "65f63f488dd0f6f0200426011bfb5895b59526a6f33e3ac5e88395105e51d931"
+      "sha256": "64a92d2889f7db207aa661630e5eb5435f76301a67d78e2c226801c6b7bb50a1"
     },
     {
       "path": "src/sync-workflow.mjs",
@@ -1149,8 +1164,8 @@
     },
     {
       "path": "src/workspace-service.mjs",
-      "size": 22760,
-      "sha256": "bad3361c26891bc25dd5657f5a5d1642af43500cb02471279008be6972222b5b"
+      "size": 23226,
+      "sha256": "af70b7a064e9e61b4e982115af8e03e14d4626551577e1b90d1efe1b4d71a0a1"
     },
     {
       "path": "src/writing-skills-policy.mjs",
@@ -1294,8 +1309,8 @@
     },
     {
       "path": "test/desktop-execution.test.mjs",
-      "size": 14393,
-      "sha256": "cdb925399394e4484a417930afbf54f3be314a46466b26f854dcd85f174a9c76"
+      "size": 23246,
+      "sha256": "22c960961bf6fcd7beaf542c624a8384450d1d8663ae03623594e3d30ecd08bf"
     },
     {
       "path": "test/desktop-model-refresh.test.mjs",
@@ -1354,8 +1369,8 @@
     },
     {
       "path": "test/external-job-status.test.mjs",
-      "size": 6920,
-      "sha256": "d1d3b640f6dcccc8093947bc69bf85ec4f5c0eaefcd04ce919c0bf7da4bb6311"
+      "size": 9462,
+      "sha256": "f0eb3ed69e7f619eee0814e6bc0654403f711fc3e9ac6771c57b870877640ba0"
     },
     {
       "path": "test/fonts.test.mjs",
@@ -1450,7 +1465,7 @@
     {
       "path": "test/mcp.test.mjs",
       "size": 12794,
-      "sha256": "da441bdac1dddff1b300c6611936aaeec123c758635e44b6e23ac82e9ce163bf"
+      "sha256": "e661cda08a221a8430c9bcbb27e450b90007979bee9daafb8fb1ce9f38b9cc2d"
     },
     {
       "path": "test/native-app-control.test.mjs",
@@ -1740,7 +1755,7 @@
     {
       "path": "test/source-package.test.mjs",
       "size": 9945,
-      "sha256": "ae4e3401e2a2ad96d6e0eb3e0bab7aeb8080fd91f097c7c4ebdd25039f8c090f"
+      "sha256": "0c59fa8e912fa1471fd1650d53b1b732983285a03ffb1c92b17ea13b9cc04e13"
     },
     {
       "path": "test/static-font-profile.test.mjs",
@@ -1854,8 +1869,8 @@
     },
     {
       "path": "ui/app.mjs",
-      "size": 258641,
-      "sha256": "6e678783566f2021325f6e29f42a813f84b3a133b964cb6e0f5ffafab3f7e5e9"
+      "size": 263194,
+      "sha256": "da3f4ec92ea98e0295b739f05c89cc7dea1dc51deac2bb1c935f25614fba63bf"
     },
     {
       "path": "ui/background-connection.mjs",
@@ -1865,12 +1880,12 @@
     {
       "path": "ui/bridge.mjs",
       "size": 10198,
-      "sha256": "4d66a74b25e1846d366dff9a7a1e6c919787abbdf5d1578e7264a78611a3f3b5"
+      "sha256": "3d061747b60c660ea3e8a31b0994494bda876013d6f7888abbe63840b1e064dd"
     },
     {
       "path": "ui/chat.mjs",
-      "size": 53955,
-      "sha256": "b16e2d460d6fd2da88d37292a9a629a630f21195ca1764b60dbf4f2cdcaa4367"
+      "size": 55443,
+      "sha256": "8546bc8087f357f7616e62d6a8f1a3372975234e536c1ea51e21c8733dd81467"
     },
     {
       "path": "ui/connection-copy.mjs",
@@ -1894,8 +1909,8 @@
     },
     {
       "path": "ui/english-writeback.mjs",
-      "size": 7191,
-      "sha256": "67bbb3806db772b6909b52d6a10107ba3b626d7432251037a4f5a32cb46a7eab"
+      "size": 7887,
+      "sha256": "6b2ee30c7b556376028f743eaa4c84532f2ed6b9d12dc0868711a96145170506"
     },
     {
       "path": "ui/existing-chat-binding.mjs",

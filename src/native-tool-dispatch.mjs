@@ -48,7 +48,7 @@ async function invoke(service, input) {
     if (current) { sessions.delete(service); await current.client.close(); await current.server.close(); }
     const { createPaperServer } = await import('./server.mjs');
     const server = createPaperServer({ service, instanceId: input.bindingId, nativeThreadId: input.originThreadId || null, uiHtml: '<!doctype html>' });
-    const client = new Client({ name: 'paper-background-model-channel', version: '1.6.1' });
+    const client = new Client({ name: 'paper-background-model-channel', version: '1.6.2' });
     try {
       const [cs, ss] = InMemoryTransport.createLinkedPair(); await server.connect(ss); await client.connect(cs);
       current = { bindingId: input.bindingId, originThreadId: input.originThreadId || null, server, client }; sessions.set(service, current);

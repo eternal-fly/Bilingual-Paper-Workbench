@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const output = path.join(root, 'work/ui-acceptance-summary.json');
 const suites = [
+  ['writeback-availability','ui-qa-writeback-availability.mjs','work/ui-writeback-availability-qa/report.json',7],
   ['source-review-draft','ui-qa-source-review-draft.mjs','work/ui-source-review-draft-qa/report.json',6],
   ['pdf-zoom','ui-qa-pdf-zoom.mjs','work/ui-pdf-zoom-qa/report.json',13],
   ['inline-structures','ui-qa-inline-structures.mjs','work/ui-inline-structures-report.json',7],
@@ -15,7 +16,7 @@ const suites = [
   ['updates','ui-qa-updates.mjs','work/ui-updates-qa/report.json',8],
   ['editor-performance','ui-qa-editor-performance.mjs','work/ui-editor-performance-qa/report.json',13],
   ['submission-model-refresh','ui-qa-submission-model-refresh.mjs','work/ui-submission-model-refresh-qa/report.json',8],
-  ['english-writeback','ui-qa-english-writeback.mjs','work/ui-english-writeback-qa/report.json',14],
+  ['english-writeback','ui-qa-english-writeback.mjs','work/ui-english-writeback-qa/report.json',17],
   ['review-revalidation','ui-qa-review-revalidation.mjs','work/ui-review-revalidation-qa/report.json',16],
   ['project-switcher','ui-qa-project-switcher.mjs','work/ui-project-switcher-qa/report.json',11],
   ['project-handoff','ui-qa-project-handoff.mjs','work/ui-project-handoff-qa/report.json',7],

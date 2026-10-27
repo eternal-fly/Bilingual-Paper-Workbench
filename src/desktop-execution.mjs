@@ -32,17 +32,63 @@ export class DesktopExecution {
   _rows(scope) { const rows = scope.app.flow?.desktopMessages; if (rows !== undefined && !Array.isArray(rows)) fail('DESKTOP_EXECUTION_RECOVERY_REQUIRED', 'The Desktop delivery history needs recovery.'); return rows || []; }
   async _mutate(scope, work) { await this._assert(scope); return scope.app._flowAction(async () => { await this._assert(scope); scope.app.flow.desktopMessages ||= []; return work(scope.app.flow.desktopMessages); }); }
   _emit() { this.service.emit?.('change'); }
+  _resultProof(scope, row, requests) {
+    if (row.projectId !== scope.projectId || row.snapshotId !== scope.snapshotId || row.threadId !== scope.threadId || !['translation', 'revision'].includes(row.kind) || ['cancelled', 'failed'].includes(row.status)) return null;
+    const request = requests.get(row.requestId);
+    if (!request || request.projectId !== scope.projectId || request.snapshotId !== scope.snapshotId || request.bindingId !== `desktop:${scope.threadId}` || request.kind !== row.kind || !request.resultHash || !['completed', 'stale'].includes(request.status) || requestFingerprint(request) !== row.requestHash || this._cancelled(scope, row.requestId)) return null;
+    return request;
+  }
+  _runtime(scope, requestId) {
+    const runtime = scope.app.jobs?.get(`desktop-${requestId}`);
+    return runtime && this.runtimes.has(runtime) && runtime.scope === scope && runtime.requestId === requestId ? runtime : null;
+  }
   state() {
     const scope = this.scope; let available = false, phase = 'unavailable', reason = 'Connect this paper to its existing Desktop chat first.', messages = [];
+    const activity = { busy: false, activeJobIds: [], awaitingResultMessageIds: [], uncertainMessageIds: [] };
     if (scope) {
       try {
         this._guard(scope); const verified = scope.producer.state?.().desktopQueueVerified === true;
-        messages = this._rows(scope).map(row => ({ ...structuredClone(row), historical: row.projectId !== scope.projectId || row.snapshotId !== scope.snapshotId || row.threadId !== scope.threadId }));
-        const unknown = messages.some(row => !row.historical && row.status === 'unknown');
+        const requests = new Map((scope.app.core.getState().requests || []).map(request => [request.requestId, request]));
+        const proven = new Set();
+        messages = this._rows(scope).map(row => {
+          const historical = row.projectId !== scope.projectId || row.snapshotId !== scope.snapshotId || row.threadId !== scope.threadId;
+          const proof = !historical && this._resultProof(scope, row, requests), runtime = !historical && this._runtime(scope, row.requestId);
+          if (proof) proven.add(row.requestId);
+          const resultState = row.status === 'cancelled' ? 'cancelled' : row.status === 'failed' ? row.deliveryAttempted === false ? 'not-sent' : 'failed' : proof || row.status === 'completed' && row.kind !== 'message' ? 'validated' : row.status === 'completed' ? 'returned' : 'awaiting-return';
+          const deliveryState = row.status === 'unknown' ? 'uncertain' : row.status === 'failed' && row.deliveryAttempted === false ? 'not-sent' : row.status === 'cancelled' ? 'cancelled' : 'acknowledged';
+          const activityState = historical ? 'historical' : runtime && !runtime.finished && !runtime.cancelled && !proof ? 'active' : resultState === 'awaiting-return' ? 'awaiting-result' : 'inactive';
+          if (!historical && resultState === 'awaiting-return') activity.awaitingResultMessageIds.push(row.messageId);
+          if (!historical && deliveryState === 'uncertain' && !proof) activity.uncertainMessageIds.push(row.messageId);
+          return { ...structuredClone(row), historical, deliveryState, resultState, activityState };
+        });
+        activity.activeJobIds = [...this.runtimes].filter(runtime => runtime.scope === scope && !runtime.finished && !runtime.cancelled && !proven.has(runtime.requestId)).map(runtime => runtime.jobId);
+        activity.busy = activity.activeJobIds.length > 0;
+        const unknown = activity.uncertainMessageIds.length > 0;
         available = verified && !unknown; phase = unknown ? 'attention' : this.problem ? 'verification-failed' : verified ? 'ready' : 'unverified'; reason = unknown ? 'A delivery is awaiting confirmation. It will not be automatically resent.' : this.problem ? this.problem.message : verified ? '' : 'Desktop queue execution has not been verified on this installation.';
       } catch { phase = 'unavailable'; }
     }
-    return { mode: 'desktop-queue', available, phase, threadId: scope?.threadId || null, title: scope?.title || '', model: scope?.model || null, effort: scope?.effort || null, verifiedAt: scope?.verifiedAt || null, messages, reason, ...(this.problem ? { error: structuredClone(this.problem) } : {}) };
+    return { mode: 'desktop-queue', available, phase, threadId: scope?.threadId || null, title: scope?.title || '', model: scope?.model || null, effort: scope?.effort || null, verifiedAt: scope?.verifiedAt || null, messages, activity, reason, ...(this.problem ? { error: structuredClone(this.problem) } : {}) };
+  }
+  async refreshStatus() {
+    const unchanged = { changed: false, updatedMessageIds: [], updatedJobIds: [] }; let scope;
+    try { scope = this._guard(); } catch { return unchanged; }
+    const requests = new Map((scope.app.core.getState().requests || []).map(request => [request.requestId, request]));
+    const pending = this._rows(scope).filter(row => this._resultProof(scope, row, requests) && (row.status !== 'completed' || this._runtime(scope, row.requestId)?.finished === false || (scope.app.flow.jobs || []).some(job => job.jobId === `desktop-${row.requestId}` && job.status !== 'completed')));
+    if (!pending.length) return unchanged;
+    const result = await this._mutate(scope, rows => {
+      const currentRequests = new Map((scope.app.core.getState().requests || []).map(request => [request.requestId, request])), updatedMessageIds = [], updatedJobIds = [], settled = [];
+      for (const original of pending) {
+        const row = rows.find(item => item.messageId === original.messageId), request = row && this._resultProof(scope, row, currentRequests);
+        if (!request) continue;
+        if (row.status !== 'completed') { Object.assign(row, { status: 'completed', resultStatus: request.status, completedAt: row.completedAt || stamp(), updatedAt: stamp() }); updatedMessageIds.push(row.messageId); }
+        const job = (scope.app.flow.jobs || []).find(item => item.jobId === `desktop-${row.requestId}` && item.requestId === row.requestId && item.threadId === scope.threadId && item.projectId === scope.projectId && item.snapshotId === scope.snapshotId);
+        if (job && job.status !== 'completed') { Object.assign(job, { status: 'completed', completedAt: row.completedAt || stamp(), result: job.result || { requestId: request.requestId, status: request.status } }); updatedJobIds.push(job.jobId); }
+        settled.push({ requestId: request.requestId, result: job?.result || { requestId: request.requestId, status: request.status } });
+      }
+      return { changed: updatedMessageIds.length > 0 || updatedJobIds.length > 0 || settled.some(item => this._runtime(scope, item.requestId)?.finished === false), updatedMessageIds, updatedJobIds, settled };
+    });
+    for (const { requestId, result: imported } of result.settled) { const runtime = this._runtime(scope, requestId); if (runtime && !runtime.cancelled) this._settle(runtime, null, { status: 'completed', threadId: scope.threadId, requestId, imported, result: imported }); }
+    const { settled, ...receipt } = result; return receipt;
   }
   async bind({ app, project, selection } = {}) {
     if (!app || !project || !id(project.id) || !id(project.snapshotId) || !id(selection?.threadId) || !id(selection.model) || selection.effort != null && !id(selection.effort)) fail('INVALID_INPUT', 'Bind a verified paper snapshot and exact originating Desktop chat.');

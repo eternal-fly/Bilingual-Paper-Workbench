@@ -11,7 +11,7 @@ const failure = (code, message, details = {}) => Object.assign(new Error(message
  * must authorize every operation. No payloads, stderr or credentials are logged.
  */
 export class NativeAppControl extends EventEmitter {
-  constructor({ command = 'codex', socket = null, transportMode = 'proxy', requestTimeoutMs = 30000, maxMessageBytes = 16 * 1024 * 1024, clientInfo = { name: 'bilingual_native_acceptance', title: 'Bilingual Paper Native Acceptance', version: '1.6.1' }, onServerRequest = null } = {}) {
+  constructor({ command = 'codex', socket = null, transportMode = 'proxy', requestTimeoutMs = 30000, maxMessageBytes = 16 * 1024 * 1024, clientInfo = { name: 'bilingual_native_acceptance', title: 'Bilingual Paper Native Acceptance', version: '1.6.2' }, onServerRequest = null } = {}) {
     super();
     if (typeof command !== 'string' || !command || socket !== null && (typeof socket !== 'string' || !socket) || !Number.isSafeInteger(requestTimeoutMs) || requestTimeoutMs <= 0 || !Number.isSafeInteger(maxMessageBytes) || maxMessageBytes < 1024 || maxMessageBytes > 16 * 1024 * 1024) throw new TypeError('Use a valid native proxy command and bounded time/message limits.');
     if (!['proxy', 'configuration'].includes(transportMode) || transportMode === 'configuration' && socket !== null) throw new TypeError('Choose the Desktop proxy or a configuration-only fresh process.');

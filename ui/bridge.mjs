@@ -42,7 +42,7 @@ const unpack = (result, source = 'rpc') => {
   return result._meta?.paperResult ?? result._meta?.paperState ?? result.structuredContent;
 };
 const ready = local ? Promise.resolve() : (async () => {
-  app = new App({ name: 'bilingual-paper-editor', version: '1.6.1' });
+  app = new App({ name: 'bilingual-paper-editor', version: '1.6.2' });
   app.ontoolresult = result => { try { unpack(result, 'tool-result'); } catch (e) { host.reason = e.message; announce(); } };
   app.onhostcontextchanged = context => {
     if (context.theme && !document.documentElement.dataset.themePreference) document.documentElement.dataset.theme = context.theme;
