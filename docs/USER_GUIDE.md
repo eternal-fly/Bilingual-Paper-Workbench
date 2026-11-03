@@ -1,8 +1,14 @@
 # Bilingual Paper Workbench — User Manual
 
-**Version 1.6.4 · Windows · English edition**
+**Version 1.6.5 · Windows · English edition**
 
 Bilingual Paper Workbench connects an English LaTeX paper, an editable translation and paragraph-linked review notes in one workspace. Your existing Codex Desktop chat performs translation and review; the workbench provides the reading, editing and author-initiated writeback interface. English is the default interface language. The translation language is a separate choice.
+
+## Version 1.6.5: open in the current chat and recover connections
+
+In a new or existing Desktop chat, enable the plugin and ask it to open and import your supplied paper. The window, import and same-chat verification proceed automatically. If the host connection omitted its chat identity, Codex repairs that connection through the packaged transport in the same turn; no command copying, Desktop restart or replacement chat is needed.
+
+If a Desktop update temporarily removes its Codex executable, the workbench looks for a verified replacement in the same official installation. The status shows the actual connection error and automatic retry. Wait for verification to recover; no model request or uncertain delivery is automatically resent. A custom command remains pinned rather than being replaced with an unrelated executable.
 
 ## Install once before opening your first paper
 
@@ -20,7 +26,7 @@ An existing compatible Windows TeX Live installation is a compiler prerequisite 
 2. Attach the original LaTeX source ZIP, or supply the full local path to its main `.tex` file or project directory. Include the document class, custom style files, bibliography and figures. A PDF alone cannot supply editable LaTeX source.
 3. Ask Codex: “Open Bilingual Paper Workbench and import this LaTeX source project.” Specify the main file if the archive contains several possible main documents.
 4. The normal 16:10 workbench window opens before import. Import updates that window; repeated calls reuse the same tracked session rather than opening another page.
-5. Check the project name, main file and bound chat. A workbench opened from a chat inherits that chat and its project context. Choose **GPT-6 Astra** and your preferred available reasoning setting in the chat/model controls if necessary.
+5. Check the project name, main file and bound chat. The workbench inherits that chat and its project context. Its verified model and reasoning setting appear in the window; change them in the existing Desktop chat when needed.
 
 Source ZIP imports create a private working copy and retain the supplied archive. Reimporting the same source reopens that working copy with its saved edits. Opening a directory manually with **Project** uses the exact directory you select; check this location before confirming a later source write.
 
@@ -259,12 +265,15 @@ Use **Project** in the left toolbar to choose a saved paper by title. Each entry
 
 Use **History** to inspect earlier records and **Manage projects** to import or open sources. Finish active saves and model/compile operations before switching projects; failed saves keep the current paper open. A normal invocation defaults to its invoking chat and current trusted project. Reopening uses that task's latest compatible saved state, while an explicit project selection restores the selected paper and its saved chat. Missing project files do not justify overwriting a different paper's state.
 
+To hide an entry, select **Delete task** in History and review its confirmation. Current drafts must save successfully before the record is hidden. This retains the paper files, drafts, reviews and chat history. Enable **Deleted tasks**, then choose **Restore task** to make the record available again. Finish active source writeback before deleting, restoring or switching tasks, even if no job row is shown. If the paper or saved chat changes while confirmation is open, refresh History and confirm the current entry again.
+
 ## Troubleshooting
 
 | Symptom | Action |
 | --- | --- |
 | No editable project | Supply the original LaTeX source project, select its main file and include dependencies. A PDF is a reading artifact, not reconstructed source. |
 | Chat unavailable | Open the paper's existing Desktop chat and workbench; check its displayed identity/model and required background services. Do not create a replacement chat merely to retry. |
+| Connection retry after a Desktop update | Read the reported error. The workbench retries metadata verification automatically and checks for a verified Codex executable in the same official installation. Keep the required processes available; uncertain sends are retained rather than resent. An unavailable custom command needs its intended configuration repaired. |
 | Selected project already has an open window | Use that paper's existing workbench window. The selector keeps the current project intact rather than creating a duplicate or replacing another window's unsaved editing state. |
 | A formula remains source text | Check the complete delimiters, current macro definitions and source/context version. Unsupported dynamic TeX stays readable as source. Do not delete labels or mathematical content to hide the warning. |
 | Source review required | The exact draft is saved. Ask Codex to adapt an English candidate, inspect retained source objects and resolve any remaining intent before final source approval. |

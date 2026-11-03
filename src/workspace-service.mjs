@@ -12,6 +12,7 @@ import { spawn } from 'node:child_process';
 
 const fail = (code, message) => { throw Object.assign(new Error(message), { code }); };
 const hash = value => createHash('sha256').update(value).digest('hex');
+const blockingWritebackPhases = new Set(['preparing', 'waiting-model', 'compiling', 'applying', 'awaiting-editor', 'recovery-required']);
 const samePath = (a, b) => process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b;
 const mainName = value => typeof value === 'string' && value.length > 0 && value.length <= 1024 && /\.tex$/i.test(value) && !path.isAbsolute(value) && !value.replaceAll('\\', '/').split('/').some(part => !part || part === '.' || part === '..' || /[:\x00-\x1f<>"|?*]/.test(part));
 
@@ -152,12 +153,12 @@ export class WorkspaceService extends EventEmitter {
     }
   }
   _publicRecord(record) {
-    const { recordId, projectRoot, rootLabel, mainFile, hostTaskId, hostProjectId, hostProjectRoot, paperTitle, boundChatTitle, hostSource, model, effort, threadId, lastOpenedAt, createdAt, legacy } = record;
-    return { recordId, projectRoot, rootLabel, mainFile, hostTaskId, hostProjectId, ...(hostProjectRoot ? { hostProjectRoot } : {}), ...(paperTitle ? { paperTitle } : {}), ...(boundChatTitle ? { boundChatTitle } : {}), hostSource, model, effort, threadId, workerThreadId: threadId, lastOpenedAt, createdAt, legacy };
+    const { recordId, projectRoot, rootLabel, mainFile, hostTaskId, hostProjectId, hostProjectRoot, paperTitle, boundChatTitle, hostSource, model, effort, threadId, lastOpenedAt, createdAt, legacy, deletedAt } = record;
+    return { recordId, projectRoot, rootLabel, mainFile, hostTaskId, hostProjectId, ...(hostProjectRoot ? { hostProjectRoot } : {}), ...(paperTitle ? { paperTitle } : {}), ...(boundChatTitle ? { boundChatTitle } : {}), hostSource, model, effort, threadId, workerThreadId: threadId, lastOpenedAt, createdAt, legacy, revision: record.revision || 0, ...(deletedAt ? { deletedAt } : {}) };
   }
-  async listWorkspaces() {
+  async listWorkspaces({ deleted = 'active' } = {}) {
     await this._bindingQueue;
-    const all = await this.registry.records(); this.recordCount = all.length;
+    const all = await this.registry.records({ deleted }); this.recordCount = deleted === 'active' ? all.length : (await this.registry.records()).length;
     const records = await Promise.all(all.slice(0, 100).map(async record => {
       const root = await lstat(record.projectRoot).catch(() => null), main = await lstat(path.join(record.projectRoot, record.mainFile)).catch(() => null);
       const available = Boolean(root?.isDirectory() && !root.isSymbolicLink() && main?.isFile() && !main.isSymbolicLink()), paperTitle = record.paperTitle || (available ? await readProjectTitle(record) : '');
@@ -165,9 +166,48 @@ export class WorkspaceService extends EventEmitter {
     }));
     return { records, currentRecordId: this.currentRecord?.recordId || null, hostContext: this.getHostContext(), chatSelection: await this.registry.chatSelection(this.hostContext?.hostTaskId), bootstrap: structuredClone(this.bootstrap), total: all.length, truncated: all.length > records.length };
   }
+  _assertDeleteIdentity(input) {
+    const state = this.active.getState();
+    if (input.currentRecordId !== (this.currentRecord?.recordId || null) || input.projectId !== (state.project?.id || null) || input.snapshotId !== (state.project?.snapshotId || null)) fail('WORKSPACE_RECORD_CHANGED', 'The current paper changed. Refresh history before deleting a task.');
+  }
+  async deleteWorkspaceRecord(input = {}) {
+    if (!input || Object.keys(input).some(key => !['recordId', 'expectedRevision', 'currentRecordId', 'projectId', 'snapshotId'].includes(key))) fail('INVALID_INPUT', 'Choose an exact task and current paper revision.');
+    this._assertIdle(); this._assertDeleteIdentity(input); this._switching = true;
+    let empty = null;
+    try {
+      await this._bindingQueue; this._assertDeleteIdentity(input);
+      const record = await this.registry.get(input.recordId), selected = record.recordId === this.currentRecord?.recordId;
+      if (record.revision !== input.expectedRevision) fail('WORKSPACE_RECORD_CHANGED', 'The saved task changed. Refresh history before deleting it.');
+      if (selected) empty = await this.factory(null);
+      this._assertDeleteIdentity(input);
+      const deleted = await this.registry.delete(record.recordId, { expectedRevision: input.expectedRevision });
+      if (selected) {
+        const previous = this.active; previous.off?.('change', this._onChange);
+        try { await previous.close?.(); }
+        catch (error) { previous.on?.('change', this._onChange); this.currentRecord = await deleted.rollback(); throw error; }
+        this.active = empty; empty = null; this.active.desktopStatusRefresher = () => this.desktopExecution?.refreshStatus?.(); this.currentRecord = null; this.active.on?.('change', this._onChange);
+        this.bootstrap = { status: 'workspace-required', mainCandidates: [] };
+        if (this._watchOptions) this.active.startWatching?.(this._watchOptions);
+      }
+      this.recordCount = (await this.registry.records()).length; this.emit('change');
+      return { deletedRecordId: deleted.recordId, record: this._publicRecord(deleted), state: this.getState() };
+    } finally { if (empty) await empty.close?.(); this._switching = false; }
+  }
+  async restoreWorkspaceRecord(input = {}) {
+    if (!input || Object.keys(input).some(key => !['recordId', 'expectedRevision'].includes(key))) fail('INVALID_INPUT', 'Choose an exact deleted task revision.');
+    this._assertIdle(); this._switching = true;
+    try {
+      await this._bindingQueue;
+      const record = await this.registry.restore(input.recordId, { expectedRevision: input.expectedRevision });
+      this.recordCount = (await this.registry.records()).length; this.emit('change');
+      return { restoredRecordId: record.recordId, record: this._publicRecord(record), state: this.getState() };
+    } finally { this._switching = false; }
+  }
   _assertIdle() {
     if (this.active.translationTasks?.state()?.tasks.some(task => ['queued', 'running'].includes(task.status))) fail('PROJECT_BUSY', 'Finish or cancel the active Desktop translation before switching papers.');
     const projectId=this.active.core?.getState?.().project?.id;
+    const writebacks = this.active.flow?.oneClickWritebacks || this.active.getState?.()?.oneClickWritebacks?.tasks || [];
+    if (projectId && writebacks.some(task => task.projectId === projectId && blockingWritebackPhases.has(task.status))) fail('PROJECT_BUSY', 'Finish or recover the current English writeback before changing paper tasks.');
     const relayBusy=(this.nativeRelay?.getState?.()?.messages||[]).some(message=>!message.historical&&message.projectId===projectId&&['claimed','sent','unknown'].includes(message.status));
     if (relayBusy || this._switching || this._closing || this.active._switching || this.active._pendingOps || this.active._chatConnecting || this.active.reviews?.starting || this.active.chat?.getState?.().busy || [...(this.active.jobs?.values?.() || [])].some(job => !job.finished)) fail('PROJECT_BUSY', 'Wait for or cancel the current paper operation before switching projects.');
   }

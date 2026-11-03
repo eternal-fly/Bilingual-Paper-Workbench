@@ -5,7 +5,10 @@ import { lstat } from 'node:fs/promises';
 
 const id = value => typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/u.test(value);
 const fail = (code, message) => { throw Object.assign(new Error(message), { code }); };
-const diagnostic = error => ({ code: /^[A-Z][A-Z0-9_]{1,63}$/u.test(error?.code || '') ? error.code : 'ORIGIN_CHAT_UNAVAILABLE', message: String(error?.message || 'The invoking chat could not be verified.').replace(/Bearer\s+\S+|sk-[A-Za-z0-9_-]+/giu, '[redacted]').slice(0, 1200) });
+const diagnostic = (error, retryable = false) => ({ code: /^[A-Z][A-Z0-9_]{1,63}$/u.test(error?.code || '') ? error.code : 'ORIGIN_CHAT_UNAVAILABLE', message: String(error?.message || 'The invoking chat could not be verified.').replace(/Bearer\s+\S+|sk-[A-Za-z0-9_-]+/giu, '[redacted]').slice(0, 1200), retryable });
+// Only known transport failures may retry automatically. A missing source file,
+// invalid metadata or different chat identity must still fail closed.
+const transientTransport = (error, readingMetadata) => ['CODEX_COMMAND_UNAVAILABLE', 'CODEX_RUNTIME_UNAVAILABLE', 'CODEX_UNAVAILABLE', 'CODEX_TIMEOUT', 'CODEX_PROCESS_EXITED', 'CODEX_DISCONNECTED', 'ETIMEDOUT', 'ECONNRESET', 'ECONNREFUSED', 'EPIPE', 'ENOTCONN', 'ERR_STREAM_DESTROYED'].includes(error?.code) || readingMetadata && error?.code === 'ENOENT';
 
 /** This metadata reader cannot resume, change settings, load turns or start a
  * chat. Its subprocess owns neither the Desktop writer nor a native lease. */
@@ -44,7 +47,7 @@ export class OriginChatBinding {
   constructor(service, { threadId, readMetadata, retryMs = 2000 } = {}) {
     if (!id(threadId) || typeof readMetadata !== 'function') throw new TypeError('Use the trusted host origin and its metadata reader.');
     this.service = service; this.threadId = threadId; this.readMetadata = readMetadata; this.retryMs = retryMs;
-    this.value = { threadId, phase: 'pending-paper', verified: false, autoConnect: true };
+    this.value = { threadId, phase: 'pending-paper', verified: false, autoConnect: true, retryable: false };
     this.timer = null; this.pending = null; this.closed = false; this.generation = 0; this.cached = null; this.retries = 0; this.stoppedScope = null;
     this.onChange = () => this.schedule(); service.on('change', this.onChange); this.schedule();
   }
@@ -52,13 +55,13 @@ export class OriginChatBinding {
   observeDesktopSelection({ app, projectId, snapshotId, selection }) {
     const project = app.core?.getState?.().project;
     if (this.closed || this.service.active !== app || project?.id !== projectId || project?.snapshotId !== snapshotId || selection.threadId !== this.threadId) return;
-    this.cached = { ...this.scope(app, project), selection }; this.value = { ...this.value, ...selection, projectId, snapshotId, verified: true, phase: 'desktop-ready', error: undefined };
+    this.cached = { ...this.scope(app, project), selection }; this.retries = 0; this.value = { ...this.value, ...selection, projectId, snapshotId, verified: true, phase: 'desktop-ready', error: undefined, retryable: false, nextRetryAt: undefined };
   }
   current(app, project, generation) { const next = app.core?.getState?.().project; return !this.closed && !this.service._closing && this.generation === generation && this.service.active === app && next?.id === project.id && next?.snapshotId === project.snapshotId; }
   scope(app, project) { return { app, projectId: project.id, snapshotId: project.snapshotId }; }
   sameScope(scope, app, project) { return scope?.app === app && scope.projectId === project.id && scope.snapshotId === project.snapshotId; }
   reference(app, project) { return [app.flow?.nativeChatBinding, app.flow?.backgroundChatReference].find(value => value?.projectId === project.id && id(value.threadId)); }
-  update(patch) { this.value = { ...this.value, ...patch }; this.service.emit('change'); }
+  update(patch) { this.value = { ...this.value, ...(patch.phase && patch.phase !== 'waiting-runtime' ? { retryable: false, nextRetryAt: undefined } : {}), ...patch }; this.service.emit('change'); }
   bindingBusy(app) { return this.service._switching || this.service._assistantImportPromise || app._pendingOps || app._bindingPending || app._chatConnecting || app.reviews?.starting || app.chat?.getState?.().busy; }
   busy(app) { return this.bindingBusy(app) || [...(app.jobs?.values?.() || [])].some(job => !job.finished); }
   schedule(delay = 0) { if (this.closed || this.pending || this.timer !== null) return; this.timer = setTimeout(() => { this.timer = null; void this.reconcile(); }, Math.max(0, delay)); this.timer.unref?.(); }
@@ -79,11 +82,13 @@ export class OriginChatBinding {
     if (app.backgroundConnection?.phase === 'released' && this.sameScope(this.cached, app, project)) { this.stoppedScope = this.scope(app, project); this.update({ phase: 'released', autoConnect: false }); return null; }
     if (this.sameScope(this.cached, app, project) && app.backgroundConnection?.phase === 'connected' && app.chat?.getState?.().connected !== false) { if (this.value.phase !== 'connected') this.update({ phase: 'connected', error: undefined }); return null; }
     if (service._switching || service._assistantImportPromise) { this.update({ phase: 'waiting-paper-operation', projectId: project.id, snapshotId: project.snapshotId }); return 250; }
+    let readingMetadata = false;
     try {
       if (!this.sameScope(this.cached, app, project)) {
         this.update({ phase: 'verifying', verified: false, projectId: project.id, snapshotId: project.snapshotId, error: undefined });
         this.abort = new AbortController(); let expectedReference = JSON.stringify(existing || null);
-        const metadata = await this.readMetadata(this.threadId, { signal: this.abort.signal }); this.abort = null;
+        readingMetadata = true;
+        const metadata = await this.readMetadata(this.threadId, { signal: this.abort.signal }); this.abort = null; readingMetadata = false;
         if (!this.current(app, project, generation)) return 0;
         if (metadata?.threadId !== this.threadId || !id(metadata.model) || metadata.effort != null && !id(metadata.effort)) fail('THREAD_MISMATCH', 'The invoking chat or model settings could not be verified.');
         if (typeof metadata.cwd !== 'string' || !path.isAbsolute(metadata.cwd) || metadata.cwd.length > 4096 || /[\x00-\x1f]/u.test(metadata.cwd)) fail('ORIGIN_WORKSPACE_UNAVAILABLE', 'The invoking chat project directory could not be verified.');
@@ -143,9 +148,13 @@ export class OriginChatBinding {
     } catch (error) {
       this.abort = null; if (!this.current(app, project, generation)) return 0;
       if (['CHAT_BUSY', 'PROJECT_BUSY', 'IMPORT_BUSY'].includes(error.code)) { this.update({ phase: 'waiting-paper-operation' }); return 500; }
+      if (transientTransport(error, readingMetadata)) {
+        const delay = Math.min(30000, this.retryMs * 2 ** Math.min(4, this.retries++));
+        this.update({ phase: 'waiting-runtime', retryable: true, nextRetryAt: Date.now() + delay, error: diagnostic(error, true) }); return delay;
+      }
       this.stoppedScope = this.scope(app, project); this.update({ phase: 'failed', error: diagnostic(error) }); return null;
     }
   }
-  retry() { if (this.closed) return this.state(); this.generation++; this.abort?.abort(); this.stoppedScope = null; this.cached = null; this.retries = 0; this.update({ autoConnect: true, error: undefined, phase: this.service.active.core?.getState?.().project ? 'verifying' : 'pending-paper' }); this.schedule(); return this.state(); }
+  retry() { if (this.closed) return this.state(); this.generation++; this.abort?.abort(); if (this.timer !== null) clearTimeout(this.timer); this.timer = null; this.stoppedScope = null; this.cached = null; this.retries = 0; this.update({ autoConnect: true, error: undefined, phase: this.service.active.core?.getState?.().project ? 'verifying' : 'pending-paper' }); this.schedule(); return this.state(); }
   close() { this.closed = true; this.generation++; this.abort?.abort(); if (this.timer !== null) clearTimeout(this.timer); this.timer = null; this.service.off('change', this.onChange); }
 }

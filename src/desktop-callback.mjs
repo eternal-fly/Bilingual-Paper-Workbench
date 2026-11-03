@@ -10,7 +10,14 @@ import {nativeWorkbenchSchema,nativeTranslationEditSchema} from './native-workbe
 const ROOT = fileURLToPath(new URL('../', import.meta.url)), MAX_INPUT = MODEL_TOOL_BYTES, MAX_OUTPUT = MODEL_TOOL_BYTES;
 const tools = { get: 'bilingual_paper_get_request', submit: 'bilingual_paper_submit_translation_result', revision: 'bilingual_paper_propose_revision', reply: 'bilingual_paper_submit_chat_reply' };
 const nativeId=z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/u),nativeLanguage=z.string().regex(/^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$/u),scope={expectedProjectId:nativeId,expectedSnapshotId:nativeId},ids=z.array(nativeId).min(1),offset=z.number().int().nonnegative();
+const importLanguage=z.string().min(2).max(32),assistantImportSchema=z.object({
+  sourcePath:z.string().min(1).max(4096).optional(),mainFile:z.string().min(1).max(1024).optional(),
+  reviews:z.array(z.object({path:z.string().min(1).max(4096),entry:z.string().min(1).max(1024).optional()}).strict()).max(16).optional(),
+  sourceLanguage:importLanguage.optional(),targetLanguage:importLanguage.optional(),
+}).strict();
 const nativeActions={
+  open:['bilingual_paper_editor',assistantImportSchema],
+  import:['bilingual_paper_import_files',assistantImportSchema],
   workbench:['bilingual_paper_workbench',nativeWorkbenchSchema],
   compile:['bilingual_paper_compile',z.object({kind:z.enum(['english','baseline','candidate']).default('english'),proposalIds:ids.optional()}).strict()],
   'edit-translation':['bilingual_paper_edit_translation',nativeTranslationEditSchema],
@@ -46,7 +53,7 @@ export function parseDesktopCallback(argv, stdin = Buffer.alloc(0)) {
   if (Buffer.byteLength(stdin) > MAX_INPUT) fail('INPUT_TOO_LARGE');
   const action = argv[0]; let input;
   if (action === 'get') input = { requestId: argv[1],...(argv.length===3?{offset:Number(argv[2])}:{}) };
-  else { try { input = !stdin.length&&['project','state'].includes(action)?{}:JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(stdin)); } catch { fail('INVALID_INPUT'); } }
+  else { try { input = !stdin.length&&['open','project','state'].includes(action)?{}:JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(stdin)); } catch { fail('INVALID_INPUT'); } }
   const valid = action === 'get' && strict(input, ['requestId','offset']) && id(input.requestId) && (input.offset===undefined || Number.isSafeInteger(input.offset)&&input.offset>=0)
     || action === 'submit' && strict(input, ['requestId', 'translations',...stageKeys]) && validStage(input) && id(input.requestId) && Array.isArray(input.translations) && input.translations.length >= 1 && input.translations.every(row => strict(row, ['segmentId', 'text']) && id(row.segmentId) && text(row.text, MODEL_TOOL_BYTES))
     || action === 'revision' && strict(input, ['requestId', 'edits', 'reason',...stageKeys]) && validStage(input) && id(input.requestId) && text(input.reason, 8000) && input.reason.length > 0 && Array.isArray(input.edits) && input.edits.length >= 1 && input.edits.every(row => strict(row, ['segmentId', 'beforeHash', 'replacement']) && id(row.segmentId) && typeof row.beforeHash === 'string' && row.beforeHash.length >= 1 && row.beforeHash.length <= 128 && text(row.replacement, MODEL_TOOL_BYTES))

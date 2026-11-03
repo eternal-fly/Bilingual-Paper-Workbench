@@ -1,5 +1,25 @@
 # Bilingual Paper Workbench Verification
 
+## Version 1.6.5: chat recovery and recoverable task deletion
+
+Date: 2026-11-03. **Status: PASSED for the synthetic release gates below.**
+
+Desktop updates can remove a previously configured versioned executable. The bridge now rediscovers a verified executable within the same official installation root; missing custom executables remain explicit errors. Trusted identity is captured per request and rechecked across asynchronous window preparation. An absent identity provides an automatic packaged current-turn opening/import route. Transient metadata failures retry with capped backoff without creating chats, starting model turns or resending uncertain deliveries.
+
+History now provides **Delete task**, **Deleted tasks** and **Restore task**. Deletion hides registry metadata, retains source/drafts/reviews/history, and closes only the selected idle controller. Revision checks, unsaved-input flushing, semantic binding checks and durable writeback phases prevent stale deletion or task switches during an active write.
+
+| Gate | Fresh result |
+| --- | --- |
+| Complete native regression | **1,488 passed**, zero failures, skips or cancellations: 1,470 with the actual isolated compiler enabled, plus 18 Desktop execution tests separately |
+| Final browser regression | **607 checks across 53 suites**, zero failed suites; fresh reports and unchanged UI input hashes. Performance suites ran alone |
+| Recovery regressions | Removed and replaced official executables, missing custom commands, junctions, changing trusted callers, missing identity, three asynchronous chat-switch races, transient retry and terminal identity errors are covered |
+| Queue lifecycle | A disconnected bridge reconnects before metadata reads; closed producers stay closed. Queue receipts retain their exact identity and uncertain requests are not resent |
+| Task deletion | Actual authenticated local HTTP delete/list/restore/reopen retains exact source and saved draft bytes. Unauthorized and foreign-origin calls change nothing. Failed draft saves, stale bindings, registry rollback, legacy revisions and active writeback guards are covered |
+| Packaged native workflow | The final packaged STDIO server completes **two synthetic queued writes and one reviewed undo** through the authenticated existing background. PDF hashes update, the original remains frozen, and no model turn or new chat is created |
+| Build and validation | Three manifests, **381 syntax files**, 20 verified build artifacts and zero external UI assets |
+
+A bounded metadata-only probe of the reported existing chat succeeds using the former configuration after executable rediscovery. It requests no turns and performs no model inference. All manuscript writes and compiler acceptance use self-authored material. These results do not claim that every runtime outage, TeX package or model response can succeed. Existing windows are preserved; reopen the workbench from its original chat after saving any input in an older window.
+
 ## Version 1.6.4: free editing, one-click writeback and complete source export
 
 Date: 2026-10-28. **Status: PASSED for the synthetic release gates below.**

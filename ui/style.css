@@ -301,3 +301,5 @@
 #edit-proposal-dialog[data-translation-typography=true] .candidate-edit-input{font-size:var(--translation-text-size,17px)}
 #translation-panel .translation-input .protected-object,#edit-proposal-dialog[data-translation-typography=true] .candidate-edit-input .protected-object{font-size:.8em}
 .translation-text-settings{margin:0 0 16px;padding:0 0 14px;border-bottom:1px solid var(--line)}.translation-text-settings>label{display:block;margin:12px 0 5px;font-size:12px;color:var(--ink)}.translation-text-controls{display:flex;align-items:center;gap:8px}.translation-text-controls select{min-height:44px;width:90px;font-size:14px;flex:1}.translation-text-controls button{min-height:44px;min-width:48px;font-size:12px;flex:none}.translation-text-settings .helper{margin-top:6px;font-size:11px;line-height:1.65;white-space:normal}
+
+.workspace-dialog{padding:24px}.workspace-dialog h2{font-size:20px}.workspace-dialog .workspace-delete,.workspace-dialog .workspace-open,.workspace-dialog .workspace-restore{min-height:44px}.workspace-dialog .workspace-delete{margin-inline-start:8px}

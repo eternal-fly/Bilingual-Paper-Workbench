@@ -215,7 +215,7 @@ export function initializeChat({ api, notify, onChatChange = () => {}, onPaperFe
     const active = opened ? 'chat' : $('main').dataset.mobileView || 'source';
     document.querySelectorAll('[data-mobile-tab]').forEach(button => { const selected = button.dataset.mobileTab === active; button.classList.toggle('active', selected); button.setAttribute('aria-pressed', String(selected)); });
   }
-  const originPhases = new Set(['pending-paper', 'waiting-paper-operation', 'verifying', 'connecting', 'waiting-desktop-release']);
+  const originPhases = new Set(['pending-paper', 'waiting-paper-operation', 'verifying', 'connecting', 'waiting-desktop-release', 'waiting-runtime']);
   const availabilityCodes = new Set(['THREAD_IN_USE', 'CHAT_BUSY', 'CHAT_LOCKED', 'NATIVE_CHAT_IN_USE', 'CHAT_IN_USE']);
   const copy = (en, zh) => document.documentElement.lang.startsWith('zh') ? zh : en;
   function pendingOrigin() {
@@ -229,8 +229,10 @@ export function initializeChat({ api, notify, onChatChange = () => {}, onPaperFe
       verifying: ['Verifying the chat that opened this workbench…', '正在核验发起此工作台的聊天…'],
       connecting: ['Connecting to the verified originating chat…', '正在连接已核验的发起聊天…'],
       'waiting-desktop-release': ['Waiting for Desktop to release this linked chat; other chats can continue normally.', '当前聊天已关联，等待桌面端释放连接；其他聊天可正常使用。'],
+      'waiting-runtime': ['The chat connection is temporarily unavailable. Retrying this same chat automatically.', '聊天连接暂不可用，正在自动重试连接同一聊天。'],
     };
-    return copy(...labels[origin.phase]);
+    const problem = origin.phase === 'waiting-runtime' ? [origin.error?.code, origin.error?.message].filter(Boolean).join(': ') : '';
+    return copy(...labels[origin.phase]) + (problem ? ` ${problem}` : '');
   }
   function showError(error) { shownError = error; $('chat-error').textContent = [error?.code, error?.message || String(error)].filter(Boolean).join('：'); $('chat-error').hidden = false; }
   function clearError() { shownError = null; $('chat-error').hidden = true; }
@@ -357,12 +359,15 @@ export function initializeChat({ api, notify, onChatChange = () => {}, onPaperFe
     nativeNote.hidden = !native;
     $('chat-settings').hidden = Boolean(native); $('chat-messages').hidden = Boolean(native&&!native.relayChat); $('chat-disconnect').hidden = Boolean(native);
     if (native) {
-      const ready = native.connected && native.canSendMessage;
+      const origin = pendingOrigin(), runtimeOrigin = native.desktopExecution && origin?.phase === 'waiting-runtime' ? origin : null;
+      const ready = native.connected && native.canSendMessage && !runtimeOrigin;
       if (native.desktopExecution && desktopThread !== native.threadId) { desktopThread = native.threadId; if ($('chat-paper-feedback')) $('chat-paper-feedback').checked = false; }
       if (native.desktopExecution && availabilityCodes.has(shownError?.code)) clearError();
       nativeNote.style.flex=native.relayChat?'0 0 auto':'1';nativeNote.textContent=native.desktopExecution?`${copy('Last verified model', '最近核验模型')}: ${native.model||'Codex'}${native.effort?` · ${native.effort}`:''} · ${copy('Model runs in Desktop', '模型在桌面端运行')}\n${native.title||native.threadId}\n${copy('Desktop uses its current chat settings. Messages and validated replies stay in this chat.', '桌面端使用聊天中的当前设置，消息和校验后的回复保留在同一聊天中。')}`:native.relayChat?'消息直接发送至绑定的 Codex 聊天；这里显示本窗口的消息及回填回复。模型沿用宿主聊天。':'沿用当前聊天模型，请在宿主聊天切换。消息发送至调用工作台的当前聊天，回复与历史请在宿主聊天查看。';
+      if (runtimeOrigin?.verified !== true && runtimeOrigin && !native.model) nativeNote.textContent = `${copy('Opening chat', '发起聊天')}: ${runtimeOrigin.threadId}\n${copy('Model details will appear after this chat is verified.', '核验当前聊天后显示模型信息。')}`;
       const awaitingResults=native.activity?.awaitingResultMessageIds?.length||0;
       $('chat-status').textContent = native.desktopExecution ? !ready ? native.reason || copy('Waiting for the bound Desktop chat', '等待绑定的桌面端聊天') : busy ? copy('Queuing in Desktop…', '正在提交至桌面端队列…') : native.error?.message || native.phase === 'verification-failed' ? native.error?.message || native.reason || copy('Model verification failed before delivery; retry explicitly.', '投递前模型核验失败；可明确重试。') : native.activity?.busy===true||!native.activity&&['queued','running'].includes(native.phase) ? copy('Desktop is processing a paper request', '桌面端正在处理论文请求') : awaitingResults ? copy(`${awaitingResults} delivered · Awaiting results`,`${awaitingResults} 项已投递 · 等待结果回填`) : copy('Desktop chat linked · Ready to queue a message', '桌面端聊天已关联 · 可提交消息') : busy ? '正在发送至当前聊天…' : native.relayPending?'Codex 正在处理窗口请求…':ready ? native.relayChat?'绑定聊天已连接 · 回复回到窗口':'当前原生聊天 · 回复在宿主中显示' : '当前聊天消息通道未就绪';
+      if (runtimeOrigin) $('chat-status').textContent = originStatus(runtimeOrigin);
       $('chat-connect').disabled = true; $('chat-model').disabled = true; $('chat-effort').disabled = true; $('chat-disconnect').disabled = true; $('chat-interrupt').hidden = true;
       $('chat-input').disabled = !ready; $('chat-input').placeholder = '发送到当前聊天，由你决定讨论、翻译或评阅范围…';
       $('chat-send').disabled = !ready || busy || native.relayPending||paperReviewBusy&&!native.desktopExecution || !$('chat-input').value.trim();

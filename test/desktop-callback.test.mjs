@@ -7,6 +7,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { callDesktopCallback, parseDesktopCallback } from '../src/desktop-callback.mjs';
 import { MODEL_TOOL_BYTES } from '../src/request-budgets.mjs';
+import { nativeAccess } from '../src/native-access.mjs';
 const root = fileURLToPath(new URL('../', import.meta.url));
 async function fixture(t, changes = {}) {
   const owned = path.join(root, 'work/desktop-callback-tests'); await mkdir(owned, { recursive: true }); const installed = await mkdtemp(path.join(owned, 'case-')); await mkdir(path.join(installed, 'dist'));
@@ -28,6 +29,36 @@ test('callback retains the four registered result actions and emits structured d
   assert.deepEqual(f.calls.filter(call => call[0] === 'tool').map(call => call[1].name), ['bilingual_paper_get_request', 'bilingual_paper_submit_translation_result', 'bilingual_paper_propose_revision', 'bilingual_paper_submit_chat_reply']);
   for (const [, transport] of f.calls.filter(call => call[0] === 'connect')) { assert.equal(transport.command, process.execPath); assert.deepEqual(transport.args, [path.join(f.installed, 'dist/server.mjs')]); assert.equal(transport.cwd, root); assert.equal(transport.env.CODEX_THREAD_ID, 'actual-desktop-thread'); assert.equal(transport.env.CoDeX_ThReAd_Id, undefined); assert.equal(transport.env.CODEX_PROJECT_ID, 'actual-project'); assert.equal(transport.env.HOST_SENTINEL, 'preserved'); assert.equal(transport.stderr, 'ignore'); }
   assert.equal(f.calls.filter(call => call[0] === 'close').length, 4);
+});
+
+test('an inherited Desktop turn can open and import explicit files through the two fixed native entrypoints', async t => {
+  const f = await fixture(t), files = { sourcePath: 'C:/author/paper.zip', mainFile: 'paper/main.tex', reviews: [{ path: 'C:/author/reviews.zip', entry: 'review.tex' }], sourceLanguage: 'en', targetLanguage: 'zh-CN' };
+  const actions = [['open', {}, 'bilingual_paper_editor'], ['open', files, 'bilingual_paper_editor'], ['import', { reviews: [{ path: 'C:/author/additional-review.md' }] }, 'bilingual_paper_import_files']];
+  assert.deepEqual(parseDesktopCallback(['open']), { action: 'open', input: {} });
+  for (const [action, input, name] of actions) {
+    const result = await callDesktopCallback(parseDesktopCallback([action], Buffer.from(JSON.stringify(input))), f.options);
+    assert.deepEqual(result, f.response.structuredContent);
+    assert.deepEqual(f.calls.filter(row => row[0] === 'tool').at(-1)[1], { name, arguments: input });
+    assert.equal(f.calls.filter(row => row[0] === 'connect').at(-1)[1].env.CODEX_THREAD_ID, 'actual-desktop-thread');
+  }
+  const transport = nativeAccess("& 'trusted-node.exe' 'installed/desktop-callback.mjs'").currentTransport;
+  for (const [action, input] of actions) { assert(transport.verbs.includes(action)); assert.equal(parseDesktopCallback([action], Buffer.from(JSON.stringify(input))).action, action); }
+});
+
+test('open and import reject authority overrides and preserve the native file-selection schema bounds', async t => {
+  const f = await fixture(t), files = { sourcePath: 'C:/author/paper.zip', mainFile: 'main.tex', reviews: [{ path: 'C:/author/reviews.zip', entry: 'review.tex' }], sourceLanguage: 'en', targetLanguage: 'zh-CN' };
+  const invalid = [
+    { ...files, originThreadId: 'foreign' }, { ...files, chatId: 'foreign' }, { ...files, url: 'http://127.0.0.1/private' }, { ...files, endpoint: 'http://127.0.0.1/private' }, { ...files, env: { CODEX_THREAD_ID: 'foreign' } }, { ...files, uiToken: 'forged' }, { ...files, token: 'forged' }, { ...files, tool: 'applyTransaction' }, { ...files, confirmationToken: 'forged' },
+    { ...files, reviews: [{ path: 'C:/author/review.md', token: 'forged' }] }, { sourcePath: '' }, { sourcePath: 'x'.repeat(4097) }, { mainFile: 'x'.repeat(1025) }, { reviews: Array.from({ length: 17 }, () => ({ path: 'C:/author/review.md' })) }, { reviews: [{ path: '' }] }, { reviews: [{ path: 'x'.repeat(4097) }] }, { reviews: [{ path: 'C:/author/reviews.zip', entry: 'x'.repeat(1025) }] }, { sourceLanguage: 'e' }, { targetLanguage: 'x'.repeat(33) },
+  ];
+  for (const action of ['open', 'import']) {
+    for (const input of invalid) {
+      assert.throws(() => parseDesktopCallback([action], Buffer.from(JSON.stringify(input))), { code: 'INVALID_INPUT' });
+      await assert.rejects(callDesktopCallback({ action, input }, f.options), { code: 'INVALID_INPUT' });
+    }
+    assert.throws(() => parseDesktopCallback([action, '--thread', 'foreign']), { code: 'INVALID_INPUT' });
+  }
+  assert.equal(f.calls.length, 0);
 });
 
 test('stale host catalogs use fixed native project/editor/preparation verbs without arbitrary tools or text overrides',async t=>{

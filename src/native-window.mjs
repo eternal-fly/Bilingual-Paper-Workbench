@@ -98,7 +98,7 @@ export async function dispatchBackgroundRequest({ url, action, payload = {}, tim
 
 /** The invoking MCP process may stop without taking down this paper window. */
 export class BackgroundWindowController {
-  constructor({ service, dataRoot, pluginRoot = ROOT, version = process.env.PAPER_EDITOR_INSTALL_VERSION || '1.6.4', instanceId = null, ensure = ensureBackgroundWorkbench, readSession = readBackgroundSession, launchWindow = openNormalEdgeWindow, dispatchRequest = dispatchBackgroundRequest, signProjectRefresh = signHostProjectRefresh }) {
+  constructor({ service, dataRoot, pluginRoot = ROOT, version = '1.6.5', instanceId = null, ensure = ensureBackgroundWorkbench, readSession = readBackgroundSession, launchWindow = openNormalEdgeWindow, dispatchRequest = dispatchBackgroundRequest, signProjectRefresh = signHostProjectRefresh }) {
     Object.assign(this, { service, dataRoot, pluginRoot, version, instanceId, ensure, readSession, launchWindow, dispatchRequest, signProjectRefresh }); this.pending = null; this.options = null; this.syncedHostProject = null;
   }
   open({ bootstrapHostProject = true } = {}) { if (this.pending) return this.pending; this.pending = this._open({ bootstrapHostProject }).finally(() => { this.pending = null; }); return this.pending; }
@@ -121,19 +121,28 @@ export class BackgroundWindowController {
     return { pluginRoot: this.pluginRoot, dataRoot: this.dataRoot, version: this.version, record: null, binding: null, launchId, ...(originThreadId ? { originThreadId } : {}) };
   }
   async _ready(input) {
-    const options = this._options(input), ready = await this.ensure(options); this.options = options; const session = await this.readSession(options); sessionUrl(session.url);
+    const options = this._options(input),scopeIdentity=JSON.stringify(options);
+    const current=()=>{if(JSON.stringify(this._options(input))!==scopeIdentity)fail('HOST_CHAT_CHANGED','The invoking chat or project changed while its connection was preparing. Retry from the current Desktop turn.');};
+    const ready = await this.ensure(options);current();const session = await this.readSession(options);current();this.options = options;sessionUrl(session.url);
     const identity = options.hostProject ? JSON.stringify(options.hostProject) : null;
-    if (identity && (input?.refreshHostProject || identity !== this.syncedHostProject)) { const proof = await this.signProjectRefresh(options, session); await this.dispatchRequest({ url: session.url, action: 'syncHostProject', payload: proof }); this.syncedHostProject = identity; }
-    return { options, ready, session };
+    if (identity && (input?.refreshHostProject || identity !== this.syncedHostProject)) {
+      const proof = await this.signProjectRefresh(options, session); current();
+      await this.dispatchRequest({ url: session.url, action: 'syncHostProject', payload: proof }); current();
+      this.syncedHostProject = identity;
+    }
+    current();
+    return { options, ready, session, assertCurrent: current };
   }
   async _open(input) {
-    const { options, ready, session } = await this._ready({ ...input, refreshHostProject: true }), placement = await this.launchWindow({ url: session.url, dataRoot: this.dataRoot });
+    const { options, ready, session, assertCurrent } = await this._ready({ ...input, refreshHostProject: true }), placement = await this.launchWindow({ url: session.url, dataRoot: this.dataRoot });
+    assertCurrent();
     const safePlacement = placement?.requestedState === 'normal' && ['width', 'height', 'x', 'y'].every(key => Number.isFinite(placement[key])) && placement.width > 0 && placement.height > 0 ? { width: placement.width, height: placement.height, x: placement.x, y: placement.y, requestedState: 'normal' } : null;
     return { opened: true, mode: 'background-workbench', sameNativeService: false, reusedService: ready.reused, reusedWindow: placement?.reusedWindow === true, requestedWindowState: 'normal', desktopWindowRequired: false, nativeCardRequired: false, ...(options.record === null ? { projectRequired: true } : {}), ...(safePlacement ? { placement: safePlacement } : {}) };
   }
   async dispatch(action, payload = {}) {
     if (!['state', 'importFiles', 'callNativeTool'].includes(action)) fail('PERMISSION_DENIED', 'This private bridge only supports paper onboarding and model tools.');
     const { session, options } = await this._ready();
+    if(action==='callNativeTool'&&payload.originThreadId!==undefined&&payload.originThreadId!==options.originThreadId)fail('THREAD_MISMATCH','The native request and its exact paper window belong to different chats.');
     return this.dispatchRequest({ url: session.url, action, payload: action === 'callNativeTool' && options.originThreadId ? { ...payload, originThreadId: options.originThreadId } : payload });
   }
   async close() {} // Background lifetime belongs to the paper window, not MCP.

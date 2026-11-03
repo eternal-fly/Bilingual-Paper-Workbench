@@ -7,6 +7,7 @@ import { mkdir, open, readFile, rename, unlink } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
+import { resolveCodexCommand } from './codex-command.mjs';
 import {MODEL_CONTEXT_BYTES,MODEL_TOOL_BYTES,REGISTERED_REQUEST_BYTES} from './request-budgets.mjs';
 
 const LIMIT = 128 * 1024;
@@ -90,12 +91,13 @@ export class CodexBridge extends EventEmitter {
         this._state = { ...this._state, ...saved, paperBinding: saved.paperBinding || this.expectedPaperBinding, connected: false, busy: false, models: [], lastError: null, permissionProfile: PROFILE, filesystemIsolation: 'no-environment-tools', mcpIsolation: { verified: false, disabledServerCount: 0 } };
       } catch (error) { if (error.code !== 'ENOENT') throw error; }
       this._decoder = new StringDecoder('utf8'); this._buffer = '';
-      this._child = spawn(this.command, this.args, { cwd: this.cwd, env: process.env, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+      const executable=await resolveCodexCommand(this.command);
+      this._child = spawn(executable, this.args, { cwd: this.cwd, env: process.env, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
       this._child.stdout.on('data', data => this._read(data));
       this._child.stderr.on('data', () => {}); // Auth/diagnostic output is never copied into manuscript logs.
       this._child.on('error', error => this._processFailed(error));
       this._child.on('exit', code => this._processFailed(Object.assign(new Error(`Codex app-server exited (${code}).`), { code: 'CODEX_PROCESS_EXITED' })));
-      await this._request('initialize', { clientInfo: { name: 'bilingual_paper_editor', title: 'Bilingual Paper Editor', version: '1.6.4' }, capabilities: { experimentalApi: true } });
+      await this._request('initialize', { clientInfo: { name: 'bilingual_paper_editor', title: 'Bilingual Paper Editor', version: '1.6.5' }, capabilities: { experimentalApi: true } });
       this._notify('initialized', {}); this._state.connected = true; this._changed();
       return this.getState();
     } catch (error) { await this.close(); throw error; }

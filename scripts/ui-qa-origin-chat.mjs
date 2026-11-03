@@ -10,7 +10,8 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const output = path.join(root, 'work/ui-origin-chat-qa');
 await mkdir(output, { recursive: true });
 const bundle = await build({ stdin: { contents: `import { initializeChat } from './ui/chat.mjs';
-window.__calls = []; window.__origin = null; window.__modelError = null; window.__deferModels = false;
+import { initializeBackgroundConnection } from './ui/background-connection.mjs';
+window.__calls = []; window.__origin = null; window.__host = null; window.__modelError = null; window.__deferModels = false;
 window.__chat = { threadId: null, connected: false, status: 'idle', messages: [] };
 const api = async (action, payload = {}) => {
   window.__calls.push({action, payload});
@@ -23,8 +24,9 @@ const api = async (action, payload = {}) => {
   if (action === 'chatSelectModel') { Object.assign(window.__chat, payload); return structuredClone(window.__chat); }
   throw new Error('Unexpected synthetic action: ' + action);
 };
-window.__controller = initializeChat({api, notify:()=>{}, getOriginatingChat:()=>window.__origin});
+window.__controller = initializeChat({api, notify:()=>{}, getNativeHost:()=>window.__host, getOriginatingChat:()=>window.__origin});
 window.__adopt = (origin, chat = {}) => { window.__origin = origin; Object.assign(window.__chat, chat); window.__controller.adopt(window.__chat, {codexChat:true}, 'synthetic-project'); };
+window.__background = () => initializeBackgroundConnection({api, getState:()=>({project:{id:'synthetic-project',snapshotId:'synthetic-version',mainFile:'synthetic.tex'},originatingChat:window.__origin,chat:window.__chat,capabilities:{backgroundConnection:true}})});
 `, resolveDir: root, sourcefile: 'synthetic-origin-chat.mjs', loader: 'js' }, bundle: true, format: 'iife', platform: 'browser', write: false });
 let html = await readFile(path.join(root, 'ui/index.html'), 'utf8');
 html = html.replace(/<link[^>]*href="\.\/style\.css"[^>]*>/, `<style>${await readFile(path.join(root, 'ui/style.css'), 'utf8')}</style>`).replace(/<script[^>]*src="\.\/app\.mjs"[^>]*><\/script>/, () => `<script>${bundle.outputFiles[0].text.replaceAll('</script', '<\\/script')}</script>`);
@@ -70,6 +72,49 @@ try {
   assert.equal(await waiting.evaluate(() => window.__controller.isReady()),false);
   assert.equal(await waiting.locator('#chat-messages .chat-message').textContent().then(text => text.includes(history[0].text)),true);
   check('pending connection preserves history and keeps manual model, message and release actions inactive');
+
+  const runtimeError = {code:'CODEX_COMMAND_UNAVAILABLE',message:'The configured Codex command disappeared during an update.',retryable:true};
+  const recovering = {...origin,phase:'waiting-runtime',error:runtimeError,retryable:true,nextRetryAt:Date.now()+2000};
+  const recovery = await scenario(recovering,{threadId:origin.threadId,model:origin.model,effort:origin.effort,connected:false,messages:history});
+  assert.match(await recovery.locator('#chat-status').textContent(),/retrying.*same chat.*automatically/iu);
+  assert.match(await recovery.locator('#chat-status').textContent(),/CODEX_COMMAND_UNAVAILABLE/u);
+  assert.match(await recovery.locator('#chat-status').textContent(),/disappeared during an update/u);
+  assert.equal(await recovery.locator('#chat-thread').textContent(),origin.threadId);
+  assert.equal(await recovery.locator('#chat-model').inputValue(),origin.model); assert.equal(await recovery.locator('#chat-effort').inputValue(),'max');
+  assert.equal(await recovery.locator('#chat-connect').isDisabled(),true); assert.match(await recovery.locator('#chat-connect').textContent(),/automatically/iu);
+  assert.equal(await recovery.locator('#chat-send').isDisabled(),true); assert.equal(await recovery.locator('#chat-messages .chat-message').textContent().then(text=>text.includes(history[0].text)),true);
+  assert.deepEqual(await recovery.evaluate(() => window.__calls),[]);
+  assert.doesNotMatch(await recovery.locator('#codex-panel').innerText(),/THREAD_MISMATCH|restart|different chat/iu);
+  check('runtime recovery shows its actual cause and automatic same-chat retry while retaining verified identity, model and history');
+
+  await recovery.evaluate(() => { window.__backgroundController=window.__background(); });
+  assert.match(await recovery.locator('#background-connection-summary').textContent(),/CODEX_COMMAND_UNAVAILABLE/u);
+  assert.match(await recovery.locator('#background-connection-summary').textContent(),/retrying.*automatically/iu);
+  await recovery.locator('#background-connection-open').click();
+  assert.match(await recovery.locator('#background-connection-status').textContent(),/disappeared during an update/u);
+  assert.equal(await recovery.locator('#background-connection-activate').isVisible(),false); assert.equal(await recovery.locator('#background-origin-retry').isVisible(),false);
+  await recovery.locator('#background-connection-close').click();
+  await recovery.screenshot({path:path.join(output,'origin-runtime-recovery.png')});
+  check('background status explains runtime recovery without offering activation or a replacement-chat workflow');
+
+  const nativeRecovery = await browser.newPage({viewport:{width:1500,height:1000}}); pages.push(nativeRecovery); nativeRecovery.on('pageerror',error=>errors.push(error.message));
+  await nativeRecovery.setContent(html);
+  await nativeRecovery.evaluate(({recovering,history}) => {
+    window.__host={desktopExecution:true,relayChat:true,connected:false,canSendMessage:false,threadId:recovering.threadId,model:recovering.model,effort:recovering.effort,title:recovering.title,reason:'Waiting for the bound Desktop chat'};
+    window.__adopt(recovering,{threadId:recovering.threadId,connected:false,messages:history}); window.__controller.toggle(true,false);
+  },{recovering,history});
+  assert.match(await nativeRecovery.locator('#chat-status').textContent(),/CODEX_COMMAND_UNAVAILABLE/u);
+  assert.match(await nativeRecovery.locator('#chat-status').textContent(),/retrying.*same chat.*automatically/iu);
+  assert.match(await nativeRecovery.locator('#chat-native-note').textContent(),/synthetic-astra.*max/u);
+  assert.equal(await nativeRecovery.locator('#chat-send').isDisabled(),true); assert.equal(await nativeRecovery.locator('#chat-desktop-refresh').isDisabled(),false);
+  assert.deepEqual(await nativeRecovery.evaluate(() => window.__calls),[]);
+  await nativeRecovery.evaluate(() => { window.__host.connected=true;window.__host.canSendMessage=true;window.__adopt(window.__origin); });
+  assert.equal(await nativeRecovery.locator('#chat-input').isDisabled(),true); assert.equal(await nativeRecovery.locator('#chat-send').isDisabled(),true);
+  await nativeRecovery.screenshot({path:path.join(output,'native-runtime-recovery.png')});
+  await nativeRecovery.evaluate(() => { window.__host.model=null;window.__host.effort=null;window.__adopt({...window.__origin,verified:false,model:null,effort:null}); });
+  assert.doesNotMatch(await nativeRecovery.locator('#chat-native-note').textContent(),/Last verified model:\s*Codex/u);
+  assert.match(await nativeRecovery.locator('#chat-native-note').textContent(),/verified|verification/iu);
+  check('native Desktop recovery exposes the same cause, retains verified settings and keeps unverified model details unlabeled');
 
   await adopt(waiting,{...origin,phase:'verifying',verified:false});
   assert.equal(await waiting.locator('#chat-model').inputValue(),'');

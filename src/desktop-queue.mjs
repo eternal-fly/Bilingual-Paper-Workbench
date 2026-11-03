@@ -124,6 +124,13 @@ export class DesktopQueueProducer {
   }
   async _open() {
     if (!this.loaded) await this._load();
+    // A dead queue process does not clear this producer's opened flag. Replace
+    // only its own disconnected bridge before metadata verification, never by
+    // retrying queue/add or changing any saved delivery receipt.
+    if (this.bridge?.getState?.()?.connected === false) {
+      await this.bridge.close(); this.bridge = null; this.opened = false;
+      if (this.closed) fail('DESKTOP_QUEUE_CLOSED', 'The Desktop queue producer is closed.');
+    }
     if (!this.opened) { this.bridge ||= new this.Bridge({ threadId: this.threadId, dataRoot: this.dataRoot, command: this.command }); await this.bridge.connect(); this.opened = true; await this._load(); }
   }
   async _verify() {

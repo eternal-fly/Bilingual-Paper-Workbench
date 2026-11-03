@@ -19,7 +19,7 @@ function userLayer(result) {
 export function nativeServerConfiguration(config) {
   if (!object(config) || config.type !== 'stdio' || typeof config.command !== 'string' || !path.isAbsolute(config.command) || !Array.isArray(config.args) || config.args.length !== 1 || typeof config.args[0] !== 'string' || !path.isAbsolute(config.args[0]) || !/[\\/]dist[\\/]server\.mjs$/i.test(config.args[0]) || !object(config.env)) fail('INVALID_NATIVE_MCP_CONFIG', 'Use the exact installed STDIO paper server configuration.');
   if (Object.entries(config.env).some(([key, value]) => !/^PAPER_EDITOR_[A-Z0-9_]+$/.test(key) || typeof value !== 'string' || value.length > 8192 || value.includes('\0')) || config.env.PAPER_EDITOR_FULL_RUNTIME !== '1') fail('INVALID_NATIVE_MCP_CONFIG', 'The installed paper server needs its bounded full-runtime environment.');
-  return { command: config.command, args: [...config.args], env: { ...config.env }, enabled: true, startup_timeout_sec: 120, tool_timeout_sec: 600 };
+  return { command: config.command, args: [...config.args], env: { ...config.env }, env_vars: ['CODEX_THREAD_ID', 'CODEX_PROJECT_ID', 'CODEX_APP_TOOLS_PIPE_PATH'], enabled: true, startup_timeout_sec: 120, tool_timeout_sec: 600 };
 }
 
 /** Configuration only: no thread start/resume, model call, source read or MCP
@@ -31,7 +31,7 @@ export async function configureNativeMcp({ client, serverConfig, dryRun = false 
   const before = await client.request('config/read', { includeLayers: true });
   const layer = userLayer(before), existing = layer.config.mcp_servers?.[NAME];
   if (existing !== undefined && (!object(existing) || !samePath(existing.command, desired.command) || !Array.isArray(existing.args) || existing.args.length !== desired.args.length || existing.args.some((arg, i) => !samePath(arg, desired.args[i])))) fail('NATIVE_MCP_NAME_CONFLICT', 'A different server already uses bilingual-paper-editor; no configuration was overwritten.');
-  const replacement = { ...(existing || {}), ...desired, env: { ...(existing?.env || {}), ...desired.env } };
+  const replacement = { ...(existing || {}), ...desired, env: { ...(existing?.env || {}), ...desired.env }, env_vars: [...new Set([...(Array.isArray(existing?.env_vars) ? existing.env_vars : []), ...desired.env_vars])] };
   const otherBeforeHash = hash(others(layer.config));
   const summary = { serverName: NAME, configurationOnly: true, desktopClosureVerified: false, dryRun, existingServer: existing !== undefined, startupTimeoutSeconds: 120, toolTimeoutSeconds: 600, otherConfigurationHash: otherBeforeHash, sourceWriteback: 'human_ui_only', reloadOrRestartRequired: true };
   if (dryRun) return { ...summary, changed: existing === undefined || hash(existing) !== hash(replacement), otherConfigurationPreserved: true };
@@ -56,7 +56,7 @@ async function main() {
   nativeServerConfiguration(config);
   const command = config.env.PAPER_EDITOR_CODEX_COMMAND;
   if (typeof command !== 'string' || !path.isAbsolute(command)) fail('INVALID_NATIVE_MCP_CONFIG', 'The installed native Codex executable is unavailable.');
-  const client = new NativeAppControl({ command, transportMode: 'configuration', requestTimeoutMs: 45000, clientInfo: { name: 'bilingual_paper_mcp_configuration', title: 'Paper MCP Configuration', version: '1.6.4' } });
+  const client = new NativeAppControl({ command, transportMode: 'configuration', requestTimeoutMs: 45000, clientInfo: { name: 'bilingual_paper_mcp_configuration', title: 'Paper MCP Configuration', version: '1.6.5' } });
   try { await client.open(); const report = await configureNativeMcp({ client, serverConfig: config, dryRun }); process.stdout.write(JSON.stringify(report) + '\n'); }
   finally { await client.close(); }
 }

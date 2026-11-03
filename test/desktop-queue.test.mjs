@@ -7,28 +7,30 @@ import os from 'node:os';
 import { DesktopQueueBridge, DesktopQueueProducer } from '../src/desktop-queue.mjs';
 
 const threadId = 'exact-desktop-origin';
-async function fixture(t, { add, read, ...options } = {}) {
+async function fixture(t, { add, read, connectionState = false, ...options } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'desktop-queue-')); t.after(() => rm(root, { recursive: true, force: true }));
-  const calls = [], queued = [];
+  const calls = [], queued = [], bridges = [];
   class Bridge {
-    async connect() { calls.push(['connect']); }
+    constructor(options) { this.options = options; this.connected = false; bridges.push(this); if (connectionState) this.getState = () => ({ connected: this.connected }); }
+    async connect() { calls.push(['connect']); this.connected = true; }
     async _request(method, params) {
+      if (connectionState && !this.connected) throw Object.assign(Error('Synthetic queue process exited.'), { code: 'CODEX_UNAVAILABLE' });
       calls.push([method, structuredClone(params)]);
-      if (method === 'thread/read') return read ? read(params) : { thread: { id: threadId, name: 'Existing Desktop chat', model: 'gpt-6-astra', reasoningEffort: 'max', cwd: root, status: { type: 'notLoaded' } } };
+      if (method === 'thread/read') return read ? read(params, this) : { thread: { id: threadId, name: 'Existing Desktop chat', model: 'gpt-6-astra', reasoningEffort: 'max', cwd: root, status: { type: 'notLoaded' } } };
       if (method === 'thread/queue/add') {
         const disk = JSON.parse(await readFile(path.join(root, 'desktop-queue-outbox.json'), 'utf8'));
         assert.equal(disk.receipts.at(-1).status, 'uncertain');
         assert.equal(disk.receipts.at(-1).clientUserMessageId, params.clientUserMessageId);
-        if (add) return add(params);
+        if (add) return add(params, this);
         const queuedSubmission = { id: `queued-${queued.length + 1}`, clientUserMessageId: params.clientUserMessageId, input: params.input }; queued.push(queuedSubmission); return { queuedSubmission };
       }
       if (method === 'thread/queue/list') return { data: queued, nextCursor: null };
       throw Error('Unexpected runtime method: ' + method);
     }
-    async close() { calls.push(['close']); }
+    async close() { calls.push(['close']); this.connected = false; }
   }
   const producer = new DesktopQueueProducer({ threadId, dataRoot: root, Bridge, desktopQueueVerified: true, ...options }); t.after(() => producer.close());
-  return { producer, root, calls, queued, Bridge };
+  return { producer, root, calls, queued, Bridge, bridges };
 }
 
 test('desktop queue transport rejects writers, inference, model overrides, tools, foreign identities and unbounded queue reads', async () => {
@@ -49,6 +51,39 @@ test('enqueue verifies the fixed chat and durably records delivery before queue/
   const disk = await readFile(path.join(f.root, 'desktop-queue-outbox.json'), 'utf8'); assert.ok(!disk.includes('Translate only')); assert.ok(!disk.includes('Existing Desktop chat'));
   const same = await f.producer.enqueue({ clientUserMessageId: 'request-1', text: 'Translate only the registered selection.' }); assert.deepEqual(same, receipt); assert.equal(f.calls.filter(c => c[0] === 'thread/queue/add').length, 1);
   await assert.rejects(f.producer.enqueue({ clientUserMessageId: 'request-1', text: 'Different request' }), { code: 'DESKTOP_QUEUE_ID_CONFLICT' });
+});
+
+test('a known disconnected producer reconnects before fresh metadata and never duplicates an acknowledged delivery', async t => {
+  const f = await fixture(t, { connectionState: true }), first = { clientUserMessageId: 'before-disconnect', text: 'One acknowledged registered request.' }, second = { clientUserMessageId: 'after-disconnect', text: 'A different new registered request.' };
+  const receipt = await f.producer.enqueue(first), original = f.bridges[0];
+  assert.equal((await f.producer.verify()).model, 'gpt-6-astra'); assert.equal(f.bridges.length, 1);
+  original.connected = false;
+  f.producer.command = 'current-installed-codex';
+  const metadata = await f.producer.verify();
+  assert.equal(metadata.threadId, threadId); assert.equal(f.bridges.length, 2); assert.equal(f.bridges[1].connected, true); assert.equal(f.bridges[1].options.command, 'current-installed-codex');
+  assert.deepEqual(await f.producer.enqueue(first), receipt);
+  assert.equal((await f.producer.enqueue(second)).status, 'queued');
+  assert.deepEqual(f.calls.map(call => call[0]), ['connect', 'thread/read', 'thread/queue/add', 'thread/read', 'close', 'connect', 'thread/read', 'thread/read', 'thread/queue/add']);
+  assert.deepEqual(f.calls.filter(call => call[0] === 'thread/queue/add').map(call => call[1].clientUserMessageId), ['before-disconnect', 'after-disconnect']);
+});
+
+test('a process disconnect during queue delivery preserves uncertainty across metadata recovery without resending', async t => {
+  const f = await fixture(t, { connectionState: true, add: async (_params, bridge) => { bridge.connected = false; throw Object.assign(Error('Acknowledgment lost during process exit.'), { code: 'CODEX_TIMEOUT' }); } }), input = { clientUserMessageId: 'disconnected-uncertain', text: 'This exact delivery must never be retried.' };
+  await assert.rejects(f.producer.enqueue(input), { code: 'DESKTOP_QUEUE_DELIVERY_UNCERTAIN' });
+  const disk = await readFile(f.producer.filename, 'utf8');
+  await assert.rejects(f.producer.enqueue(input), { code: 'DESKTOP_QUEUE_DELIVERY_UNCERTAIN' }); assert.equal(f.bridges.length, 1);
+  await f.producer.verify();
+  assert.equal(f.bridges.length, 2); assert.equal(await readFile(f.producer.filename, 'utf8'), disk); assert.equal(f.producer.state().receipts[0].status, 'uncertain');
+  await assert.rejects(f.producer.enqueue(input), { code: 'DESKTOP_QUEUE_DELIVERY_UNCERTAIN' });
+  assert.deepEqual(f.calls.map(call => call[0]), ['connect', 'thread/read', 'thread/queue/add', 'close', 'connect', 'thread/read']);
+});
+
+test('an explicitly closed disconnected producer cannot reconnect or queue a later request', async t => {
+  const f = await fixture(t, { connectionState: true }); await f.producer.verify(); f.bridges[0].connected = false;
+  await f.producer.close(); const calls = structuredClone(f.calls);
+  await assert.rejects(f.producer.verify(), { code: 'DESKTOP_QUEUE_CLOSED' });
+  await assert.rejects(f.producer.enqueue({ clientUserMessageId: 'after-close', text: 'No delivery after explicit close.' }), { code: 'DESKTOP_QUEUE_CLOSED' });
+  assert.equal(f.bridges.length, 1); assert.deepEqual(f.calls, calls); assert.deepEqual(calls.map(call => call[0]), ['connect', 'thread/read', 'close']);
 });
 
 test('one verified metadata callback runs before delivery and a denied preflight leaves no outbox receipt or queue call', async t => {

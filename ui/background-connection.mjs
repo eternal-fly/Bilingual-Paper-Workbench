@@ -49,7 +49,7 @@ export function initializeBackgroundConnection({
   const originCopy=(en,zh)=>getLanguage().startsWith('zh')?zh:en;
   const originState=()=>{
     const state=getState(),origin=state.originatingChat;
-    if(!origin||origin.autoConnect!==true||!validId(origin.threadId)||!['pending-paper','waiting-paper-operation','verifying','connecting','waiting-desktop-release','connected','preserved-binding','failed','released'].includes(origin.phase))return null;
+    if(!origin||origin.autoConnect!==true||!validId(origin.threadId)||!['pending-paper','waiting-paper-operation','verifying','connecting','waiting-desktop-release','waiting-runtime','connected','preserved-binding','failed','released'].includes(origin.phase))return null;
     if(origin.projectId&&state.project?.id&&origin.projectId!==state.project.id)return null;
     return origin;
   };
@@ -61,12 +61,14 @@ export function initializeBackgroundConnection({
       verifying:['Verifying the chat that opened this workbench…','正在核验发起此工作台的聊天…'],
       connecting:['Connecting to the verified originating chat…','正在连接已核验的发起聊天…'],
       'waiting-desktop-release':['Waiting for Desktop to release this chat. The same chat is already linked; other chats can continue normally.','当前聊天已关联，等待桌面端释放其连接；其他聊天可正常使用。'],
+      'waiting-runtime':['The chat connection is temporarily unavailable. Retrying this same chat automatically.','聊天连接暂不可用，正在自动重试连接同一聊天。'],
       connected:['Connected to the chat that opened this workbench. Its history and model are retained.','已连接发起此工作台的聊天，历史记录和模型设置保留。'],
       'preserved-binding':['The saved paper chat differs from the originating chat. Its explicit binding is preserved; use advanced connection controls to change it.','已保存的论文聊天与发起聊天不同。已保留原有明确绑定；如需更换，请使用高级连接设置。'],
       failed:['The originating chat is temporarily unavailable. Retry its verification without choosing another chat.','发起聊天暂时无法连接。可重试核验，无需另选聊天。']
     };
     const [en,zh]=messages[origin.phase]||messages.failed;
-    return originCopy(en,zh)+(origin.phase==='failed'&&origin.error?.message?` ${origin.error.message}`:'');
+    const problem=origin.phase==='waiting-runtime'?[origin.error?.code,origin.error?.message].filter(Boolean).join(': '):origin.phase==='failed'?origin.error?.message:'';
+    return originCopy(en,zh)+(problem?` ${problem}`:'');
   };
   const current=()=>target&&paperIdentity(getState())===target.identity;
   const capability=()=>getState().capabilities?.backgroundConnection===true;

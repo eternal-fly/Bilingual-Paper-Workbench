@@ -11,7 +11,7 @@ import { createPaperServer } from '../src/server.mjs';
 import { callBackgroundModelTool } from '../src/native-tool-dispatch.mjs';
 
 async function connect(t, options) {
-  const server = createPaperServer(options), client = new Client({ name: 'onboarding-test', version: '1' });
+  const server = createPaperServer({nativeThreadId:'synthetic-onboarding-chat',...options}), client = new Client({ name: 'onboarding-test', version: '1' });
   const [cs, ss] = InMemoryTransport.createLinkedPair(); await server.connect(ss); await client.connect(cs);
   t.after(async () => { await client.close(); await server.close(); }); return client;
 }

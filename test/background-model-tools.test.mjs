@@ -16,7 +16,7 @@ test('background model channel validates tool name and uses actual daemon state'
 
 test('after independent open native status reads daemon instead of stale MCP state', async t => {
   const calls = [], service = { getState: () => ({ project: null, segments: [], translations: {}, proposals: [] }) };
-  const server = createPaperServer({ service, uiHtml: '<!doctype html>', backgroundWindow: true,
+  const server = createPaperServer({ service, nativeThreadId:'synthetic-background-forward-chat', uiHtml: '<!doctype html>', backgroundWindow: true,
     openIndependentWindow: async () => ({ opened: true, mode: 'background-workbench' }),
     dispatchBackground: async (action, payload) => { calls.push({ action, payload }); return { ok: true, result: { content: [{ type: 'text', text: 'daemon' }], structuredContent: { projectOpen: true, segmentCount: 123 } } }; },
   });

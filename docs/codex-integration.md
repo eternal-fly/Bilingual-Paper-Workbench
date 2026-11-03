@@ -1,5 +1,14 @@
-# Bilingual Paper Workbench: Codex Integration, Version 1.6.4
+# Bilingual Paper Workbench: Codex Integration, Version 1.6.5
 
+## Version 1.6.5: trusted connection recovery
+
+Codex command resolution verifies the executable and follows Desktop version changes only within the same official installation root. Explicit custom commands remain pinned. Known transient runtime failures expose their actual error, retryability and next retry time, and retry exact-chat metadata with capped backoff. Identity mismatches remain stopped. Verification neither loads turns nor starts or resumes a model writer.
+
+The current caller is captured for each request. Native registration forwards the current launch's Desktop identity variables through `env_vars` instead of saving a fixed chat ID. When the host transport omitted that identity, the packaged current-turn `open`/`import` route recaptures it from the invoking Desktop environment and completes opening/importing automatically. It does not infer identity from MCP metadata or model arguments, ask the user to copy commands or restart, or start another model conversation. Queue disconnect/reconnect retains exact delivery identities and uncertain receipts; it never treats transport recovery as permission to resend.
+
+Task deletion hides only the saved registry record after current drafts save and the author confirms. **Deleted tasks → Restore task** restores that record; files, drafts, reviews and chat history remain retained. Current source writeback blocks delete/restore/switch operations independently of displayed jobs. Record revisions and paper/chat identities invalidate stale confirmations.
+
+## Author-click writeback and protected compatibility
 
 Version 1.6.4 defaults to freely editable inline TeX and an author-initiated one-click controller. **Write back English** saves current input, registers exact current paper/source/draft/alignment authorization, queues English generation in the same bound Desktop chat, compiles the returned candidate in isolation, atomically applies it and promotes the latest PDF. No second confirmation is required for this default task. Model tools cannot create its grant, select an arbitrary destination or apply source directly.
 
@@ -53,7 +62,7 @@ An explicit `bilingual_paper_panel` call opens the optional embedded panel. When
 
 ## Trusted originating identity
 
-Only inherited native `CODEX_THREAD_ID` and, when present, `CODEX_PROJECT_ID` supply host identity. Model arguments, MCP session IDs, arbitrary request metadata and random window IDs cannot become chat identity. Missing identity remains unavailable; opening from the intended Desktop chat establishes it. A deliberately saved different-chat binding is preserved for an explicit choice.
+Inherited native `CODEX_THREAD_ID` and, when present, `CODEX_PROJECT_ID` supply host identity, captured separately for each request. Model arguments, MCP session IDs, arbitrary request metadata and random window IDs cannot become chat identity. A missing host identity triggers the packaged same-turn opener/import recovery; it cannot borrow a saved window origin as current-caller authority. A deliberately saved different-chat binding is preserved for an explicit choice.
 
 The trusted origin travels through the signed launcher descriptor and exact session health identity. Metadata verification reads only `thread/read` for that fixed ID with `includeTurns:false`. It verifies the existing selection and project directory without loading turns, changing settings or starting a model. Delayed results remain tied to the same application, source snapshot and saved reference.
 
@@ -132,6 +141,7 @@ The fixed operations are:
 
 | Callback command | Native tool |
 | --- | --- |
+| `open` / `import` with UTF-8 JSON stdin | `bilingual_paper_editor` / `bilingual_paper_import_files`, using only user-supplied file paths and inherited current-chat identity. |
 | `get <requestId> [offset]` | `bilingual_paper_get_request` |
 | `submit` with UTF-8 JSON stdin | `bilingual_paper_submit_translation_result` |
 | `revision` with UTF-8 JSON stdin | `bilingual_paper_propose_revision` |

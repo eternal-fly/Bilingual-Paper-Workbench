@@ -27,6 +27,7 @@ export class TaskRegistry {
     for (const key of ['model', 'effort', 'threadId']) if (record[key] !== null && (typeof record[key] !== 'string' || record[key].length > 128)) fail('REGISTRY_RECOVERY_REQUIRED', 'A saved model binding is invalid.');
     if (record.hostProjectRoot !== undefined && record.hostProjectRoot !== null && (typeof record.hostProjectRoot !== 'string' || !path.isAbsolute(record.hostProjectRoot) || record.hostProjectRoot.length > 4096 || /[\x00-\x1f]/u.test(record.hostProjectRoot))) fail('REGISTRY_RECOVERY_REQUIRED', 'The saved invoking-project identity is invalid.');
     for (const [key, maximum] of [['paperTitle', 240], ['boundChatTitle', 160]]) if (record[key] !== undefined && record[key] !== null && (typeof record[key] !== 'string' || record[key].length > maximum || /[\x00-\x1f\x7f]/u.test(record[key]))) fail('REGISTRY_RECOVERY_REQUIRED', 'A saved project display label is invalid.');
+    if (record.revision !== undefined && (!Number.isSafeInteger(record.revision) || record.revision < 0) || record.deletedAt !== undefined && (typeof record.deletedAt !== 'string' || !Number.isFinite(Date.parse(record.deletedAt)))) fail('REGISTRY_RECOVERY_REQUIRED', 'A saved workspace deletion revision is invalid.');
     return record;
   }
   async _read() {
@@ -46,15 +47,19 @@ export class TaskRegistry {
     }
     return data;
   }
-  async records() { return structuredClone((await this._read()).records.sort((a, b) => b.lastOpenedAt.localeCompare(a.lastOpenedAt))); }
-  async get(recordId) { if (!idPattern.test(recordId || '')) fail('INVALID_INPUT', 'Choose a saved workspace record.'); const record = (await this._read()).records.find(item => item.recordId === recordId); if (!record) fail('WORKSPACE_RECORD_NOT_FOUND', 'This workspace record is unavailable.'); return { ...record, ...this.paths(record) }; }
+  async records({ deleted = 'active' } = {}) {
+    if (!['active', 'deleted', 'all'].includes(deleted)) fail('INVALID_INPUT', 'Choose active, deleted, or all saved tasks.');
+    return structuredClone((await this._read()).records.filter(record => deleted === 'all' || Boolean(record.deletedAt) === (deleted === 'deleted')).map(record => ({ ...record, revision: record.revision || 0 })).sort((a, b) => b.lastOpenedAt.localeCompare(a.lastOpenedAt)));
+  }
+  async get(recordId, { includeDeleted = false } = {}) { if (!idPattern.test(recordId || '')) fail('INVALID_INPUT', 'Choose a saved workspace record.'); const record = (await this._read()).records.find(item => item.recordId === recordId); if (!record) fail('WORKSPACE_RECORD_NOT_FOUND', 'This workspace record is unavailable.'); if (record.deletedAt && !includeDeleted) fail('WORKSPACE_RECORD_DELETED', 'Restore this deleted task before reopening it.'); return { ...record, revision: record.revision || 0, ...this.paths(record) }; }
   async chatSelection(threadId) { if (!safeId(threadId) || !threadId) return null; return structuredClone((await this._read()).chatSelections?.find(item => item.threadId === threadId) || null); }
   async selectForChat({ threadId, recordId, hostProjectRoot }) {
     return this._write(data => {
       const record = data.records.find(item => item.recordId === recordId);
-      if (!safeId(threadId) || !threadId || !record || record.threadId !== threadId || typeof hostProjectRoot !== 'string' || !path.isAbsolute(hostProjectRoot) || hostProjectRoot.length > 4096 || /[\x00-\x1f]/u.test(hostProjectRoot)) fail('WORKSPACE_RECORD_CHANGED', 'Only an explicitly verified saved paper/chat pair may be selected.');
+      if (!safeId(threadId) || !threadId || !record || record.deletedAt || record.threadId !== threadId || typeof hostProjectRoot !== 'string' || !path.isAbsolute(hostProjectRoot) || hostProjectRoot.length > 4096 || /[\x00-\x1f]/u.test(hostProjectRoot)) fail('WORKSPACE_RECORD_CHANGED', 'Only an explicitly verified saved paper/chat pair may be selected.');
       const selection = { threadId, recordId, hostProjectRoot, selectedAt: stamp() };
       record.lastOpenedAt = selection.selectedAt;
+      record.revision = (record.revision || 0) + 1;
       data.chatSelections = [...(data.chatSelections || []).filter(item => item.threadId !== threadId), selection]; return structuredClone(selection);
     });
   }
@@ -83,25 +88,59 @@ export class TaskRegistry {
       let record = data.records.find(item => item.recordId === recordId);
       if (!record) {
         if (legacy && data.records.some(item => item.legacy)) legacy = false;
-        record = { recordId, projectRoot, rootLabel: path.basename(projectRoot), mainFile, hostTaskId, hostProjectId, hostProjectRoot, hostSource, legacy, sourceLanguage, targetLanguage, model: null, effort: null, threadId: null, createdAt: stamp(), lastOpenedAt: stamp() };
+        record = { recordId, projectRoot, rootLabel: path.basename(projectRoot), mainFile, hostTaskId, hostProjectId, hostProjectRoot, hostSource, legacy, sourceLanguage, targetLanguage, model: null, effort: null, threadId: null, revision: 0, createdAt: stamp(), lastOpenedAt: stamp() };
         this._validate(record); data.records.push(record);
-      } else { record.lastOpenedAt = stamp(); if (!record.hostProjectRoot && hostProjectRoot) record.hostProjectRoot = hostProjectRoot; this._validate(record); }
+      } else { if (record.deletedAt) fail('WORKSPACE_RECORD_DELETED', 'Restore this deleted task from history before opening it.'); record.lastOpenedAt = stamp(); record.revision = (record.revision || 0) + 1; if (!record.hostProjectRoot && hostProjectRoot) record.hostProjectRoot = hostProjectRoot; this._validate(record); }
       return { ...structuredClone(record), ...this.paths(record) };
     });
   }
   async touch(recordId, binding = {}) {
     return this._write(data => {
       const record = data.records.find(item => item.recordId === recordId); if (!record) fail('WORKSPACE_RECORD_NOT_FOUND', 'This workspace record is unavailable.');
+      if (record.deletedAt) fail('WORKSPACE_RECORD_DELETED', 'Restore this deleted task before updating its binding.');
       if (binding.threadId != null && data.chatSelections?.some(selection => selection.recordId === recordId && selection.threadId !== binding.threadId)) fail('WORKSPACE_RECORD_CHANGED', 'The explicit paper/chat selection must be preserved before changing its saved chat.');
       if (binding.hostProjectRoot !== undefined) {
         if (!binding.hostTaskId || record.hostTaskId !== binding.hostTaskId) fail('WORKSPACE_RECORD_CHANGED', 'Only this exact invoking task can capture its project identity.');
         if (!record.hostProjectRoot) record.hostProjectRoot = binding.hostProjectRoot;
       }
       record.lastOpenedAt = stamp();
+      record.revision = (record.revision || 0) + 1;
       for (const key of ['model', 'effort', 'threadId']) if (binding[key] !== undefined && binding[key] !== null) record[key] = binding[key];
       if (binding.effort === null) record.effort = null;
       for (const key of ['paperTitle', 'boundChatTitle']) if (binding[key] !== undefined && binding[key] !== null) record[key] = binding[key];
       this._validate(record); return { ...structuredClone(record), ...this.paths(record) };
+    });
+  }
+  async delete(recordId, { expectedRevision } = {}) {
+    return this._setDeleted(recordId, expectedRevision, true);
+  }
+  async restore(recordId, { expectedRevision } = {}) {
+    return this._setDeleted(recordId, expectedRevision, false);
+  }
+  async _setDeleted(recordId, expectedRevision, deleted) {
+    if (!idPattern.test(recordId || '') || !Number.isSafeInteger(expectedRevision) || expectedRevision < 0) fail('INVALID_INPUT', 'Choose an exact saved task revision.');
+    return this._write(data => {
+      const record = data.records.find(item => item.recordId === recordId);
+      if (!record) fail('WORKSPACE_RECORD_NOT_FOUND', 'This workspace record is unavailable.');
+      if ((record.revision || 0) !== expectedRevision || Boolean(record.deletedAt) === deleted) fail('WORKSPACE_RECORD_CHANGED', 'The saved task changed. Refresh history before changing it.');
+      const removedSelections = deleted ? structuredClone((data.chatSelections || []).filter(selection => selection.recordId === recordId)) : [];
+      if (deleted) { record.deletedAt = stamp(); data.chatSelections = (data.chatSelections || []).filter(selection => selection.recordId !== recordId); }
+      else delete record.deletedAt;
+      record.revision = expectedRevision + 1; this._validate(record);
+      const result = { ...structuredClone(record), ...this.paths(record) };
+      // A transaction-local undo is intentionally absent from saved metadata
+      // and public records. It also restores exact selection timestamps if
+      // detaching the selected controller fails after the tombstone commits.
+      if (deleted) Object.defineProperty(result, 'rollback', { value: () => this._rollbackDelete(recordId, result.revision, removedSelections) });
+      return result;
+    });
+  }
+  async _rollbackDelete(recordId, expectedRevision, selections) {
+    return this._write(data => {
+      const record = data.records.find(item => item.recordId === recordId);
+      if (!record?.deletedAt || record.revision !== expectedRevision || selections.some(selection => (data.chatSelections || []).some(current => current.threadId === selection.threadId))) fail('WORKSPACE_DELETE_RECOVERY_REQUIRED', 'The task changed during deletion recovery. Its retained files remain available.');
+      delete record.deletedAt; record.revision++; data.chatSelections = [...(data.chatSelections || []), ...structuredClone(selections)]; this._validate(record);
+      return { ...structuredClone(record), ...this.paths(record) };
     });
   }
 }

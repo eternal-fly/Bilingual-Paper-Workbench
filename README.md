@@ -1,4 +1,4 @@
-# Bilingual Paper Workbench 1.6.4
+# Bilingual Paper Workbench 1.6.5
 
 A local Windows plugin for reading, translating and revising LaTeX papers with Codex. Three aligned columns show the English PDF, an editable translation in reading view, and paragraph-linked notes. Import the original LaTeX project to preserve its document class, columns, figures and bibliography when compiling English revisions.
 
@@ -47,7 +47,7 @@ Use the same explicit `-Node`, `-Codex`, or `-PrivateRoot` arguments in both com
 
 ## Get started
 
-1. Enable **Bilingual Paper Workbench** in the intended Codex Desktop chat and provide the paper's LaTeX source ZIP, main `.tex` file or project directory, plus any review files. Ask Codex to open the workbench and import them. The independent window opens first and binds to that same chat.
+1. Enable **Bilingual Paper Workbench** in the intended Codex Desktop chat, including a new chat, and provide the paper's LaTeX source ZIP, main `.tex` file or project directory, plus any review files. Ask Codex to open the workbench and import them. It opens the independent window, imports the supplied files and verifies that same chat automatically.
 2. Include the original class, style, bibliography and figure dependencies. Imports create a private working copy and retain the uploaded source unchanged. Multiple main-file choices remain explicit. A PDF alone does not provide editable LaTeX source.
 3. Build the English PDF, choose a target language and translate the paper or selected paragraphs. The three columns show the English PDF, translation and current paragraph notes.
 4. Click a translation paragraph to edit its full inline TeX. Prose, formulas, citations, labels, macros and environments can be added, changed or deleted. Saved text is retained even while its TeX is incomplete. No content whitelist or protected-object inventory vetoes the default author writeback route.
@@ -98,6 +98,14 @@ Review imports allow **64 MiB per file**, **32 MiB of extracted text/annotations
 PDF review supplies text and paragraph evidence, not visual inspection of binary figures. SyncTeX offers coarse navigation. Compilation and feedback do not prove scientific correctness. The compiler enforces CPU, memory, wall-time and process limits with sampled output monitoring rather than a hard volume quota. Private state relies on user filesystem access controls; encryption at rest and a VM boundary are not claimed.
 
 See [Data and Source Boundaries](docs/core-boundaries.md), [Compiler Security](docs/compiler-security.md) and [Font Support](docs/fonts-support.md).
+
+## Version 1.6.5: connection recovery and recoverable task deletion
+
+Each invocation captures the current trusted Desktop chat identity. If the host connection omitted it, Codex uses the packaged open/import transport within the same turn; you do not copy a command, restart Desktop or create a replacement chat to finish opening the paper.
+
+After a Desktop update replaces its versioned Codex CLI, the workbench can rediscover a verified executable within the same official installation root. An unknown custom command is never silently substituted. Temporary runtime failures show the actual error and retry metadata verification with bounded backoff. Verification reads no turns and starts no model request. Reconnection retains uncertain delivery receipts without resending them.
+
+In **History**, **Delete task** asks for confirmation and saves current drafts before hiding the saved task record. Its files, drafts, reviews and chat history remain retained. Enable **Deleted tasks** and choose **Restore task** to recover the entry. Active source writeback blocks task changes even when no job row is visible; a changed paper or binding invalidates an older confirmation.
 
 ## Version 1.6.4: free editing and one-click writeback
 

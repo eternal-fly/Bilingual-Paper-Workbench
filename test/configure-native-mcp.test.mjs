@@ -5,6 +5,14 @@ import { fileURLToPath } from 'node:url';
 import { configureNativeMcp, nativeServerConfiguration } from '../scripts/configure-native-mcp.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
+test('native launch forwards current Desktop identity without pinning it into saved environment', async () => {
+  const desired = nativeServerConfiguration(server);
+  assert.deepEqual(desired.env_vars, ['CODEX_THREAD_ID', 'CODEX_PROJECT_ID', 'CODEX_APP_TOOLS_PIPE_PATH']);
+  assert.equal(desired.env.CODEX_THREAD_ID, undefined);
+  const f = fixture({mcp_servers:{'bilingual-paper-editor':{...desired,env_vars:['CUSTOM_INSTALLED_VAR','CODEX_THREAD_ID']}}});
+  await configureNativeMcp({client:f.client,serverConfig:server});
+  assert.deepEqual(f.current().mcp_servers['bilingual-paper-editor'].env_vars, ['CUSTOM_INSTALLED_VAR','CODEX_THREAD_ID','CODEX_PROJECT_ID','CODEX_APP_TOOLS_PIPE_PATH']);
+});
 const server = { type: 'stdio', command: process.execPath, args: [path.join(root, 'dist/server.mjs')], env: { PAPER_EDITOR_FULL_RUNTIME: '1', PAPER_EDITOR_INSTALL_VERSION: '0.4.1', PAPER_EDITOR_DATA_ROOT: path.join(root, 'work/synthetic-private') } };
 const file = path.join(root, 'work/synthetic-config/config.toml');
 function fixture(initial, { onWrite = () => {}, failWrite = false } = {}) {
